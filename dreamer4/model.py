@@ -481,7 +481,7 @@ class Tokenizer(nn.Module):
 def pack_bottleneck_to_spatial(z_btLd: torch.Tensor, *, n_spatial: int, k: int) -> torch.Tensor:
     """
     z: (B,T,L,D_b) where L == n_spatial * k
-    -> (B,T,n_spatial,D_b*k)
+    -> (B,T,n_spatial,D_b*k) 512 thin tokens to 256 thick tokens
     """
     B, T, L, D = z_btLd.shape
     assert L == n_spatial * k, f"L={L} must equal n_spatial*k={n_spatial*k}"

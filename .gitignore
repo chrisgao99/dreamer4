@@ -212,3 +212,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+*.out
+*.pt
+dreamer4/logs
+dreamer4/data

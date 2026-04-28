@@ -9,8 +9,9 @@ import torch.nn.functional as F
 from task_set import TASK_SET
 
 
-FILEDIR = "/<path>/expert"        # raw data source
-OUTDIR = "/<path>/expert-shards"  # preprocessed shards
+FILEDIR = "./data/mixed-small"        # raw data source raw data are png for image and pt for Actions, Action Masks, Tasks/Rewards
+OUTDIR = "./data/mixed-small-shards"  # preprocessed shards, compressed image without action and states
+
 
 TARGET_SIZE = 128   # image resolution for training
 SHARD_SIZE = 2048   # number of frames per shard

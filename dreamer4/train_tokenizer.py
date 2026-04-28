@@ -380,9 +380,9 @@ if __name__ == "__main__":
 
     # data
     p.add_argument("--data_dirs", type=str, nargs="+", default=[   # paths to preprocessed frames
-        "/<path>/expert-shards",
-        "/<path>/mixed-small-shards",
-        "/<path>/mixed-large-shards",
+        "./data/expert-shards",
+        "./data/mixed-small-shards",
+        "./data/mixed-large-shards",
     ])
     p.add_argument("--seq_len", type=int, default=8)
     p.add_argument("--num_workers", type=int, default=8)
