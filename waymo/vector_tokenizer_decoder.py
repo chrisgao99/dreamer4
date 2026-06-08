@@ -1,0 +1,451 @@
+"""Latent-only decoder for the Waymo vector tokenizer.
+
+This is Decoder 1 from the tokenizer plan: reconstructed agent and traffic
+light states are decoded only from bottleneck latents ``z`` plus learned query
+tokens. Static map conditioning is intentionally left for a later decoder
+variant, so this module is a strict bottleneck smoke test for the encoder.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Optional
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+try:
+    from vector_tokenizer_encoder import (
+        VectorBlockCausalEncoder,
+        VectorBlockCausalLayer,
+        VectorEncoderOutput,
+        _collate,
+    )
+    from waymo_vector_dataset import WaymoVectorDataset
+except ModuleNotFoundError:
+    from waymo.vector_tokenizer_encoder import (
+        VectorBlockCausalEncoder,
+        VectorBlockCausalLayer,
+        VectorEncoderOutput,
+        _collate,
+    )
+    from waymo.waymo_vector_dataset import WaymoVectorDataset
+
+from dreamer4.model import add_sinusoidal_positions
+
+
+@dataclass(frozen=True)
+class VectorDecoderOutput:
+    agent_continuous: torch.Tensor      # (B,T,K,7): x/100,y/100,speed/30,vx/30,vy/30,sin(yaw),cos(yaw)
+    agent_valid_logits: torch.Tensor    # (B,T,K)
+    light_state_logits: torch.Tensor    # (B,T,L,num_light_states)
+    light_valid_logits: torch.Tensor    # (B,T,L)
+    agent_tokens: torch.Tensor          # (B,T,K,D)
+    light_tokens: torch.Tensor          # (B,T,L,D)
+    token_mask: torch.Tensor            # (B,T,S)
+
+
+@dataclass(frozen=True)
+class VectorTokenizerOutput:
+    encoder: VectorEncoderOutput
+    decoder: VectorDecoderOutput
+
+
+def _maybe_transpose_agents(agents: torch.Tensor, agent_mask: torch.Tensor) -> torch.Tensor:
+    if agents.dim() != 4:
+        raise ValueError(f"Expected agents with shape (B,K,T,F) or (B,T,K,F), got {tuple(agents.shape)}")
+    k = agent_mask.shape[-1]
+    if agents.shape[1] == k:
+        return agents.transpose(1, 2).contiguous()
+    return agents
+
+
+class VectorBlockCausalTokenizerDecoder(nn.Module):
+    """Dreamer-style block-causal decoder from latent tokens to vector states."""
+
+    def __init__(
+        self,
+        *,
+        d_bottleneck: int = 32,
+        d_model: int = 256,
+        n_heads: int = 4,
+        depth: int = 4,
+        n_latents: int = 8,
+        n_agents: int = 32,
+        n_lights: int = 16,
+        num_light_states: int = 16,
+        dropout: float = 0.05,
+        mlp_ratio: float = 4.0,
+        time_every: int = 1,
+        scale_pos_embeds: bool = True,
+    ):
+        super().__init__()
+        self.d_model = int(d_model)
+        self.n_latents = int(n_latents)
+        self.n_agents = int(n_agents)
+        self.n_lights = int(n_lights)
+        self.num_light_states = int(num_light_states)
+        self.scale_pos_embeds = bool(scale_pos_embeds)
+
+        self.up_proj = nn.Linear(d_bottleneck, d_model)
+        self.agent_queries = nn.Parameter(torch.empty(n_agents, d_model))
+        self.light_queries = nn.Parameter(torch.empty(n_lights, d_model))
+        nn.init.normal_(self.agent_queries, std=0.02)
+        nn.init.normal_(self.light_queries, std=0.02)
+
+        self.layers = nn.ModuleList(
+            [
+                VectorBlockCausalLayer(
+                    d_model=d_model,
+                    n_heads=n_heads,
+                    dropout=dropout,
+                    mlp_ratio=mlp_ratio,
+                    layer_index=i,
+                    time_every=time_every,
+                )
+                for i in range(depth)
+            ]
+        )
+
+        self.agent_continuous_head = nn.Linear(d_model, 7)
+        self.agent_valid_head = nn.Linear(d_model, 1)
+        self.light_state_head = nn.Linear(d_model, num_light_states)
+        self.light_valid_head = nn.Linear(d_model, 1)
+
+    def forward(
+        self,
+        z: torch.Tensor,
+        *,
+        agent_mask: Optional[torch.Tensor] = None,
+        light_mask: Optional[torch.Tensor] = None,
+    ) -> VectorDecoderOutput:
+        """Decode bottleneck latents.
+
+        Args:
+            z: (B,T,N_latents,D_bottleneck)
+            agent_mask: optional (B,K), True for selected agent slots
+            light_mask: optional (B,T,L), True for valid light observations
+        """
+        if z.dim() != 4:
+            raise ValueError(f"Expected z with shape (B,T,N_latents,D), got {tuple(z.shape)}")
+        b, t, n_latents, _ = z.shape
+        if n_latents != self.n_latents:
+            raise ValueError(f"Expected {self.n_latents} latent slots, got {n_latents}")
+
+        k = self.n_agents if agent_mask is None else int(agent_mask.shape[-1])
+        l = self.n_lights if light_mask is None else int(light_mask.shape[-1])
+        if k > self.n_agents:
+            raise ValueError(f"Decoder was built for at most {self.n_agents} agent slots, got {k}")
+        if l > self.n_lights:
+            raise ValueError(f"Decoder was built for at most {self.n_lights} light slots, got {l}")
+
+        latents = torch.tanh(self.up_proj(z))
+        agent_queries = self.agent_queries[:k].view(1, 1, k, self.d_model).expand(b, t, k, self.d_model)
+        light_queries = self.light_queries[:l].view(1, 1, l, self.d_model).expand(b, t, l, self.d_model)
+        tokens = torch.cat([latents, agent_queries, light_queries], dim=2)
+
+        latent_mask = torch.ones((b, t, self.n_latents), dtype=torch.bool, device=z.device)
+        if agent_mask is None:
+            agent_query_mask = torch.ones((b, t, k), dtype=torch.bool, device=z.device)
+        else:
+            agent_query_mask = agent_mask.to(device=z.device, dtype=torch.bool)[:, None, :].expand(b, t, k)
+        if light_mask is None:
+            light_query_mask = torch.ones((b, t, l), dtype=torch.bool, device=z.device)
+        else:
+            light_ever_valid = light_mask.to(device=z.device, dtype=torch.bool).any(dim=1)
+            light_query_mask = light_ever_valid[:, None, :].expand(b, t, l)
+        token_mask = torch.cat([latent_mask, agent_query_mask, light_query_mask], dim=2)
+
+        tokens = add_sinusoidal_positions(tokens, self.scale_pos_embeds)
+        tokens = tokens * token_mask[..., None].to(tokens.dtype)
+        for layer in self.layers:
+            tokens = layer(tokens, token_mask=token_mask)
+
+        agent_start = self.n_latents
+        light_start = agent_start + k
+        agent_tokens = tokens[:, :, agent_start:light_start, :]
+        light_tokens = tokens[:, :, light_start : light_start + l, :]
+
+        return VectorDecoderOutput(
+            agent_continuous=self.agent_continuous_head(agent_tokens),
+            agent_valid_logits=self.agent_valid_head(agent_tokens).squeeze(-1),
+            light_state_logits=self.light_state_head(light_tokens),
+            light_valid_logits=self.light_valid_head(light_tokens).squeeze(-1),
+            agent_tokens=agent_tokens,
+            light_tokens=light_tokens,
+            token_mask=token_mask,
+        )
+
+
+class VectorTokenizer(nn.Module):
+    """Encoder plus latent-only decoder wrapper."""
+
+    def __init__(self, encoder: VectorBlockCausalEncoder, decoder: VectorBlockCausalTokenizerDecoder):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def forward(
+        self,
+        *,
+        agents: torch.Tensor,
+        agent_mask: torch.Tensor,
+        map_polylines: torch.Tensor,
+        map_mask: torch.Tensor,
+        lights: torch.Tensor,
+        light_mask: torch.Tensor,
+    ) -> VectorTokenizerOutput:
+        enc = self.encoder(
+            agents=agents,
+            agent_mask=agent_mask,
+            map_polylines=map_polylines,
+            map_mask=map_mask,
+            lights=lights,
+            light_mask=light_mask,
+        )
+        dec = self.decoder(enc.z, agent_mask=agent_mask, light_mask=light_mask)
+        return VectorTokenizerOutput(encoder=enc, decoder=dec)
+
+
+def normalized_agent_targets(
+    agents: torch.Tensor,
+    agent_mask: torch.Tensor,
+    *,
+    already_btkf: bool = False,
+) -> torch.Tensor:
+    if not already_btkf:
+        agents = _maybe_transpose_agents(agents, agent_mask)
+    yaw = agents[..., 6]
+    return torch.stack(
+        [
+            agents[..., 0] / 100.0,
+            agents[..., 1] / 100.0,
+            agents[..., 2] / 30.0,
+            agents[..., 3] / 30.0,
+            agents[..., 4] / 30.0,
+            torch.sin(yaw),
+            torch.cos(yaw),
+        ],
+        dim=-1,
+    )
+
+
+def _masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    mask_f = mask.to(dtype=values.dtype)
+    while mask_f.dim() < values.dim():
+        mask_f = mask_f.unsqueeze(-1)
+    mask_f = mask_f.expand_as(values)
+    denom = mask_f.sum().clamp_min(1.0)
+    return (values * mask_f).sum() / denom
+
+
+def _wrapped_angle_error(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    return torch.atan2(torch.sin(a - b), torch.cos(a - b)).abs()
+
+
+def vector_tokenizer_reconstruction_loss(
+    pred: VectorDecoderOutput,
+    *,
+    agents: torch.Tensor,
+    agent_mask: torch.Tensor,
+    lights: torch.Tensor,
+    light_mask: torch.Tensor,
+    agent_xy_weight: float = 1.0,
+    agent_vel_weight: float = 0.5,
+    agent_yaw_weight: float = 0.5,
+    agent_valid_weight: float = 0.2,
+    light_state_weight: float = 0.5,
+    light_valid_weight: float = 0.1,
+) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    """Compute first-pass reconstruction losses for tokenizer training."""
+    agents_btkf = _maybe_transpose_agents(agents, agent_mask)
+    agent_slot_mask = agent_mask[:, None, :].to(device=agents_btkf.device, dtype=torch.bool)
+    agent_valid_target = (agents_btkf[..., 5] > 0.5) & agent_slot_mask
+    agent_target = normalized_agent_targets(agents_btkf, agent_mask, already_btkf=True)
+
+    agent_xy_raw = F.smooth_l1_loss(pred.agent_continuous[..., 0:2], agent_target[..., 0:2], reduction="none")
+    agent_xy_loss = _masked_mean(agent_xy_raw, agent_valid_target)
+    agent_vel_raw = F.smooth_l1_loss(pred.agent_continuous[..., 2:5], agent_target[..., 2:5], reduction="none")
+    agent_vel_loss = _masked_mean(agent_vel_raw, agent_valid_target)
+    agent_yaw_raw = F.smooth_l1_loss(pred.agent_continuous[..., 5:7], agent_target[..., 5:7], reduction="none")
+    agent_yaw_loss = _masked_mean(agent_yaw_raw, agent_valid_target)
+
+    agent_valid_raw = F.binary_cross_entropy_with_logits(
+        pred.agent_valid_logits,
+        agent_valid_target.to(dtype=pred.agent_valid_logits.dtype),
+        reduction="none",
+    )
+    agent_valid_loss = _masked_mean(agent_valid_raw, agent_slot_mask.expand_as(agent_valid_target))
+
+    light_valid_target = light_mask.to(device=pred.light_valid_logits.device, dtype=torch.bool)
+    light_state_target = lights[..., 2].long().clamp(min=0, max=pred.light_state_logits.shape[-1] - 1)
+    if light_valid_target.any():
+        light_state_loss = F.cross_entropy(pred.light_state_logits[light_valid_target], light_state_target[light_valid_target])
+    else:
+        light_state_loss = pred.light_state_logits.sum() * 0.0
+    light_valid_loss = F.binary_cross_entropy_with_logits(
+        pred.light_valid_logits,
+        light_valid_target.to(dtype=pred.light_valid_logits.dtype),
+    )
+
+    pred_xy_m = pred.agent_continuous[..., 0:2] * 100.0
+    target_xy_m = agents_btkf[..., 0:2]
+    agent_xy_mae_m = _masked_mean((pred_xy_m - target_xy_m).norm(dim=-1), agent_valid_target)
+
+    pred_speed_mps = pred.agent_continuous[..., 2] * 30.0
+    agent_speed_mae_mps = _masked_mean((pred_speed_mps - agents_btkf[..., 2]).abs(), agent_valid_target)
+
+    pred_vel_mps = pred.agent_continuous[..., 3:5] * 30.0
+    target_vel_mps = agents_btkf[..., 3:5]
+    agent_vxvy_mae_mps = _masked_mean((pred_vel_mps - target_vel_mps).norm(dim=-1), agent_valid_target)
+
+    pred_yaw = torch.atan2(pred.agent_continuous[..., 5], pred.agent_continuous[..., 6])
+    agent_yaw_mae_deg = _masked_mean(_wrapped_angle_error(pred_yaw, agents_btkf[..., 6]) * (180.0 / torch.pi), agent_valid_target)
+
+    agent_valid_pred = pred.agent_valid_logits > 0.0
+    agent_valid_acc = _masked_mean(
+        (agent_valid_pred == agent_valid_target).to(dtype=pred.agent_valid_logits.dtype),
+        agent_slot_mask.expand_as(agent_valid_target),
+    )
+
+    light_valid_pred = pred.light_valid_logits > 0.0
+    light_valid_acc = (light_valid_pred == light_valid_target).to(dtype=pred.light_valid_logits.dtype).mean()
+    if light_valid_target.any():
+        light_state_pred = pred.light_state_logits.argmax(dim=-1)
+        light_state_acc = (light_state_pred[light_valid_target] == light_state_target[light_valid_target]).float().mean()
+    else:
+        light_state_acc = pred.light_state_logits.sum() * 0.0
+
+    total = (
+        agent_xy_weight * agent_xy_loss
+        + agent_vel_weight * agent_vel_loss
+        + agent_yaw_weight * agent_yaw_loss
+        + agent_valid_weight * agent_valid_loss
+        + light_state_weight * light_state_loss
+        + light_valid_weight * light_valid_loss
+    )
+    metrics = {
+        "loss_total": total.detach(),
+        "loss_agent_xy": agent_xy_loss.detach(),
+        "loss_agent_vel": agent_vel_loss.detach(),
+        "loss_agent_yaw": agent_yaw_loss.detach(),
+        "loss_agent_valid": agent_valid_loss.detach(),
+        "loss_light_state": light_state_loss.detach(),
+        "loss_light_valid": light_valid_loss.detach(),
+        "agent_xy_mae_m": agent_xy_mae_m.detach(),
+        "agent_speed_mae_mps": agent_speed_mae_mps.detach(),
+        "agent_vxvy_mae_mps": agent_vxvy_mae_mps.detach(),
+        "agent_yaw_mae_deg": agent_yaw_mae_deg.detach(),
+        "agent_valid_acc": agent_valid_acc.detach(),
+        "light_state_acc": light_state_acc.detach(),
+        "light_valid_acc": light_valid_acc.detach(),
+    }
+    return total, metrics
+
+
+def _slice_time_window(batch: Dict[str, torch.Tensor], time_window: int) -> Dict[str, torch.Tensor]:
+    if time_window <= 0:
+        return batch
+    batch = dict(batch)
+    k = batch["agent_mask"].shape[-1]
+    if batch["agents"].shape[1] == k:
+        batch["agents"] = batch["agents"][:, :, :time_window]
+    else:
+        batch["agents"] = batch["agents"][:, :time_window]
+    batch["lights"] = batch["lights"][:, :time_window]
+    batch["light_mask"] = batch["light_mask"][:, :time_window]
+    return batch
+
+
+def smoke_test(data_dir: str, batch_size: int, time_window: int, backward: bool) -> None:
+    ds = WaymoVectorDataset(data_dir)
+    loader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=0, collate_fn=_collate)
+    batch = _slice_time_window(next(iter(loader)), time_window)
+
+    _, _, k, _ = VectorBlockCausalEncoder._maybe_transpose_agents(batch["agents"], batch["agent_mask"]).shape
+    l = batch["lights"].shape[2]
+    encoder = VectorBlockCausalEncoder(
+        d_model=128,
+        n_heads=4,
+        depth=3,
+        n_latents=8,
+        d_bottleneck=32,
+        hidden_dim=64,
+        dropout=0.0,
+        time_every=1,
+    )
+    decoder = VectorBlockCausalTokenizerDecoder(
+        d_bottleneck=32,
+        d_model=128,
+        n_heads=4,
+        depth=3,
+        n_latents=8,
+        n_agents=k,
+        n_lights=l,
+        dropout=0.0,
+        time_every=1,
+    )
+    model = VectorTokenizer(encoder=encoder, decoder=decoder)
+    model.train(backward)
+
+    out = model(
+        agents=batch["agents"],
+        agent_mask=batch["agent_mask"],
+        map_polylines=batch["map_polylines"],
+        map_mask=batch["map_mask"],
+        lights=batch["lights"],
+        light_mask=batch["light_mask"],
+    )
+    loss, metrics = vector_tokenizer_reconstruction_loss(
+        out.decoder,
+        agents=batch["agents"],
+        agent_mask=batch["agent_mask"],
+        lights=batch["lights"],
+        light_mask=batch["light_mask"],
+    )
+    if backward:
+        loss.backward()
+
+    print(f"batch agents: {tuple(batch['agents'].shape)}")
+    print(f"batch lights: {tuple(batch['lights'].shape)}")
+    print(f"encoder z: {tuple(out.encoder.z.shape)}")
+    print(f"decoder agent_continuous: {tuple(out.decoder.agent_continuous.shape)}")
+    print(f"decoder agent_valid_logits: {tuple(out.decoder.agent_valid_logits.shape)}")
+    print(f"decoder light_state_logits: {tuple(out.decoder.light_state_logits.shape)}")
+    print(f"decoder light_valid_logits: {tuple(out.decoder.light_valid_logits.shape)}")
+    print(f"decoder token_mask valid: {int(out.decoder.token_mask.sum().item())}/{out.decoder.token_mask.numel()}")
+    print("losses: " + ", ".join(f"{k}={float(v.item()):.4f}" for k, v in metrics.items()))
+
+    tensors = [
+        out.encoder.z,
+        out.decoder.agent_continuous,
+        out.decoder.agent_valid_logits,
+        out.decoder.light_state_logits,
+        out.decoder.light_valid_logits,
+        loss,
+    ]
+    if not all(torch.isfinite(x).all().item() for x in tensors):
+        raise RuntimeError("Non-finite values in vector tokenizer smoke test")
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="Smoke-test the Waymo vector tokenizer encoder+decoder.")
+    p.add_argument("--data_dir", type=str, default="/p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset")
+    p.add_argument("--batch_size", type=int, default=2)
+    p.add_argument("--time_window", type=int, default=16)
+    p.add_argument("--no_backward", action="store_true", help="Skip backward pass in the smoke test.")
+    args = p.parse_args()
+    smoke_test(data_dir=args.data_dir, batch_size=args.batch_size, time_window=args.time_window, backward=not args.no_backward)
+
+
+if __name__ == "__main__":
+    main()

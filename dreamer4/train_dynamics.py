@@ -682,12 +682,22 @@ def train(args):
             dyn, device_ids=[local_rank], output_device=local_rank, broadcast_buffers=False
         )
 
-    # Optimizer and scaler
+    # Optimizer and AMP scaler
     opt = torch.optim.AdamW(
         dyn.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.999)
     )
-    use_amp = torch.cuda.is_available()
-    scaler = GradScaler(device="cuda", enabled=use_amp)
+    use_amp = torch.cuda.is_available() and args.amp_dtype != "none"
+    amp_dtype = {
+        "fp16": torch.float16,
+        "bf16": torch.bfloat16,
+        "none": torch.float32,
+    }[args.amp_dtype]
+    scaler = GradScaler(device="cuda", enabled=(use_amp and amp_dtype == torch.float16))
+    if is_rank0():
+        print(
+            f"[amp] enabled={use_amp} dtype={args.amp_dtype} "
+            f"grad_scaler={scaler.is_enabled()}"
+        )
 
     # Initialize wandb
     if is_rank0():
@@ -757,7 +767,7 @@ def train(args):
                 B_self = int(round(args.self_fraction * B))
                 B_self = max(0, min(B - 1, B_self))
 
-                with autocast(device_type="cuda", enabled=use_amp):
+                with autocast(device_type="cuda", enabled=use_amp, dtype=amp_dtype):
                     loss, aux = dynamics_pretrain_loss(
                         dyn.module if hasattr(dyn, "module") else dyn,
                         z1=z1,
@@ -771,7 +781,13 @@ def train(args):
                     )
 
                 if not torch.isfinite(loss):
-                    raise RuntimeError(f"Non-finite loss at step {step}: loss={loss}")
+                    aux_str = ", ".join(
+                        f"{k}={float(v.detach().float().item()):.6g}" for k, v in aux.items()
+                    )
+                    raise RuntimeError(
+                        f"Non-finite loss at step {step}: loss={loss}, "
+                        f"B={B}, B_self={B_self}, amp_dtype={args.amp_dtype}, {aux_str}"
+                    )
 
                 loss_to_backprop = loss / grad_accum
                 scaler.scale(loss_to_backprop).backward()
@@ -956,6 +972,7 @@ if __name__ == "__main__":
     p.add_argument("--max_steps", type=int, default=10_000_000)
     p.add_argument("--grad_accum", type=int, default=1)
     p.add_argument("--grad_clip", type=float, default=1.0)
+    p.add_argument("--amp_dtype", type=str, default="fp16", choices=["fp16", "bf16", "none"])
 
     # eval / viz
     p.add_argument("--eval_every", type=int, default=1_000)

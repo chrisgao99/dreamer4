@@ -8,6 +8,17 @@ import torch
 from torch.utils.data import Dataset
 
 
+def _load_pt(path: Union[str, Path]):
+    try:
+        return torch.load(path, map_location="cpu", mmap=True)
+    except TypeError:
+        return torch.load(path, map_location="cpu")
+    except RuntimeError as e:
+        if "mmap" not in str(e).lower():
+            raise
+        return torch.load(path, map_location="cpu")
+
+
 class ShardedFrameDataset(Dataset):
     """
     Samples contiguous sequences from preprocessed shards across multiple roots:
@@ -56,7 +67,7 @@ class ShardedFrameDataset(Dataset):
                     path = task_dir / fname
 
                     try:
-                        td = torch.load(path, map_location="cpu")
+                        td = _load_pt(path)
                     except Exception as e:
                         print(f"[ShardedFrameDataset] Skipping shard {path} (load error): {e}")
                         continue
@@ -100,7 +111,7 @@ class ShardedFrameDataset(Dataset):
     def _load_shard(self, path: str) -> torch.Tensor:
         if self._cache_path == path and self._cache_frames is not None:
             return self._cache_frames
-        td = torch.load(path, map_location="cpu")
+        td = _load_pt(path)
         frames = td["frames"]
         self._cache_path = path
         self._cache_frames = frames

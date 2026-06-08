@@ -218,3 +218,37 @@ __marimo__/
 *.pt
 dreamer4/logs
 dreamer4/data
+
+# Local datasets, training outputs, and generated artifacts.
+# Keep source code in folders like waymo/, but do not commit rerunnable outputs.
+/data/
+**/data/
+**/logs/
+**/wandb/
+**/checkpoints/
+**/ckpts/
+**/*_ckpts/
+**/reports/
+tmp/
+tmp_*/
+*_tmp/
+*.pid
+*.err
+*.ckpt
+*.pth
+*.safetensors
+*.onnx
+*.npz
+*.npy
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.tfevents*
+*.wandb
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.pdf
