@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-/p/yufeng/tri30/dreamer4}"
-PYTHON="${PYTHON:-/p/yufeng/.conda/envs/dreamer4/bin/python}"
-RUN_NAME="${RUN_NAME:-ooi50k_lat16_d256_ep200_4a100_staticmap_v2_lossfix}"
-SESSION_NAME="${SESSION_NAME:-ooi50k_staticmap_v2_ep200_lossfix}"
+REPO_ROOT="${REPO_ROOT:-/scratch/baz7dy/tri30/dreamer4}"
+PYTHON="${PYTHON:-/home/baz7dy/.conda/envs/dreamer4/bin/python}"
+RUN_NAME="${RUN_NAME:-ooi50k_lat16_d256_ep200_2a100_staticmap_v2_lossfix}"
+SESSION_NAME="${SESSION_NAME:-ooi50k_staticmap_v2_ep200_2a100_lossfix}"
 
-DATA_DIR="${DATA_DIR:-$REPO_ROOT/data/waymo_vector_dataset_ooi_centered_50k}"
+DATA_DIR="${DATA_DIR:-$REPO_ROOT/waymo/data/waymo_vector_dataset_ooi_centered_50k}"
 CKPT_DIR="${CKPT_DIR:-$REPO_ROOT/waymo/checkpoints/$RUN_NAME}"
 LOG_DIR="${LOG_DIR:-$REPO_ROOT/waymo/logs}"
 LOG="${LOG:-$LOG_DIR/${RUN_NAME}.log}"
 WANDB_DIR="${WANDB_DIR:-$REPO_ROOT/waymo/wandb}"
 
-CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
+CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
 OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 WANDB_MODE="${WANDB_MODE:-online}"
 
-BATCH_SIZE="${BATCH_SIZE:-32}"
+BATCH_SIZE="${BATCH_SIZE:-64}"
 NUM_WORKERS="${NUM_WORKERS:-8}"
 EPOCHS="${EPOCHS:-200}"
 D_MODEL="${D_MODEL:-256}"
@@ -34,8 +34,51 @@ MAP_DEPTH="${MAP_DEPTH:-2}"
 MAP_CROSS_EVERY="${MAP_CROSS_EVERY:-1}"
 MAP_QUERY_TOKENS="${MAP_QUERY_TOKENS:-latent_agent}"
 
+check_required_paths() {
+  if [[ ! -x "$PYTHON" ]]; then
+    echo "Python not found or not executable: $PYTHON" >&2
+    exit 1
+  fi
+  if [[ ! -f "$REPO_ROOT/waymo/train_waymo_vector_tokenizer.py" ]]; then
+    echo "Training script not found under REPO_ROOT: $REPO_ROOT" >&2
+    exit 1
+  fi
+  if [[ ! -d "$DATA_DIR/train" || ! -d "$DATA_DIR/val" ]]; then
+    echo "Expected dataset directories are missing:" >&2
+    echo "  $DATA_DIR/train" >&2
+    echo "  $DATA_DIR/val" >&2
+    echo "Set DATA_DIR to the directory containing train/ and val/ before launching." >&2
+    exit 1
+  fi
+  if ! compgen -G "$DATA_DIR/train/*.npz" >/dev/null; then
+    echo "No training .npz files found in: $DATA_DIR/train" >&2
+    exit 1
+  fi
+  if ! compgen -G "$DATA_DIR/val/*.npz" >/dev/null; then
+    echo "No validation .npz files found in: $DATA_DIR/val" >&2
+    exit 1
+  fi
+}
+
+check_required_paths
+
 if [[ "${RUN_INSIDE_TMUX:-0}" != "1" ]]; then
   mkdir -p "$CKPT_DIR" "$LOG_DIR" "$WANDB_DIR"
+  if ! command -v tmux >/dev/null 2>&1; then
+    if command -v module >/dev/null 2>&1; then
+      module load tmux >/dev/null 2>&1 || true
+    elif [[ -f /etc/profile.d/modules.sh ]]; then
+      # Some batch/non-login shells need the modules init script sourced first.
+      # shellcheck source=/dev/null
+      source /etc/profile.d/modules.sh
+      module load tmux >/dev/null 2>&1 || true
+    fi
+  fi
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "tmux not found after trying: module load tmux" >&2
+    echo "running in the current shell instead."
+    RUN_INSIDE_TMUX=1 exec bash "$0"
+  fi
   if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
     echo "tmux session already exists: $SESSION_NAME"
     echo "Attach with: tmux attach -t $SESSION_NAME"
@@ -107,6 +150,6 @@ fi
 
 "$PYTHON" -m torch.distributed.run \
   --standalone \
-  --nproc_per_node=4 \
+  --nproc_per_node=2 \
   "${train_args[@]}" \
   2>&1 | tee -a "$LOG"
