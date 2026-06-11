@@ -23,9 +23,12 @@ from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+WAYMO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = WAYMO_ROOT.parent
+CORE_ROOT = WAYMO_ROOT / "core"
+for path in (REPO_ROOT, CORE_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 try:
     from waymo_vector_filter import (
@@ -38,7 +41,7 @@ try:
         iter_tfrecord_examples,
     )
 except ModuleNotFoundError:
-    from waymo.waymo_vector_filter import (
+    from waymo.core.waymo_vector_filter import (
         CURRENT_IDX,
         N_AGENTS_WAYMO,
         N_STEPS,
@@ -498,7 +501,7 @@ def main() -> None:
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Analyze Waymo raw objects-of-interest statistics.")
     p.add_argument("--raw_dir", type=str, default="/p/liverobotics/waymo_open_dataset_motion/tf_example/training")
-    p.add_argument("--output_dir", type=str, default="/p/yufeng/tri30/dreamer4/waymo/reports/ooi_raw_stats")
+    p.add_argument("--output_dir", type=str, default="/p/yufeng/tri30/dreamer4/waymo/evaluation/reports/ooi_raw_stats")
     p.add_argument("--max_files", type=int, default=0, help="0 means all TFRecord files.")
     p.add_argument("--max_records_per_file", type=int, default=None)
     p.add_argument("--log_every", type=int, default=1000)

@@ -3,8 +3,8 @@ set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-/scratch/baz7dy/tri30/dreamer4}"
 PYTHON="${PYTHON:-/home/baz7dy/.conda/envs/dreamer4/bin/python}"
-RUN_NAME="${RUN_NAME:-ooi50k_lat16_d256_ep200_2a100_staticmap_v2_lossfix}"
-SESSION_NAME="${SESSION_NAME:-ooi50k_staticmap_v2_ep200_2a100_lossfix}"
+RUN_NAME="${RUN_NAME:-ooi50k_lat16_d256_ep200_2a100_staticmap_v2_fulltraj_trajloss}"
+SESSION_NAME="${SESSION_NAME:-ooi50k_staticmap_v2_fulltraj_trajloss}"
 
 DATA_DIR="${DATA_DIR:-$REPO_ROOT/waymo/data/waymo_vector_dataset_ooi_centered_50k}"
 CKPT_DIR="${CKPT_DIR:-$REPO_ROOT/waymo/checkpoints/$RUN_NAME}"
@@ -16,7 +16,7 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
 OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 WANDB_MODE="${WANDB_MODE:-online}"
 
-BATCH_SIZE="${BATCH_SIZE:-64}"
+BATCH_SIZE="${BATCH_SIZE:-32}"
 NUM_WORKERS="${NUM_WORKERS:-8}"
 EPOCHS="${EPOCHS:-200}"
 D_MODEL="${D_MODEL:-256}"
@@ -24,7 +24,7 @@ DEPTH="${DEPTH:-4}"
 DECODER_DEPTH="${DECODER_DEPTH:-4}"
 N_LATENTS="${N_LATENTS:-16}"
 D_BOTTLENECK="${D_BOTTLENECK:-32}"
-TIME_WINDOW="${TIME_WINDOW:-32}"
+TIME_WINDOW="${TIME_WINDOW:-0}"
 LOG_EVERY="${LOG_EVERY:-20}"
 EVAL_EVERY="${EVAL_EVERY:-500}"
 SAVE_EVERY="${SAVE_EVERY:-500}"
@@ -33,13 +33,16 @@ ENCODER_VARIANT="${ENCODER_VARIANT:-static_map_query}"
 MAP_DEPTH="${MAP_DEPTH:-2}"
 MAP_CROSS_EVERY="${MAP_CROSS_EVERY:-1}"
 MAP_QUERY_TOKENS="${MAP_QUERY_TOKENS:-latent_agent}"
+AGENT_DELTA_XY_WEIGHT="${AGENT_DELTA_XY_WEIGHT:-5}"
+AGENT_FDE_XY_WEIGHT="${AGENT_FDE_XY_WEIGHT:-2}"
+FOCUS_AGENT_WEIGHT="${FOCUS_AGENT_WEIGHT:-4}"
 
 check_required_paths() {
   if [[ ! -x "$PYTHON" ]]; then
     echo "Python not found or not executable: $PYTHON" >&2
     exit 1
   fi
-  if [[ ! -f "$REPO_ROOT/waymo/train_waymo_vector_tokenizer.py" ]]; then
+  if [[ ! -f "$REPO_ROOT/waymo/training/train_waymo_vector_tokenizer.py" ]]; then
     echo "Training script not found under REPO_ROOT: $REPO_ROOT" >&2
     exit 1
   fi
@@ -68,7 +71,6 @@ if [[ "${RUN_INSIDE_TMUX:-0}" != "1" ]]; then
     if command -v module >/dev/null 2>&1; then
       module load tmux >/dev/null 2>&1 || true
     elif [[ -f /etc/profile.d/modules.sh ]]; then
-      # Some batch/non-login shells need the modules init script sourced first.
       # shellcheck source=/dev/null
       source /etc/profile.d/modules.sh
       module load tmux >/dev/null 2>&1 || true
@@ -103,7 +105,7 @@ export WANDB_MODE
 export WANDB_DIR
 
 train_args=(
-  waymo/train_waymo_vector_tokenizer.py
+  waymo/training/train_waymo_vector_tokenizer.py
   --data_dir "$DATA_DIR/train"
   --val_data_dir "$DATA_DIR/val"
   --ckpt_dir "$CKPT_DIR"
@@ -120,6 +122,9 @@ train_args=(
   --map_depth "$MAP_DEPTH"
   --map_cross_every "$MAP_CROSS_EVERY"
   --map_query_tokens "$MAP_QUERY_TOKENS"
+  --agent_delta_xy_weight "$AGENT_DELTA_XY_WEIGHT"
+  --agent_fde_xy_weight "$AGENT_FDE_XY_WEIGHT"
+  --focus_agent_weight "$FOCUS_AGENT_WEIGHT"
   --log_every "$LOG_EVERY"
   --eval_every "$EVAL_EVERY"
   --save_every "$SAVE_EVERY"
@@ -142,8 +147,9 @@ fi
   echo "data_dir=$DATA_DIR"
   echo "ckpt_dir=$CKPT_DIR"
   echo "log=$LOG"
-  echo "batch_size=$BATCH_SIZE epochs=$EPOCHS d_model=$D_MODEL depth=$DEPTH decoder_depth=$DECODER_DEPTH n_latents=$N_LATENTS d_bottleneck=$D_BOTTLENECK"
+  echo "batch_size=$BATCH_SIZE epochs=$EPOCHS d_model=$D_MODEL depth=$DEPTH decoder_depth=$DECODER_DEPTH n_latents=$N_LATENTS d_bottleneck=$D_BOTTLENECK time_window=$TIME_WINDOW"
   echo "encoder_variant=$ENCODER_VARIANT map_depth=$MAP_DEPTH map_cross_every=$MAP_CROSS_EVERY map_query_tokens=$MAP_QUERY_TOKENS"
+  echo "agent_delta_xy_weight=$AGENT_DELTA_XY_WEIGHT agent_fde_xy_weight=$AGENT_FDE_XY_WEIGHT focus_agent_weight=$FOCUS_AGENT_WEIGHT"
   echo "loss_fix=normalized_agent_targets_no_double_transpose"
   echo "========================"
 } | tee -a "$LOG"

@@ -6,7 +6,7 @@ LOG="${LOG:-$REPO_ROOT/waymo/prepare_waymo_vector_5k.log}"
 PIDFILE="${PIDFILE:-$REPO_ROOT/waymo/prepare_waymo_vector_5k.pid}"
 
 cd "$REPO_ROOT"
-nohup bash waymo/prepare_waymo_vector_dataset.sh > "$LOG" 2>&1 &
+nohup bash waymo/data_prep/prepare_waymo_vector_dataset.sh > "$LOG" 2>&1 &
 pid=$!
 echo "$pid" > "$PIDFILE"
 

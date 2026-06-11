@@ -25,9 +25,12 @@ import torch.distributed as dist
 from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader, DistributedSampler, random_split
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+WAYMO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = WAYMO_ROOT.parent
+CORE_ROOT = WAYMO_ROOT / "core"
+for path in (REPO_ROOT, CORE_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 try:
     from vector_tokenizer_encoder import VectorBlockCausalEncoder, VectorStaticMapQueryEncoder, _collate
@@ -39,14 +42,14 @@ try:
     )
     from waymo_vector_dataset import WaymoVectorDataset
 except ModuleNotFoundError:
-    from waymo.vector_tokenizer_encoder import VectorBlockCausalEncoder, VectorStaticMapQueryEncoder, _collate
-    from waymo.vector_tokenizer_decoder import (
+    from waymo.core.vector_tokenizer_encoder import VectorBlockCausalEncoder, VectorStaticMapQueryEncoder, _collate
+    from waymo.core.vector_tokenizer_decoder import (
         VectorBlockCausalTokenizerDecoder,
         VectorTokenizer,
         _slice_time_window,
         vector_tokenizer_reconstruction_loss,
     )
-    from waymo.waymo_vector_dataset import WaymoVectorDataset
+    from waymo.core.waymo_vector_dataset import WaymoVectorDataset
 
 
 def seed_everything(seed: int) -> None:
@@ -109,6 +112,34 @@ def make_splits(dataset: WaymoVectorDataset, val_fraction: float, seed: int) -> 
     return train_ds, val_ds
 
 
+def slice_time_window(
+    batch: Dict[str, torch.Tensor],
+    time_window: int,
+    *,
+    random_start: bool = False,
+) -> Dict[str, torch.Tensor]:
+    if time_window <= 0:
+        return batch
+    total_steps = int(batch["lights"].shape[1])
+    if total_steps <= time_window:
+        return _slice_time_window(batch, time_window)
+    if random_start:
+        start = int(torch.randint(0, total_steps - int(time_window) + 1, (1,)).item())
+    else:
+        start = 0
+    end = start + int(time_window)
+
+    out = dict(batch)
+    k = batch["agent_mask"].shape[-1]
+    if batch["agents"].shape[1] == k:
+        out["agents"] = batch["agents"][:, :, start:end]
+    else:
+        out["agents"] = batch["agents"][:, start:end]
+    out["lights"] = batch["lights"][:, start:end]
+    out["light_mask"] = batch["light_mask"][:, start:end]
+    return out
+
+
 def build_model(args: argparse.Namespace, n_agents: int, n_lights: int) -> VectorTokenizer:
     encoder_kwargs = dict(
         d_model=args.d_model,
@@ -167,6 +198,12 @@ def compute_loss(out, batch: Dict[str, torch.Tensor], args: argparse.Namespace):
         agent_valid_weight=args.agent_valid_weight,
         light_state_weight=args.light_state_weight,
         light_valid_weight=args.light_valid_weight,
+        agent_delta_xy_weight=args.agent_delta_xy_weight,
+        agent_fde_xy_weight=args.agent_fde_xy_weight,
+        agent_kinematic_xy_weight=args.agent_kinematic_xy_weight,
+        agent_speed_yaw_kinematic_weight=args.agent_speed_yaw_kinematic_weight,
+        kinematic_dt=args.kinematic_dt,
+        focus_agent_weight=args.focus_agent_weight,
     )
 
 
@@ -181,9 +218,19 @@ def format_metrics(metrics: Dict[str, float]) -> str:
         "loss_agent_vel",
         "loss_agent_yaw",
         "loss_agent_valid",
+        "loss_agent_delta_xy",
+        "loss_agent_fde_xy",
+        "loss_agent_kinematic_xy",
+        "loss_agent_speed_yaw_kinematic",
         "loss_light_state",
         "loss_light_valid",
         "agent_xy_mae_m",
+        "agent_delta_xy_mae_m",
+        "agent_fde_mae_m",
+        "agent_kinematic_xy_mae_m",
+        "agent_speed_yaw_kinematic_mae_m",
+        "focus_agent_xy_mae_m",
+        "focus_agent_fde_m",
         "agent_speed_mae_mps",
         "agent_vxvy_mae_mps",
         "agent_yaw_mae_deg",
@@ -200,10 +247,20 @@ def ordered_metric_names(metrics: Dict[str, torch.Tensor] | Dict[str, float]) ->
         "loss_agent_vel",
         "loss_agent_xy",
         "loss_agent_yaw",
+        "loss_agent_delta_xy",
+        "loss_agent_fde_xy",
+        "loss_agent_kinematic_xy",
+        "loss_agent_speed_yaw_kinematic",
         "loss_light_state",
         "loss_light_valid",
         "loss_total",
         "agent_xy_mae_m",
+        "agent_delta_xy_mae_m",
+        "agent_fde_mae_m",
+        "agent_kinematic_xy_mae_m",
+        "agent_speed_yaw_kinematic_mae_m",
+        "focus_agent_xy_mae_m",
+        "focus_agent_fde_m",
         "agent_speed_mae_mps",
         "agent_vxvy_mae_mps",
         "agent_yaw_mae_deg",
@@ -236,7 +293,7 @@ def evaluate(
     totals: Dict[str, float] = {}
     count = 0
     for batch in loader:
-        batch = _slice_time_window(move_batch(batch, device), args.time_window)
+        batch = slice_time_window(move_batch(batch, device), args.time_window, random_start=args.eval_random_time_window_start)
         out = model(
             agents=batch["agents"],
             agent_mask=batch["agent_mask"],
@@ -394,7 +451,7 @@ def train(args: argparse.Namespace) -> None:
             train_sampler.set_epoch(epoch)
         model.train()
         for batch in train_loader:
-            batch = _slice_time_window(move_batch(batch, device), args.time_window)
+            batch = slice_time_window(move_batch(batch, device), args.time_window, random_start=args.random_time_window_start)
             opt.zero_grad(set_to_none=True)
             with autocast(device_type=device.type, enabled=use_amp):
                 out = model(
@@ -473,6 +530,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--batch_size", type=int, default=2)
     p.add_argument("--num_workers", type=int, default=0)
     p.add_argument("--time_window", type=int, default=32)
+    p.add_argument("--random_time_window_start", action="store_true", help="Sample a random contiguous time window during training.")
+    p.add_argument("--eval_random_time_window_start", action="store_true", help="Also sample random windows during validation/eval logging.")
     p.add_argument("--val_fraction", type=float, default=0.1)
 
     p.add_argument("--d_model", type=int, default=128)
@@ -498,6 +557,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--agent_valid_weight", type=float, default=0.2)
     p.add_argument("--light_state_weight", type=float, default=0.5)
     p.add_argument("--light_valid_weight", type=float, default=0.1)
+    p.add_argument("--agent_delta_xy_weight", type=float, default=0.0)
+    p.add_argument("--agent_fde_xy_weight", type=float, default=0.0)
+    p.add_argument("--agent_kinematic_xy_weight", type=float, default=0.0)
+    p.add_argument("--agent_speed_yaw_kinematic_weight", type=float, default=0.0)
+    p.add_argument("--kinematic_dt", type=float, default=0.1)
+    p.add_argument("--focus_agent_weight", type=float, default=1.0)
 
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--weight_decay", type=float, default=1e-4)

@@ -18,16 +18,20 @@ from typing import Dict, Iterable, List, Sequence
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+WAYMO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = WAYMO_ROOT.parent
+CORE_ROOT = WAYMO_ROOT / "core"
+EVAL_ROOT = Path(__file__).resolve().parent
+for path in (REPO_ROOT, CORE_ROOT, EVAL_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 try:
     from visualize_waymo_vector_npz import render_video
     from waymo_vector_filter import WaymoVectorConfig, filter_scenario, iter_tfrecord_examples
 except ModuleNotFoundError:
-    from waymo.visualize_waymo_vector_npz import render_video
-    from waymo.waymo_vector_filter import WaymoVectorConfig, filter_scenario, iter_tfrecord_examples
+    from waymo.evaluation.visualize_waymo_vector_npz import render_video
+    from waymo.core.waymo_vector_filter import WaymoVectorConfig, filter_scenario, iter_tfrecord_examples
 
 
 DEFAULT_LABELS = [
@@ -186,12 +190,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument(
         "--stats_csv",
         type=str,
-        default="/p/yufeng/tri30/dreamer4/waymo/reports/ooi_raw_stats_train/waymo_ooi_scenario_stats.csv",
+        default="/p/yufeng/tri30/dreamer4/waymo/evaluation/reports/ooi_raw_stats_train/waymo_ooi_scenario_stats.csv",
     )
     p.add_argument(
         "--output_dir",
         type=str,
-        default="/p/yufeng/tri30/dreamer4/waymo/reports/ooi_visual_samples",
+        default="/p/yufeng/tri30/dreamer4/waymo/evaluation/reports/ooi_visual_samples",
     )
     p.add_argument("--labels", type=str, nargs="*", default=None)
     p.add_argument("--samples_per_label", type=int, default=3)

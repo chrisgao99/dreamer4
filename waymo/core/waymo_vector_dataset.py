@@ -59,6 +59,8 @@ class WaymoVectorDataset(Dataset):
                 "ego_origin_xy": torch.from_numpy(data["ego_origin_xy"]).float(),
                 "ego_heading": torch.as_tensor(float(data["ego_heading"]), dtype=torch.float32),
             }
+            if "scenario_id" in data:
+                item["scenario_id"] = str(data["scenario_id"])
 
         item["path"] = path
         return item

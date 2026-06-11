@@ -5,6 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
+
+WAYMO_ROOT = Path(__file__).resolve().parents[1]
+CORE_ROOT = WAYMO_ROOT / "core"
+if str(CORE_ROOT) not in sys.path:
+    sys.path.insert(0, str(CORE_ROOT))
 
 from waymo_vector_filter import WaymoVectorConfig, iter_filtered_scenarios, summarize_filtered
 

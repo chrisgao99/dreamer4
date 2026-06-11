@@ -110,12 +110,12 @@ def main() -> None:
     p.add_argument(
         "--manifest",
         type=Path,
-        default=Path("/p/yufeng/tri30/dreamer4/waymo/reports/ooi_visual_samples/selected_samples.csv"),
+        default=Path("/p/yufeng/tri30/dreamer4/waymo/evaluation/reports/ooi_visual_samples/selected_samples.csv"),
     )
     p.add_argument(
         "--output",
         type=Path,
-        default=Path("/p/yufeng/tri30/dreamer4/waymo/reports/ooi_visual_samples/index.html"),
+        default=Path("/p/yufeng/tri30/dreamer4/waymo/evaluation/reports/ooi_visual_samples/index.html"),
     )
     args = p.parse_args()
     build_gallery(args.manifest, args.output)

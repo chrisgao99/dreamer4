@@ -596,7 +596,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument(
         "--output_dir",
         type=str,
-        default="/p/yufeng/tri30/dreamer4/waymo/reports/vector_dataset_5k_audit",
+        default="/p/yufeng/tri30/dreamer4/waymo/evaluation/reports/vector_dataset_5k_audit",
     )
     p.add_argument("--max_files", type=int, default=0, help="Optional limit for quick debug runs; 0 means all files.")
     p.add_argument("--outlier_top_k", type=int, default=50)

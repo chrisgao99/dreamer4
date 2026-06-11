@@ -25,9 +25,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+WAYMO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = WAYMO_ROOT.parent
+CORE_ROOT = Path(__file__).resolve().parent
+for path in (REPO_ROOT, CORE_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 from dreamer4.model import MLP, RMSNorm, add_sinusoidal_positions
 from waymo_vector_dataset import WaymoVectorDataset

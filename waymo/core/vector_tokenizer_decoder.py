@@ -19,9 +19,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+WAYMO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = WAYMO_ROOT.parent
+CORE_ROOT = Path(__file__).resolve().parent
+for path in (REPO_ROOT, CORE_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 try:
     from vector_tokenizer_encoder import (
@@ -32,13 +35,13 @@ try:
     )
     from waymo_vector_dataset import WaymoVectorDataset
 except ModuleNotFoundError:
-    from waymo.vector_tokenizer_encoder import (
+    from waymo.core.vector_tokenizer_encoder import (
         VectorBlockCausalEncoder,
         VectorBlockCausalLayer,
         VectorEncoderOutput,
         _collate,
     )
-    from waymo.waymo_vector_dataset import WaymoVectorDataset
+    from waymo.core.waymo_vector_dataset import WaymoVectorDataset
 
 from dreamer4.model import add_sinusoidal_positions
 
@@ -240,12 +243,16 @@ def normalized_agent_targets(
 
 
 def _masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    mask_f = mask.to(dtype=values.dtype)
-    while mask_f.dim() < values.dim():
-        mask_f = mask_f.unsqueeze(-1)
-    mask_f = mask_f.expand_as(values)
-    denom = mask_f.sum().clamp_min(1.0)
-    return (values * mask_f).sum() / denom
+    return _weighted_masked_mean(values, mask.to(dtype=values.dtype))
+
+
+def _weighted_masked_mean(values: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
+    weights = weights.to(device=values.device, dtype=values.dtype)
+    while weights.dim() < values.dim():
+        weights = weights.unsqueeze(-1)
+    weights = weights.expand_as(values)
+    denom = weights.sum().clamp_min(1.0)
+    return (values * weights).sum() / denom
 
 
 def _wrapped_angle_error(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -265,19 +272,70 @@ def vector_tokenizer_reconstruction_loss(
     agent_valid_weight: float = 0.2,
     light_state_weight: float = 0.5,
     light_valid_weight: float = 0.1,
+    agent_delta_xy_weight: float = 0.0,
+    agent_fde_xy_weight: float = 0.0,
+    agent_kinematic_xy_weight: float = 0.0,
+    agent_speed_yaw_kinematic_weight: float = 0.0,
+    kinematic_dt: float = 0.1,
+    focus_agent_weight: float = 1.0,
 ) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     """Compute first-pass reconstruction losses for tokenizer training."""
     agents_btkf = _maybe_transpose_agents(agents, agent_mask)
     agent_slot_mask = agent_mask[:, None, :].to(device=agents_btkf.device, dtype=torch.bool)
     agent_valid_target = (agents_btkf[..., 5] > 0.5) & agent_slot_mask
     agent_target = normalized_agent_targets(agents_btkf, agent_mask, already_btkf=True)
+    agent_loss_weight = agent_valid_target.to(dtype=agents_btkf.dtype)
+    if focus_agent_weight != 1.0 and agent_loss_weight.shape[-1] > 0:
+        agent_loss_weight = agent_loss_weight.clone()
+        agent_loss_weight[..., 0] = agent_loss_weight[..., 0] * float(focus_agent_weight)
 
     agent_xy_raw = F.smooth_l1_loss(pred.agent_continuous[..., 0:2], agent_target[..., 0:2], reduction="none")
-    agent_xy_loss = _masked_mean(agent_xy_raw, agent_valid_target)
+    agent_xy_loss = _weighted_masked_mean(agent_xy_raw, agent_loss_weight)
     agent_vel_raw = F.smooth_l1_loss(pred.agent_continuous[..., 2:5], agent_target[..., 2:5], reduction="none")
-    agent_vel_loss = _masked_mean(agent_vel_raw, agent_valid_target)
+    agent_vel_loss = _weighted_masked_mean(agent_vel_raw, agent_loss_weight)
     agent_yaw_raw = F.smooth_l1_loss(pred.agent_continuous[..., 5:7], agent_target[..., 5:7], reduction="none")
-    agent_yaw_loss = _masked_mean(agent_yaw_raw, agent_valid_target)
+    agent_yaw_loss = _weighted_masked_mean(agent_yaw_raw, agent_loss_weight)
+
+    consecutive_valid = agent_valid_target[:, 1:, :] & agent_valid_target[:, :-1, :]
+    consecutive_weight = consecutive_valid.to(dtype=agents_btkf.dtype)
+    if focus_agent_weight != 1.0 and consecutive_weight.shape[-1] > 0:
+        consecutive_weight = consecutive_weight.clone()
+        consecutive_weight[..., 0] = consecutive_weight[..., 0] * float(focus_agent_weight)
+    pred_delta_xy = pred.agent_continuous[:, 1:, :, 0:2] - pred.agent_continuous[:, :-1, :, 0:2]
+    target_delta_xy = agent_target[:, 1:, :, 0:2] - agent_target[:, :-1, :, 0:2]
+    agent_delta_xy_raw = F.smooth_l1_loss(pred_delta_xy, target_delta_xy, reduction="none")
+    agent_delta_xy_loss = _weighted_masked_mean(agent_delta_xy_raw, consecutive_weight)
+
+    # Kinematic consistency ties reconstructed positions to reconstructed motion
+    # state. XY is normalized by 100m and velocity/speed by 30m/s.
+    dt_scale = float(kinematic_dt) * 30.0 / 100.0
+    pred_vxvy_delta_xy = pred.agent_continuous[:, :-1, :, 3:5] * dt_scale
+    agent_kinematic_xy_raw = F.smooth_l1_loss(pred_delta_xy, pred_vxvy_delta_xy, reduction="none")
+    agent_kinematic_xy_loss = _weighted_masked_mean(agent_kinematic_xy_raw, consecutive_weight)
+
+    pred_yaw_for_delta = torch.atan2(pred.agent_continuous[:, :-1, :, 5], pred.agent_continuous[:, :-1, :, 6])
+    pred_speed_delta_xy = torch.stack(
+        (
+            pred.agent_continuous[:, :-1, :, 2] * torch.cos(pred_yaw_for_delta) * dt_scale,
+            pred.agent_continuous[:, :-1, :, 2] * torch.sin(pred_yaw_for_delta) * dt_scale,
+        ),
+        dim=-1,
+    )
+    agent_speed_yaw_kinematic_raw = F.smooth_l1_loss(pred_delta_xy, pred_speed_delta_xy, reduction="none")
+    agent_speed_yaw_kinematic_loss = _weighted_masked_mean(agent_speed_yaw_kinematic_raw, consecutive_weight)
+
+    any_valid = agent_valid_target.any(dim=1)
+    time_idx = torch.arange(agent_valid_target.shape[1], device=agent_valid_target.device).view(1, -1, 1)
+    last_idx = torch.where(agent_valid_target, time_idx, torch.zeros_like(time_idx)).amax(dim=1)
+    gather_idx = last_idx[:, None, :, None].expand(-1, 1, -1, 2)
+    pred_final_xy = pred.agent_continuous[..., 0:2].gather(dim=1, index=gather_idx).squeeze(1)
+    target_final_xy = agent_target[..., 0:2].gather(dim=1, index=gather_idx).squeeze(1)
+    final_weight = any_valid.to(dtype=agents_btkf.dtype)
+    if focus_agent_weight != 1.0 and final_weight.shape[-1] > 0:
+        final_weight = final_weight.clone()
+        final_weight[..., 0] = final_weight[..., 0] * float(focus_agent_weight)
+    agent_fde_xy_raw = F.smooth_l1_loss(pred_final_xy, target_final_xy, reduction="none")
+    agent_fde_xy_loss = _weighted_masked_mean(agent_fde_xy_raw, final_weight)
 
     agent_valid_raw = F.binary_cross_entropy_with_logits(
         pred.agent_valid_logits,
@@ -300,6 +358,20 @@ def vector_tokenizer_reconstruction_loss(
     pred_xy_m = pred.agent_continuous[..., 0:2] * 100.0
     target_xy_m = agents_btkf[..., 0:2]
     agent_xy_mae_m = _masked_mean((pred_xy_m - target_xy_m).norm(dim=-1), agent_valid_target)
+    agent_delta_xy_mae_m = _masked_mean(((pred_delta_xy - target_delta_xy) * 100.0).norm(dim=-1), consecutive_valid)
+    agent_kinematic_xy_mae_m = _masked_mean(((pred_delta_xy - pred_vxvy_delta_xy) * 100.0).norm(dim=-1), consecutive_valid)
+    agent_speed_yaw_kinematic_mae_m = _masked_mean(
+        ((pred_delta_xy - pred_speed_delta_xy) * 100.0).norm(dim=-1), consecutive_valid
+    )
+    agent_fde_mae_m = _masked_mean(((pred_final_xy - target_final_xy) * 100.0).norm(dim=-1), any_valid)
+    if agent_valid_target.shape[-1] > 0:
+        focus_valid = agent_valid_target[..., 0]
+        focus_agent_xy_mae_m = _masked_mean((pred_xy_m[..., 0, :] - target_xy_m[..., 0, :]).norm(dim=-1), focus_valid)
+        focus_any_valid = any_valid[..., 0]
+        focus_agent_fde_m = _masked_mean(((pred_final_xy[..., 0, :] - target_final_xy[..., 0, :]) * 100.0).norm(dim=-1), focus_any_valid)
+    else:
+        focus_agent_xy_mae_m = pred_xy_m.sum() * 0.0
+        focus_agent_fde_m = pred_xy_m.sum() * 0.0
 
     pred_speed_mps = pred.agent_continuous[..., 2] * 30.0
     agent_speed_mae_mps = _masked_mean((pred_speed_mps - agents_btkf[..., 2]).abs(), agent_valid_target)
@@ -332,6 +404,10 @@ def vector_tokenizer_reconstruction_loss(
         + agent_valid_weight * agent_valid_loss
         + light_state_weight * light_state_loss
         + light_valid_weight * light_valid_loss
+        + agent_delta_xy_weight * agent_delta_xy_loss
+        + agent_fde_xy_weight * agent_fde_xy_loss
+        + agent_kinematic_xy_weight * agent_kinematic_xy_loss
+        + agent_speed_yaw_kinematic_weight * agent_speed_yaw_kinematic_loss
     )
     metrics = {
         "loss_total": total.detach(),
@@ -339,9 +415,19 @@ def vector_tokenizer_reconstruction_loss(
         "loss_agent_vel": agent_vel_loss.detach(),
         "loss_agent_yaw": agent_yaw_loss.detach(),
         "loss_agent_valid": agent_valid_loss.detach(),
+        "loss_agent_delta_xy": agent_delta_xy_loss.detach(),
+        "loss_agent_fde_xy": agent_fde_xy_loss.detach(),
+        "loss_agent_kinematic_xy": agent_kinematic_xy_loss.detach(),
+        "loss_agent_speed_yaw_kinematic": agent_speed_yaw_kinematic_loss.detach(),
         "loss_light_state": light_state_loss.detach(),
         "loss_light_valid": light_valid_loss.detach(),
         "agent_xy_mae_m": agent_xy_mae_m.detach(),
+        "agent_delta_xy_mae_m": agent_delta_xy_mae_m.detach(),
+        "agent_kinematic_xy_mae_m": agent_kinematic_xy_mae_m.detach(),
+        "agent_speed_yaw_kinematic_mae_m": agent_speed_yaw_kinematic_mae_m.detach(),
+        "agent_fde_mae_m": agent_fde_mae_m.detach(),
+        "focus_agent_xy_mae_m": focus_agent_xy_mae_m.detach(),
+        "focus_agent_fde_m": focus_agent_fde_m.detach(),
         "agent_speed_mae_mps": agent_speed_mae_mps.detach(),
         "agent_vxvy_mae_mps": agent_vxvy_mae_mps.detach(),
         "agent_yaw_mae_deg": agent_yaw_mae_deg.detach(),

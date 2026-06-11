@@ -24,9 +24,12 @@ from typing import Dict, Iterable, List
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+WAYMO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = WAYMO_ROOT.parent
+CORE_ROOT = WAYMO_ROOT / "core"
+for path in (REPO_ROOT, CORE_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 try:
     from waymo_vector_filter import (
@@ -35,7 +38,7 @@ try:
         iter_tfrecord_examples,
     )
 except ModuleNotFoundError:
-    from waymo.waymo_vector_filter import (
+    from waymo.core.waymo_vector_filter import (
         WaymoVectorConfig,
         filter_scenario_around_focus,
         iter_tfrecord_examples,
@@ -306,7 +309,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument(
         "--stats_csv",
         type=str,
-        default="/p/yufeng/tri30/dreamer4/waymo/reports/ooi_raw_stats_train/waymo_ooi_scenario_stats.csv",
+        default="/p/yufeng/tri30/dreamer4/waymo/evaluation/reports/ooi_raw_stats_train/waymo_ooi_scenario_stats.csv",
     )
     p.add_argument(
         "--output_dir",

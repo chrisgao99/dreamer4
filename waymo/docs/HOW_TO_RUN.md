@@ -92,7 +92,7 @@ light_mask:    (91, 16)
 This writes an MP4 and a VSCode-friendly PNG contact sheet.
 
 ```bash
-/p/yufeng/.conda/envs/dreamer4/bin/python waymo/visualize_waymo_vector_npz.py \
+/p/yufeng/.conda/envs/dreamer4/bin/python waymo/evaluation/visualize_waymo_vector_npz.py \
   /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset/3e55e88e46dac74e.npz \
   --output /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset/3e55e88e46dac74e.mp4
 ```
@@ -106,7 +106,7 @@ Default extra output:
 Make a denser preview image:
 
 ```bash
-/p/yufeng/.conda/envs/dreamer4/bin/python waymo/visualize_waymo_vector_npz.py \
+/p/yufeng/.conda/envs/dreamer4/bin/python waymo/evaluation/visualize_waymo_vector_npz.py \
   /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset/3e55e88e46dac74e.npz \
   --output /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset/3e55e88e46dac74e.mp4 \
   --preview_frames 20 \
@@ -116,7 +116,7 @@ Make a denser preview image:
 Skip the PNG preview:
 
 ```bash
-/p/yufeng/.conda/envs/dreamer4/bin/python waymo/visualize_waymo_vector_npz.py \
+/p/yufeng/.conda/envs/dreamer4/bin/python waymo/evaluation/visualize_waymo_vector_npz.py \
   /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset/3e55e88e46dac74e.npz \
   --output /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset/3e55e88e46dac74e.mp4 \
   --no_preview_png
@@ -125,7 +125,7 @@ Skip the PNG preview:
 Optionally create a GIF too:
 
 ```bash
-/p/yufeng/.conda/envs/dreamer4/bin/python waymo/visualize_waymo_vector_npz.py \
+/p/yufeng/.conda/envs/dreamer4/bin/python waymo/evaluation/visualize_waymo_vector_npz.py \
   /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset/3e55e88e46dac74e.npz \
   --output /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset/3e55e88e46dac74e.mp4 \
   --gif_output /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset/3e55e88e46dac74e.gif
@@ -220,7 +220,7 @@ The loss is:
 Run a tiny debug check:
 
 ```bash
-/p/yufeng/.conda/envs/dreamer4/bin/python waymo/train_waymo_vector_tokenizer.py \
+/p/yufeng/.conda/envs/dreamer4/bin/python waymo/training/train_waymo_vector_tokenizer.py \
   --data_dir /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset \
   --ckpt_dir /p/yufeng/tri30/dreamer4/waymo/checkpoints/vector_tokenizer_debug \
   --batch_size 2 \
@@ -234,7 +234,7 @@ Run a tiny debug check:
 Run the first baseline on 32-step windows:
 
 ```bash
-/p/yufeng/.conda/envs/dreamer4/bin/python waymo/train_waymo_vector_tokenizer.py \
+/p/yufeng/.conda/envs/dreamer4/bin/python waymo/training/train_waymo_vector_tokenizer.py \
   --data_dir /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset \
   --ckpt_dir /p/yufeng/tri30/dreamer4/waymo/checkpoints/vector_tokenizer_baseline \
   --batch_size 2 \
@@ -250,7 +250,7 @@ Run the first baseline on 32-step windows:
 Run the same trainer on multiple GPUs with `torchrun`:
 
 ```bash
-/p/yufeng/.conda/envs/dreamer4/bin/torchrun --nproc_per_node=4 waymo/train_waymo_vector_tokenizer.py \
+/p/yufeng/.conda/envs/dreamer4/bin/torchrun --nproc_per_node=4 waymo/training/train_waymo_vector_tokenizer.py \
   --data_dir /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset \
   --ckpt_dir /p/yufeng/tri30/dreamer4/waymo/checkpoints/vector_tokenizer_baseline \
   --batch_size 2 \
@@ -268,7 +268,7 @@ Run the same trainer on multiple GPUs with `torchrun`:
 Resume from the latest checkpoint:
 
 ```bash
-/p/yufeng/.conda/envs/dreamer4/bin/python waymo/train_waymo_vector_tokenizer.py \
+/p/yufeng/.conda/envs/dreamer4/bin/python waymo/training/train_waymo_vector_tokenizer.py \
   --data_dir /p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset \
   --ckpt_dir /p/yufeng/tri30/dreamer4/waymo/checkpoints/vector_tokenizer_baseline \
   --resume /p/yufeng/tri30/dreamer4/waymo/checkpoints/vector_tokenizer_baseline/latest.pt

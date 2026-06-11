@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-/p/yufeng/tri30/dreamer4}"
 PYTHON="${PYTHON:-/p/yufeng/.conda/envs/dreamer4/bin/python}"
-STATS_CSV="${STATS_CSV:-$REPO_ROOT/waymo/reports/ooi_raw_stats_train/waymo_ooi_scenario_stats.csv}"
+STATS_CSV="${STATS_CSV:-$REPO_ROOT/waymo/evaluation/reports/ooi_raw_stats_train/waymo_ooi_scenario_stats.csv}"
 DATA_DIR="${DATA_DIR:-$REPO_ROOT/data/waymo_vector_dataset_ooi_centered_50k}"
 CKPT_DIR="${CKPT_DIR:-$REPO_ROOT/waymo/checkpoints/vector_tokenizer_ooi_centered_50k}"
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
@@ -13,7 +13,7 @@ NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 cd "$REPO_ROOT"
 
 echo "=== Stage 1: prepare/resume OOI-centered data ==="
-"$PYTHON" waymo/prepare_waymo_vector_ooi_centered.py \
+"$PYTHON" waymo/data_prep/prepare_waymo_vector_ooi_centered.py \
   --stats_csv "$STATS_CSV" \
   --output_dir "$DATA_DIR" \
   --num_focus_samples "${NUM_FOCUS_SAMPLES:-50000}" \
@@ -37,7 +37,7 @@ fi
 
 echo "=== Stage 2: train tokenizer ==="
 train_args=(
-  waymo/train_waymo_vector_tokenizer.py
+  waymo/training/train_waymo_vector_tokenizer.py
   --data_dir "$DATA_DIR/train"
   --val_data_dir "$DATA_DIR/val"
   --ckpt_dir "$CKPT_DIR"
