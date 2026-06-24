@@ -1,0 +1,35 @@
+Selection rule: best checkpoint is selected by minimum eval loss_total within each log.
+The loss value is intentionally omitted from the comparison table below.
+
+Best checkpoints
+================
+
+raw_gmm_fde
+/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/ooi50k_lat16_d256_ep200_anygpu_staticmap_v2_chunk32_raw_gmm_fdeloss_focus_randstart_noamp/step_00068500.pt
+
+raw_gmm_kin_fde
+/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/ooi50k_lat16_d256_ep200_anygpu_staticmap_v2_chunk32_raw_gmm_kinematic_fdeloss_focus_randstart_noamp/step_00130500.pt
+
+raw_gmm_kin_nofde
+/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/ooi50k_lat16_d256_ep200_anygpu_staticmap_v2_chunk32_raw_gmm_kinematic_nofde_focus_randstart_noamp/step_00114000.pt
+
+raw_kin_fde
+/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/ooi50k_lat16_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_fdeloss_focus_randstart_noamp/step_00108500.pt
+
+raw_kin_nofde
+/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/ooi50k_lat16_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_nofde_focus_randstart_noamp/step_00070500.pt
+
+raw_fde
+/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/ooi50k_lat16_d256_ep200_anygpu_staticmap_v2_chunk32_raw_fdeloss_focus_randstart_noamp/step_00009000.pt
+
+Validation metric comparison
+============================
+
+| experiment | best step | agent ADE (m) | agent FDE (m) | focus ADE (m) | focus FDE (m) | speed MAE (m/s) | yaw MAE (deg) | agent valid acc |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| raw_gmm_fde | 68500 | 4.2112 | 2.0398 | 0.5684 | 0.4863 | 0.9666 | 46.9923 | 0.9291 |
+| raw_gmm_kin_fde | 130500 | 0.8626 | 0.5686 | 0.1440 | 0.2068 | 0.2904 | 27.9488 | 0.9797 |
+| raw_gmm_kin_nofde | 114000 | 5.4928 | 6.2234 | 0.0897 | 0.1322 | 0.4162 | 15.6380 | 0.9617 |
+| raw_kin_fde | 108500 | 0.8045 | 0.6664 | 0.2831 | 0.2743 | 0.2614 | 22.4241 | 0.9915 |
+| raw_kin_nofde | 70500 | 0.7411 | 0.7651 | 0.1753 | 0.3322 | 0.1720 | 4.7481 | 0.9992 |
+| raw_fde | 9000 | 5.0135 | 3.1125 | 1.7591 | 1.3939 | 1.3320 | 56.6128 | 0.9186 |

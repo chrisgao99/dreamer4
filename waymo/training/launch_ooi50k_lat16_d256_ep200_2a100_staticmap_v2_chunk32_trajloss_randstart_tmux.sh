@@ -3,8 +3,8 @@ set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-/scratch/baz7dy/tri30/dreamer4}"
 PYTHON="${PYTHON:-/home/baz7dy/.conda/envs/dreamer4/bin/python}"
-RUN_NAME="${RUN_NAME:-ooi50k_lat16_d256_ep200_2a100_staticmap_v2_chunk32_trajloss_randstart}"
-SESSION_NAME="${SESSION_NAME:-ooi50k_staticmap_v2_chunk32_trajloss_randstart}"
+RUN_NAME="${RUN_NAME:-ooi50k_lat16_d256_ep200_anygpu_staticmap_v2_chunk32_trajloss_randstart_noamp}"
+SESSION_NAME="${SESSION_NAME:-ooi50k_staticmap_v2_chunk32_trajloss_randstart_noamp}"
 
 DATA_DIR="${DATA_DIR:-$REPO_ROOT/waymo/data/waymo_vector_dataset_ooi_centered_50k}"
 CKPT_DIR="${CKPT_DIR:-$REPO_ROOT/waymo/checkpoints/$RUN_NAME}"
@@ -18,7 +18,7 @@ OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 WANDB_MODE="${WANDB_MODE:-online}"
 
 BATCH_SIZE="${BATCH_SIZE:-32}"
-NUM_WORKERS="${NUM_WORKERS:-8}"
+NUM_WORKERS="${NUM_WORKERS:-4}"
 EPOCHS="${EPOCHS:-200}"
 D_MODEL="${D_MODEL:-256}"
 DEPTH="${DEPTH:-4}"
@@ -29,17 +29,27 @@ TIME_WINDOW="${TIME_WINDOW:-32}"
 LOG_EVERY="${LOG_EVERY:-20}"
 EVAL_EVERY="${EVAL_EVERY:-500}"
 SAVE_EVERY="${SAVE_EVERY:-500}"
+BOTTLENECK_OUTPUT="${BOTTLENECK_OUTPUT:-tanh}"
+DECODER_USE_AGENT_TOKENS="${DECODER_USE_AGENT_TOKENS:-0}"
+DECODER_AGENT_TOKEN_MODE="${DECODER_AGENT_TOKEN_MODE:-none}"
+OVERWRITE_RUN="${OVERWRITE_RUN:-0}"
 
 ENCODER_VARIANT="${ENCODER_VARIANT:-static_map_query}"
 MAP_DEPTH="${MAP_DEPTH:-2}"
 MAP_CROSS_EVERY="${MAP_CROSS_EVERY:-1}"
 MAP_QUERY_TOKENS="${MAP_QUERY_TOKENS:-latent_agent}"
+AGENT_XY_LOSS="${AGENT_XY_LOSS:-smooth_l1}"
+AGENT_XY_PARAMETERIZATION="${AGENT_XY_PARAMETERIZATION:-absolute}"
 AGENT_DELTA_XY_WEIGHT="${AGENT_DELTA_XY_WEIGHT:-5}"
 AGENT_FDE_XY_WEIGHT="${AGENT_FDE_XY_WEIGHT:-2}"
 AGENT_KINEMATIC_XY_WEIGHT="${AGENT_KINEMATIC_XY_WEIGHT:-0}"
 AGENT_SPEED_YAW_KINEMATIC_WEIGHT="${AGENT_SPEED_YAW_KINEMATIC_WEIGHT:-0}"
 KINEMATIC_DT="${KINEMATIC_DT:-0.1}"
 FOCUS_AGENT_WEIGHT="${FOCUS_AGENT_WEIGHT:-4}"
+LR="${LR:-3e-4}"
+WEIGHT_DECAY="${WEIGHT_DECAY:-1e-4}"
+GRAD_CLIP="${GRAD_CLIP:-1.0}"
+NO_AMP="${NO_AMP:-1}"
 
 check_required_paths() {
   if [[ ! -x "$PYTHON" ]]; then
@@ -68,6 +78,38 @@ check_required_paths() {
 }
 
 check_required_paths
+
+is_truthy() {
+  [[ "$1" == "1" || "$1" == "true" || "$1" == "TRUE" ]]
+}
+
+prepare_overwrite_run() {
+  if ! is_truthy "$OVERWRITE_RUN"; then
+    mkdir -p "$CKPT_DIR" "$LOG_DIR" "$WANDB_DIR"
+    return
+  fi
+  if [[ -z "$RUN_NAME" ]]; then
+    echo "Refusing OVERWRITE_RUN=1 with empty RUN_NAME" >&2
+    exit 1
+  fi
+  case "$CKPT_DIR" in
+    "$REPO_ROOT/waymo/checkpoints/"*) ;;
+    *)
+      echo "Refusing to remove checkpoint dir outside $REPO_ROOT/waymo/checkpoints: $CKPT_DIR" >&2
+      exit 1
+      ;;
+  esac
+  case "$LOG" in
+    "$REPO_ROOT/waymo/logs/"*) ;;
+    *)
+      echo "Refusing to truncate log outside $REPO_ROOT/waymo/logs: $LOG" >&2
+      exit 1
+      ;;
+  esac
+  rm -rf "$CKPT_DIR"
+  mkdir -p "$CKPT_DIR" "$LOG_DIR" "$WANDB_DIR"
+  : > "$LOG"
+}
 
 if [[ "${RUN_INSIDE_TMUX:-0}" != "1" ]]; then
   mkdir -p "$CKPT_DIR" "$LOG_DIR" "$WANDB_DIR"
@@ -101,7 +143,7 @@ if [[ "${RUN_INSIDE_TMUX:-0}" != "1" ]]; then
 fi
 
 cd "$REPO_ROOT"
-mkdir -p "$CKPT_DIR" "$LOG_DIR" "$WANDB_DIR"
+prepare_overwrite_run
 
 export CUDA_VISIBLE_DEVICES
 export OMP_NUM_THREADS
@@ -127,12 +169,18 @@ train_args=(
   --map_depth "$MAP_DEPTH"
   --map_cross_every "$MAP_CROSS_EVERY"
   --map_query_tokens "$MAP_QUERY_TOKENS"
+  --bottleneck_output "$BOTTLENECK_OUTPUT"
+  --agent_xy_loss "$AGENT_XY_LOSS"
+  --agent_xy_parameterization "$AGENT_XY_PARAMETERIZATION"
   --agent_delta_xy_weight "$AGENT_DELTA_XY_WEIGHT"
   --agent_fde_xy_weight "$AGENT_FDE_XY_WEIGHT"
   --agent_kinematic_xy_weight "$AGENT_KINEMATIC_XY_WEIGHT"
   --agent_speed_yaw_kinematic_weight "$AGENT_SPEED_YAW_KINEMATIC_WEIGHT"
   --kinematic_dt "$KINEMATIC_DT"
   --focus_agent_weight "$FOCUS_AGENT_WEIGHT"
+  --lr "$LR"
+  --weight_decay "$WEIGHT_DECAY"
+  --grad_clip "$GRAD_CLIP"
   --log_every "$LOG_EVERY"
   --eval_every "$EVAL_EVERY"
   --save_every "$SAVE_EVERY"
@@ -140,6 +188,16 @@ train_args=(
   --wandb_project waymo-vector-tokenizer
   --wandb_run_name "$RUN_NAME"
 )
+
+if [[ "$NO_AMP" == "1" || "$NO_AMP" == "true" || "$NO_AMP" == "TRUE" ]]; then
+  train_args+=(--no_amp)
+fi
+if [[ "$DECODER_USE_AGENT_TOKENS" == "1" || "$DECODER_USE_AGENT_TOKENS" == "true" || "$DECODER_USE_AGENT_TOKENS" == "TRUE" ]]; then
+  train_args+=(--decoder_use_agent_tokens)
+fi
+if [[ "$DECODER_AGENT_TOKEN_MODE" != "none" ]]; then
+  train_args+=(--decoder_agent_token_mode "$DECODER_AGENT_TOKEN_MODE")
+fi
 
 if [[ -f "$CKPT_DIR/latest.pt" ]]; then
   train_args+=(--resume "$CKPT_DIR/latest.pt")
@@ -153,12 +211,15 @@ fi
   echo "cuda=$CUDA_VISIBLE_DEVICES"
   echo "nproc_per_node=$NPROC_PER_NODE"
   echo "wandb_mode=$WANDB_MODE"
+  echo "overwrite_run=$OVERWRITE_RUN"
   echo "data_dir=$DATA_DIR"
   echo "ckpt_dir=$CKPT_DIR"
   echo "log=$LOG"
   echo "batch_size=$BATCH_SIZE epochs=$EPOCHS d_model=$D_MODEL depth=$DEPTH decoder_depth=$DECODER_DEPTH n_latents=$N_LATENTS d_bottleneck=$D_BOTTLENECK time_window=$TIME_WINDOW random_time_window_start=1"
   echo "encoder_variant=$ENCODER_VARIANT map_depth=$MAP_DEPTH map_cross_every=$MAP_CROSS_EVERY map_query_tokens=$MAP_QUERY_TOKENS"
-  echo "agent_delta_xy_weight=$AGENT_DELTA_XY_WEIGHT agent_fde_xy_weight=$AGENT_FDE_XY_WEIGHT agent_kinematic_xy_weight=$AGENT_KINEMATIC_XY_WEIGHT agent_speed_yaw_kinematic_weight=$AGENT_SPEED_YAW_KINEMATIC_WEIGHT kinematic_dt=$KINEMATIC_DT focus_agent_weight=$FOCUS_AGENT_WEIGHT"
+  echo "bottleneck_output=$BOTTLENECK_OUTPUT decoder_use_agent_tokens=$DECODER_USE_AGENT_TOKENS decoder_agent_token_mode=$DECODER_AGENT_TOKEN_MODE"
+  echo "agent_xy_loss=$AGENT_XY_LOSS agent_xy_parameterization=$AGENT_XY_PARAMETERIZATION agent_delta_xy_weight=$AGENT_DELTA_XY_WEIGHT agent_fde_xy_weight=$AGENT_FDE_XY_WEIGHT agent_kinematic_xy_weight=$AGENT_KINEMATIC_XY_WEIGHT agent_speed_yaw_kinematic_weight=$AGENT_SPEED_YAW_KINEMATIC_WEIGHT kinematic_dt=$KINEMATIC_DT focus_agent_weight=$FOCUS_AGENT_WEIGHT"
+  echo "lr=$LR weight_decay=$WEIGHT_DECAY grad_clip=$GRAD_CLIP no_amp=$NO_AMP"
   echo "loss_fix=normalized_agent_targets_no_double_transpose"
   echo "========================"
 } | tee -a "$LOG"

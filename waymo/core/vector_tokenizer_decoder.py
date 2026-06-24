@@ -1,9 +1,9 @@
-"""Latent-only decoder for the Waymo vector tokenizer.
+"""Decoder for the Waymo vector tokenizer.
 
-This is Decoder 1 from the tokenizer plan: reconstructed agent and traffic
-light states are decoded only from bottleneck latents ``z`` plus learned query
-tokens. Static map conditioning is intentionally left for a later decoder
-variant, so this module is a strict bottleneck smoke test for the encoder.
+By default this is Decoder 1 from the tokenizer plan: reconstructed agent and
+traffic light states are decoded only from bottleneck latents ``z`` plus learned
+query tokens. Optional ablation flags can expose all or only the focus encoder
+agent token to the decoder or interpret XY head outputs as per-step deltas.
 """
 
 from __future__ import annotations
@@ -48,19 +48,57 @@ from dreamer4.model import add_sinusoidal_positions
 
 @dataclass(frozen=True)
 class VectorDecoderOutput:
-    agent_continuous: torch.Tensor      # (B,T,K,7): x/100,y/100,speed/30,vx/30,vy/30,sin(yaw),cos(yaw)
+    agent_continuous: torch.Tensor      # (B,T,K,7): x,y,speed,vx,vy,sin(yaw),cos(yaw)
     agent_valid_logits: torch.Tensor    # (B,T,K)
     light_state_logits: torch.Tensor    # (B,T,L,num_light_states)
     light_valid_logits: torch.Tensor    # (B,T,L)
     agent_tokens: torch.Tensor          # (B,T,K,D)
     light_tokens: torch.Tensor          # (B,T,L,D)
     token_mask: torch.Tensor            # (B,T,S)
+    agent_xy_gmm: Optional[torch.Tensor] = None  # (B,T,K,5): mux,muy,log_sx,log_sy,rho_raw
 
 
 @dataclass(frozen=True)
 class VectorTokenizerOutput:
     encoder: VectorEncoderOutput
     decoder: VectorDecoderOutput
+
+
+def decoder_agent_xy(
+    pred: VectorDecoderOutput,
+    agent_xy_loss: str = "smooth_l1",
+    agent_xy_parameterization: str = "absolute",
+    *,
+    anchor_xy: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    """Return the reconstructed XY tensor used by the configured XY objective.
+
+    XY metrics, FDE metrics, delta-XY losses, and visualizations should all use
+    this helper so GMM checkpoints are evaluated from the GMM mean while
+    smooth-L1 checkpoints are evaluated from the continuous head.
+    """
+    if agent_xy_loss == "smooth_l1":
+        xy_head = pred.agent_continuous[..., 0:2]
+    elif agent_xy_loss == "gmm":
+        if pred.agent_xy_gmm is None:
+            raise ValueError("agent_xy_loss='gmm' requires pred.agent_xy_gmm")
+        xy_head = pred.agent_xy_gmm[..., 0:2]
+    else:
+        raise ValueError(f"Unknown agent_xy_loss: {agent_xy_loss}")
+
+    if agent_xy_parameterization == "absolute":
+        return xy_head
+    if agent_xy_parameterization == "delta":
+        if agent_xy_loss != "smooth_l1":
+            raise ValueError("agent_xy_parameterization='delta' currently supports only agent_xy_loss='smooth_l1'")
+        if anchor_xy is None:
+            raise ValueError("agent_xy_parameterization='delta' requires anchor_xy with shape (B,K,2)")
+        if anchor_xy.dim() != 3 or anchor_xy.shape[-1] != 2:
+            raise ValueError(f"Expected anchor_xy with shape (B,K,2), got {tuple(anchor_xy.shape)}")
+        zero_delta = torch.zeros_like(xy_head[:, :1])
+        deltas = torch.cat([zero_delta, xy_head[:, 1:]], dim=1)
+        return anchor_xy[:, None, :, :].to(device=xy_head.device, dtype=xy_head.dtype) + deltas.cumsum(dim=1)
+    raise ValueError(f"Unknown agent_xy_parameterization: {agent_xy_parameterization}")
 
 
 def _maybe_transpose_agents(agents: torch.Tensor, agent_mask: torch.Tensor) -> torch.Tensor:
@@ -90,6 +128,9 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
         mlp_ratio: float = 4.0,
         time_every: int = 1,
         scale_pos_embeds: bool = True,
+        use_agent_tokens: bool = False,
+        agent_token_mode: str = "none",
+        predict_agent_xy_gmm: bool = False,
     ):
         super().__init__()
         self.d_model = int(d_model)
@@ -98,8 +139,16 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
         self.n_lights = int(n_lights)
         self.num_light_states = int(num_light_states)
         self.scale_pos_embeds = bool(scale_pos_embeds)
+        if bool(use_agent_tokens) and agent_token_mode == "none":
+            agent_token_mode = "all"
+        if agent_token_mode not in {"none", "all", "focus"}:
+            raise ValueError(f"agent_token_mode must be one of none, all, focus; got {agent_token_mode!r}")
+        self.agent_token_mode = agent_token_mode
+        self.use_agent_tokens = self.agent_token_mode != "none"
+        self.predict_agent_xy_gmm = bool(predict_agent_xy_gmm)
 
         self.up_proj = nn.Linear(d_bottleneck, d_model)
+        self.agent_skip_proj = nn.Linear(d_model, d_model) if self.use_agent_tokens else None
         self.agent_queries = nn.Parameter(torch.empty(n_agents, d_model))
         self.light_queries = nn.Parameter(torch.empty(n_lights, d_model))
         nn.init.normal_(self.agent_queries, std=0.02)
@@ -120,6 +169,7 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
         )
 
         self.agent_continuous_head = nn.Linear(d_model, 7)
+        self.agent_xy_gmm_head = nn.Linear(d_model, 5) if self.predict_agent_xy_gmm else None
         self.agent_valid_head = nn.Linear(d_model, 1)
         self.light_state_head = nn.Linear(d_model, num_light_states)
         self.light_valid_head = nn.Linear(d_model, 1)
@@ -130,6 +180,8 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
         *,
         agent_mask: Optional[torch.Tensor] = None,
         light_mask: Optional[torch.Tensor] = None,
+        encoder_agent_tokens: Optional[torch.Tensor] = None,
+        encoder_agent_mask: Optional[torch.Tensor] = None,
     ) -> VectorDecoderOutput:
         """Decode bottleneck latents.
 
@@ -154,8 +206,6 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
         latents = torch.tanh(self.up_proj(z))
         agent_queries = self.agent_queries[:k].view(1, 1, k, self.d_model).expand(b, t, k, self.d_model)
         light_queries = self.light_queries[:l].view(1, 1, l, self.d_model).expand(b, t, l, self.d_model)
-        tokens = torch.cat([latents, agent_queries, light_queries], dim=2)
-
         latent_mask = torch.ones((b, t, self.n_latents), dtype=torch.bool, device=z.device)
         if agent_mask is None:
             agent_query_mask = torch.ones((b, t, k), dtype=torch.bool, device=z.device)
@@ -166,14 +216,39 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
         else:
             light_ever_valid = light_mask.to(device=z.device, dtype=torch.bool).any(dim=1)
             light_query_mask = light_ever_valid[:, None, :].expand(b, t, l)
-        token_mask = torch.cat([latent_mask, agent_query_mask, light_query_mask], dim=2)
+        token_parts = [latents]
+        mask_parts = [latent_mask]
+        agent_skip_count = 0
+        if self.use_agent_tokens:
+            if encoder_agent_tokens is None:
+                raise ValueError("Decoder was built with use_agent_tokens=True but encoder_agent_tokens is None")
+            if encoder_agent_tokens.shape[:3] != (b, t, k):
+                raise ValueError(
+                    "Expected encoder_agent_tokens with shape "
+                    f"{(b, t, k, self.d_model)}, got {tuple(encoder_agent_tokens.shape)}"
+                )
+            if self.agent_token_mode == "focus":
+                agent_skip_count = 1 if k > 0 else 0
+            else:
+                agent_skip_count = k
+            skip_tokens = self.agent_skip_proj(encoder_agent_tokens[:, :, :agent_skip_count, :])
+            if encoder_agent_mask is None:
+                skip_mask = agent_query_mask[:, :, :agent_skip_count]
+            else:
+                skip_mask = encoder_agent_mask.to(device=z.device, dtype=torch.bool)[:, :, :agent_skip_count]
+            token_parts.append(skip_tokens)
+            mask_parts.append(skip_mask)
+        token_parts.extend([agent_queries, light_queries])
+        mask_parts.extend([agent_query_mask, light_query_mask])
+        tokens = torch.cat(token_parts, dim=2)
+        token_mask = torch.cat(mask_parts, dim=2)
 
         tokens = add_sinusoidal_positions(tokens, self.scale_pos_embeds)
         tokens = tokens * token_mask[..., None].to(tokens.dtype)
         for layer in self.layers:
             tokens = layer(tokens, token_mask=token_mask)
 
-        agent_start = self.n_latents
+        agent_start = self.n_latents + agent_skip_count
         light_start = agent_start + k
         agent_tokens = tokens[:, :, agent_start:light_start, :]
         light_tokens = tokens[:, :, light_start : light_start + l, :]
@@ -186,6 +261,7 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
             agent_tokens=agent_tokens,
             light_tokens=light_tokens,
             token_mask=token_mask,
+            agent_xy_gmm=None if self.agent_xy_gmm_head is None else self.agent_xy_gmm_head(agent_tokens),
         )
 
 
@@ -215,11 +291,18 @@ class VectorTokenizer(nn.Module):
             lights=lights,
             light_mask=light_mask,
         )
-        dec = self.decoder(enc.z, agent_mask=agent_mask, light_mask=light_mask)
+        decoder_kwargs = {}
+        if getattr(self.decoder, "use_agent_tokens", False):
+            agents_btkf = _maybe_transpose_agents(agents, agent_mask)
+            decoder_kwargs["encoder_agent_tokens"] = enc.agent_tokens
+            decoder_kwargs["encoder_agent_mask"] = (agents_btkf[..., 5] > 0.5) & agent_mask[:, None, :].to(
+                device=agents_btkf.device, dtype=torch.bool
+            )
+        dec = self.decoder(enc.z, agent_mask=agent_mask, light_mask=light_mask, **decoder_kwargs)
         return VectorTokenizerOutput(encoder=enc, decoder=dec)
 
 
-def normalized_agent_targets(
+def agent_reconstruction_targets(
     agents: torch.Tensor,
     agent_mask: torch.Tensor,
     *,
@@ -230,16 +313,26 @@ def normalized_agent_targets(
     yaw = agents[..., 6]
     return torch.stack(
         [
-            agents[..., 0] / 100.0,
-            agents[..., 1] / 100.0,
-            agents[..., 2] / 30.0,
-            agents[..., 3] / 30.0,
-            agents[..., 4] / 30.0,
+            agents[..., 0],
+            agents[..., 1],
+            agents[..., 2],
+            agents[..., 3],
+            agents[..., 4],
             torch.sin(yaw),
             torch.cos(yaw),
         ],
         dim=-1,
     )
+
+
+def normalized_agent_targets(
+    agents: torch.Tensor,
+    agent_mask: torch.Tensor,
+    *,
+    already_btkf: bool = False,
+) -> torch.Tensor:
+    """Backward-compatible alias for raw reconstruction targets."""
+    return agent_reconstruction_targets(agents, agent_mask, already_btkf=already_btkf)
 
 
 def _masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -257,6 +350,27 @@ def _weighted_masked_mean(values: torch.Tensor, weights: torch.Tensor) -> torch.
 
 def _wrapped_angle_error(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return torch.atan2(torch.sin(a - b), torch.cos(a - b)).abs()
+
+
+def _bivariate_gaussian_nll(
+    pred_xy_gmm: torch.Tensor,
+    target_xy: torch.Tensor,
+    *,
+    log_std_range: tuple[float, float] = (-1.609, 5.0),
+    rho_limit: float = 0.5,
+) -> torch.Tensor:
+    mux, muy, log_sx, log_sy, rho_raw = pred_xy_gmm.unbind(dim=-1)
+    log_sx = torch.clamp(log_sx, min=log_std_range[0], max=log_std_range[1])
+    log_sy = torch.clamp(log_sy, min=log_std_range[0], max=log_std_range[1])
+    sx = torch.exp(log_sx)
+    sy = torch.exp(log_sy)
+    rho = torch.clamp(torch.tanh(rho_raw), min=-rho_limit, max=rho_limit)
+
+    dx = target_xy[..., 0] - mux
+    dy = target_xy[..., 1] - muy
+    one_minus_rho2 = torch.clamp(1.0 - rho * rho, min=1e-6)
+    z = (dx / sx) ** 2 + (dy / sy) ** 2 - 2.0 * rho * dx * dy / (sx * sy)
+    return log_sx + log_sy + 0.5 * torch.log(one_minus_rho2) + 0.5 * z / one_minus_rho2
 
 
 def vector_tokenizer_reconstruction_loss(
@@ -278,19 +392,37 @@ def vector_tokenizer_reconstruction_loss(
     agent_speed_yaw_kinematic_weight: float = 0.0,
     kinematic_dt: float = 0.1,
     focus_agent_weight: float = 1.0,
+    agent_xy_loss: str = "smooth_l1",
+    agent_xy_parameterization: str = "absolute",
 ) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     """Compute first-pass reconstruction losses for tokenizer training."""
     agents_btkf = _maybe_transpose_agents(agents, agent_mask)
     agent_slot_mask = agent_mask[:, None, :].to(device=agents_btkf.device, dtype=torch.bool)
     agent_valid_target = (agents_btkf[..., 5] > 0.5) & agent_slot_mask
-    agent_target = normalized_agent_targets(agents_btkf, agent_mask, already_btkf=True)
+    agent_target = agent_reconstruction_targets(agents_btkf, agent_mask, already_btkf=True)
     agent_loss_weight = agent_valid_target.to(dtype=agents_btkf.dtype)
     if focus_agent_weight != 1.0 and agent_loss_weight.shape[-1] > 0:
         agent_loss_weight = agent_loss_weight.clone()
         agent_loss_weight[..., 0] = agent_loss_weight[..., 0] * float(focus_agent_weight)
 
-    agent_xy_raw = F.smooth_l1_loss(pred.agent_continuous[..., 0:2], agent_target[..., 0:2], reduction="none")
-    agent_xy_loss = _weighted_masked_mean(agent_xy_raw, agent_loss_weight)
+    target_xy = agent_target[..., 0:2]
+    anchor_xy = target_xy[:, 0] if agent_xy_parameterization == "delta" else None
+    pred_xy = decoder_agent_xy(
+        pred,
+        agent_xy_loss,
+        agent_xy_parameterization,
+        anchor_xy=anchor_xy,
+    )
+    if agent_xy_loss == "smooth_l1":
+        agent_xy_raw = F.smooth_l1_loss(pred_xy, target_xy, reduction="none")
+        agent_xy_loss_value = _weighted_masked_mean(agent_xy_raw, agent_loss_weight)
+    elif agent_xy_loss == "gmm":
+        if agent_xy_parameterization != "absolute":
+            raise ValueError("GMM XY loss supports only agent_xy_parameterization='absolute'")
+        agent_xy_raw = _bivariate_gaussian_nll(pred.agent_xy_gmm, agent_target[..., 0:2])
+        agent_xy_loss_value = _weighted_masked_mean(agent_xy_raw, agent_loss_weight)
+    else:
+        raise ValueError(f"Unknown agent_xy_loss: {agent_xy_loss}")
     agent_vel_raw = F.smooth_l1_loss(pred.agent_continuous[..., 2:5], agent_target[..., 2:5], reduction="none")
     agent_vel_loss = _weighted_masked_mean(agent_vel_raw, agent_loss_weight)
     agent_yaw_raw = F.smooth_l1_loss(pred.agent_continuous[..., 5:7], agent_target[..., 5:7], reduction="none")
@@ -301,14 +433,14 @@ def vector_tokenizer_reconstruction_loss(
     if focus_agent_weight != 1.0 and consecutive_weight.shape[-1] > 0:
         consecutive_weight = consecutive_weight.clone()
         consecutive_weight[..., 0] = consecutive_weight[..., 0] * float(focus_agent_weight)
-    pred_delta_xy = pred.agent_continuous[:, 1:, :, 0:2] - pred.agent_continuous[:, :-1, :, 0:2]
-    target_delta_xy = agent_target[:, 1:, :, 0:2] - agent_target[:, :-1, :, 0:2]
+    pred_delta_xy = pred_xy[:, 1:, :, :] - pred_xy[:, :-1, :, :]
+    target_delta_xy = target_xy[:, 1:, :, :] - target_xy[:, :-1, :, :]
     agent_delta_xy_raw = F.smooth_l1_loss(pred_delta_xy, target_delta_xy, reduction="none")
     agent_delta_xy_loss = _weighted_masked_mean(agent_delta_xy_raw, consecutive_weight)
 
-    # Kinematic consistency ties reconstructed positions to reconstructed motion
-    # state. XY is normalized by 100m and velocity/speed by 30m/s.
-    dt_scale = float(kinematic_dt) * 30.0 / 100.0
+    # Kinematic consistency ties reconstructed positions in meters to
+    # reconstructed motion state in m/s.
+    dt_scale = float(kinematic_dt)
     pred_vxvy_delta_xy = pred.agent_continuous[:, :-1, :, 3:5] * dt_scale
     agent_kinematic_xy_raw = F.smooth_l1_loss(pred_delta_xy, pred_vxvy_delta_xy, reduction="none")
     agent_kinematic_xy_loss = _weighted_masked_mean(agent_kinematic_xy_raw, consecutive_weight)
@@ -328,8 +460,8 @@ def vector_tokenizer_reconstruction_loss(
     time_idx = torch.arange(agent_valid_target.shape[1], device=agent_valid_target.device).view(1, -1, 1)
     last_idx = torch.where(agent_valid_target, time_idx, torch.zeros_like(time_idx)).amax(dim=1)
     gather_idx = last_idx[:, None, :, None].expand(-1, 1, -1, 2)
-    pred_final_xy = pred.agent_continuous[..., 0:2].gather(dim=1, index=gather_idx).squeeze(1)
-    target_final_xy = agent_target[..., 0:2].gather(dim=1, index=gather_idx).squeeze(1)
+    pred_final_xy = pred_xy.gather(dim=1, index=gather_idx).squeeze(1)
+    target_final_xy = target_xy.gather(dim=1, index=gather_idx).squeeze(1)
     final_weight = any_valid.to(dtype=agents_btkf.dtype)
     if focus_agent_weight != 1.0 and final_weight.shape[-1] > 0:
         final_weight = final_weight.clone()
@@ -355,28 +487,28 @@ def vector_tokenizer_reconstruction_loss(
         light_valid_target.to(dtype=pred.light_valid_logits.dtype),
     )
 
-    pred_xy_m = pred.agent_continuous[..., 0:2] * 100.0
+    pred_xy_m = pred_xy
     target_xy_m = agents_btkf[..., 0:2]
     agent_xy_mae_m = _masked_mean((pred_xy_m - target_xy_m).norm(dim=-1), agent_valid_target)
-    agent_delta_xy_mae_m = _masked_mean(((pred_delta_xy - target_delta_xy) * 100.0).norm(dim=-1), consecutive_valid)
-    agent_kinematic_xy_mae_m = _masked_mean(((pred_delta_xy - pred_vxvy_delta_xy) * 100.0).norm(dim=-1), consecutive_valid)
+    agent_delta_xy_mae_m = _masked_mean((pred_delta_xy - target_delta_xy).norm(dim=-1), consecutive_valid)
+    agent_kinematic_xy_mae_m = _masked_mean((pred_delta_xy - pred_vxvy_delta_xy).norm(dim=-1), consecutive_valid)
     agent_speed_yaw_kinematic_mae_m = _masked_mean(
-        ((pred_delta_xy - pred_speed_delta_xy) * 100.0).norm(dim=-1), consecutive_valid
+        (pred_delta_xy - pred_speed_delta_xy).norm(dim=-1), consecutive_valid
     )
-    agent_fde_mae_m = _masked_mean(((pred_final_xy - target_final_xy) * 100.0).norm(dim=-1), any_valid)
+    agent_fde_mae_m = _masked_mean((pred_final_xy - target_final_xy).norm(dim=-1), any_valid)
     if agent_valid_target.shape[-1] > 0:
         focus_valid = agent_valid_target[..., 0]
         focus_agent_xy_mae_m = _masked_mean((pred_xy_m[..., 0, :] - target_xy_m[..., 0, :]).norm(dim=-1), focus_valid)
         focus_any_valid = any_valid[..., 0]
-        focus_agent_fde_m = _masked_mean(((pred_final_xy[..., 0, :] - target_final_xy[..., 0, :]) * 100.0).norm(dim=-1), focus_any_valid)
+        focus_agent_fde_m = _masked_mean((pred_final_xy[..., 0, :] - target_final_xy[..., 0, :]).norm(dim=-1), focus_any_valid)
     else:
         focus_agent_xy_mae_m = pred_xy_m.sum() * 0.0
         focus_agent_fde_m = pred_xy_m.sum() * 0.0
 
-    pred_speed_mps = pred.agent_continuous[..., 2] * 30.0
+    pred_speed_mps = pred.agent_continuous[..., 2]
     agent_speed_mae_mps = _masked_mean((pred_speed_mps - agents_btkf[..., 2]).abs(), agent_valid_target)
 
-    pred_vel_mps = pred.agent_continuous[..., 3:5] * 30.0
+    pred_vel_mps = pred.agent_continuous[..., 3:5]
     target_vel_mps = agents_btkf[..., 3:5]
     agent_vxvy_mae_mps = _masked_mean((pred_vel_mps - target_vel_mps).norm(dim=-1), agent_valid_target)
 
@@ -398,7 +530,7 @@ def vector_tokenizer_reconstruction_loss(
         light_state_acc = pred.light_state_logits.sum() * 0.0
 
     total = (
-        agent_xy_weight * agent_xy_loss
+        agent_xy_weight * agent_xy_loss_value
         + agent_vel_weight * agent_vel_loss
         + agent_yaw_weight * agent_yaw_loss
         + agent_valid_weight * agent_valid_loss
@@ -411,7 +543,7 @@ def vector_tokenizer_reconstruction_loss(
     )
     metrics = {
         "loss_total": total.detach(),
-        "loss_agent_xy": agent_xy_loss.detach(),
+        "loss_agent_xy": agent_xy_loss_value.detach(),
         "loss_agent_vel": agent_vel_loss.detach(),
         "loss_agent_yaw": agent_yaw_loss.detach(),
         "loss_agent_valid": agent_valid_loss.detach(),

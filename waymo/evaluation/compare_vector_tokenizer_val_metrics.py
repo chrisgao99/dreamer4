@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 import torch
 from torch.utils.data import DataLoader, Subset
@@ -22,7 +22,7 @@ for path in (REPO_ROOT, WAYMO_ROOT / "training", WAYMO_ROOT / "core"):
         sys.path.insert(0, str(path))
 
 from train_waymo_vector_tokenizer import build_argparser, build_model, compute_loss, metric_values  # noqa: E402
-from vector_tokenizer_decoder import VectorDecoderOutput, _collate, _slice_time_window  # noqa: E402
+from vector_tokenizer_decoder import VectorDecoderOutput, _collate, _slice_time_window, decoder_agent_xy  # noqa: E402
 from waymo_vector_dataset import WaymoVectorDataset  # noqa: E402
 
 
@@ -93,6 +93,11 @@ def _concat_decoder_outputs(parts: List[VectorDecoderOutput]) -> VectorDecoderOu
         agent_tokens=torch.cat([p.agent_tokens for p in parts], dim=1),
         light_tokens=torch.cat([p.light_tokens for p in parts], dim=1),
         token_mask=torch.cat([p.token_mask for p in parts], dim=1),
+        agent_xy_gmm=(
+            None
+            if any(p.agent_xy_gmm is None for p in parts)
+            else torch.cat([p.agent_xy_gmm for p in parts if p.agent_xy_gmm is not None], dim=1)
+        ),
     )
 
 
@@ -154,6 +159,27 @@ def _wrapped_angle_error(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return torch.atan2(torch.sin(a - b), torch.cos(a - b)).abs()
 
 
+def _focus_heading_change_deg(batch: Dict[str, torch.Tensor]) -> torch.Tensor:
+    agents_btkf = _agents_btkf(batch["agents"], batch["agent_mask"])
+    if agents_btkf.shape[2] == 0:
+        return torch.zeros((agents_btkf.shape[0],), device=agents_btkf.device, dtype=agents_btkf.dtype)
+
+    focus_valid = (agents_btkf[:, :, 0, 5] > 0.5) & batch["agent_mask"][:, 0:1].to(
+        device=agents_btkf.device, dtype=torch.bool
+    )
+    focus_yaw = agents_btkf[:, :, 0, 6]
+    out = []
+    for valid, yaw in zip(focus_valid, focus_yaw):
+        valid_yaw = yaw[valid]
+        if valid_yaw.numel() < 2:
+            out.append(torch.zeros((), device=yaw.device, dtype=yaw.dtype))
+            continue
+        delta = torch.atan2(torch.sin(valid_yaw[1:] - valid_yaw[:-1]), torch.cos(valid_yaw[1:] - valid_yaw[:-1]))
+        unwrapped = torch.cat([valid_yaw[:1], valid_yaw[:1] + delta.cumsum(dim=0)])
+        out.append((unwrapped - unwrapped[0]).abs().amax() * (180.0 / math.pi))
+    return torch.stack(out, dim=0)
+
+
 class MetricAccumulator:
     def __init__(self) -> None:
         self.sums: Dict[str, float] = {}
@@ -166,12 +192,19 @@ class MetricAccumulator:
     def add_scalar(self, name: str, value: float) -> None:
         self.add_mean(name, value, 1.0)
 
+    def add_total(self, name: str, value: float) -> None:
+        self.sums[name] = self.sums.get(name, 0.0) + float(value)
+        self.counts[name] = 1.0
+
     def update_physical(
         self,
         pred: VectorDecoderOutput,
         batch: Dict[str, torch.Tensor],
         *,
         chunk_window: int,
+        agent_xy_loss: str = "smooth_l1",
+        agent_xy_parameterization: str = "absolute",
+        sample_mask: Optional[torch.Tensor] = None,
     ) -> None:
         agents_btkf = _agents_btkf(batch["agents"], batch["agent_mask"])
         steps = min(int(agents_btkf.shape[1]), int(pred.agent_continuous.shape[1]))
@@ -179,10 +212,25 @@ class MetricAccumulator:
         lights = batch["lights"][:, :steps]
         light_mask = batch["light_mask"][:, :steps].to(dtype=torch.bool)
 
+        if sample_mask is None:
+            sample_mask = torch.ones((agents_btkf.shape[0],), device=agents_btkf.device, dtype=torch.bool)
+        else:
+            sample_mask = sample_mask.to(device=agents_btkf.device, dtype=torch.bool)
+        sample_count = float(sample_mask.detach().float().sum().item())
+        if sample_count <= 0:
+            return
+        sample_agent_mask = sample_mask[:, None, None]
+        sample_light_mask = sample_mask[:, None, None]
+
         agent_slot_mask = batch["agent_mask"][:, None, :].to(device=agents_btkf.device, dtype=torch.bool)
-        valid = (agents_btkf[..., 5] > 0.5) & agent_slot_mask
-        pred_xy_m = pred.agent_continuous[:, :steps, :, 0:2] * 100.0
+        valid = (agents_btkf[..., 5] > 0.5) & agent_slot_mask & sample_agent_mask
         target_xy_m = agents_btkf[..., 0:2]
+        pred_xy_m = decoder_agent_xy(
+            pred,
+            agent_xy_loss,
+            agent_xy_parameterization,
+            anchor_xy=(target_xy_m[:, 0] if agent_xy_parameterization == "delta" else None),
+        )[:, :steps]
         xy_err = (pred_xy_m - target_xy_m).norm(dim=-1)
         total, count = _sum_masked(xy_err, valid)
         self.add_mean("agent_xy_ade_m", total, count)
@@ -224,12 +272,12 @@ class MetricAccumulator:
                     total, count = _sum_masked(boundary_err, boundary_valid)
                     self.add_mean("chunk_boundary_delta_xy_mae_m", total, count)
 
-        pred_speed = pred.agent_continuous[:, :steps, :, 2] * 30.0
+        pred_speed = pred.agent_continuous[:, :steps, :, 2]
         speed_err = (pred_speed - agents_btkf[..., 2]).abs()
         total, count = _sum_masked(speed_err, valid)
         self.add_mean("agent_speed_mae_mps", total, count)
 
-        pred_vel = pred.agent_continuous[:, :steps, :, 3:5] * 30.0
+        pred_vel = pred.agent_continuous[:, :steps, :, 3:5]
         vel_err = (pred_vel - agents_btkf[..., 3:5]).norm(dim=-1)
         total, count = _sum_masked(vel_err, valid)
         self.add_mean("agent_vxvy_mae_mps", total, count)
@@ -241,14 +289,17 @@ class MetricAccumulator:
 
         valid_pred = pred.agent_valid_logits[:, :steps] > 0.0
         valid_acc = (valid_pred == valid).float()
-        valid_acc_mask = agent_slot_mask.expand_as(valid)
+        valid_acc_mask = agent_slot_mask.expand_as(valid) & sample_agent_mask
         total, count = _sum_masked(valid_acc, valid_acc_mask)
         self.add_mean("agent_valid_acc", total, count)
 
         light_valid_pred = pred.light_valid_logits[:, :steps] > 0.0
         light_valid_acc = (light_valid_pred == light_mask).float()
-        self.add_mean("light_valid_acc", float(light_valid_acc.sum().item()), float(light_valid_acc.numel()))
+        light_valid_acc_mask = torch.ones_like(light_mask, dtype=torch.bool) & sample_light_mask
+        total, count = _sum_masked(light_valid_acc, light_valid_acc_mask)
+        self.add_mean("light_valid_acc", total, count)
 
+        light_mask = light_mask & sample_light_mask
         if light_mask.any():
             light_state_target = lights[..., 2].long().clamp(min=0, max=pred.light_state_logits.shape[-1] - 1)
             light_state_pred = pred.light_state_logits[:, :steps].argmax(dim=-1)
@@ -256,7 +307,8 @@ class MetricAccumulator:
             total, count = _sum_masked(light_state_acc, light_mask)
             self.add_mean("light_state_acc", total, count)
 
-        self.add_mean("recon_steps", float(steps) * float(agents_btkf.shape[0]), float(agents_btkf.shape[0]))
+        self.add_mean("recon_steps", float(steps) * sample_count, sample_count)
+        self.add_total("selected_samples", sample_count)
 
     def to_dict(self) -> Dict[str, float]:
         out = {}
@@ -272,7 +324,21 @@ def _load_model(checkpoint: Path, sample: Dict[str, torch.Tensor], device: torch
     n_agents = int(sample["agent_mask"].shape[-1])
     n_lights = int(sample["lights"].shape[1])
     model = build_model(args, n_agents=n_agents, n_lights=n_lights)
-    model.load_state_dict(ckpt["model"], strict=True)
+    try:
+        model.load_state_dict(ckpt["model"], strict=True)
+    except RuntimeError:
+        incompatible = model.load_state_dict(ckpt["model"], strict=False)
+        allowed_gmm_keys = {
+            "decoder.agent_xy_gmm_head.weight",
+            "decoder.agent_xy_gmm_head.bias",
+        }
+        if (
+            not set(incompatible.missing_keys).issubset(allowed_gmm_keys)
+            or not set(incompatible.unexpected_keys).issubset(allowed_gmm_keys)
+            or getattr(args, "agent_xy_loss", "smooth_l1") == "gmm"
+        ):
+            raise
+        print(f"loaded {checkpoint} with optional xy GMM head mismatch")
     model.to(device).eval()
     return model, args, ckpt
 
@@ -328,7 +394,26 @@ def main() -> None:
         default=str(WAYMO_ROOT / "evaluation/reports/val_reconstruction_compare/summary.json"),
     )
     p.add_argument("--progress_every", type=int, default=50)
+    p.add_argument(
+        "--stratify_focus_motion",
+        action="store_true",
+        help="Also report metrics separately for straight/curve focus-agent trajectories.",
+    )
+    p.add_argument(
+        "--curve_heading_deg",
+        type=float,
+        default=15.0,
+        help="Focus trajectory is curve when max unwrapped heading change is at least this many degrees.",
+    )
+    p.add_argument(
+        "--straight_heading_deg",
+        type=float,
+        default=5.0,
+        help="Focus trajectory is straight when max unwrapped heading change is at most this many degrees.",
+    )
     args = p.parse_args()
+    if args.stratify_focus_motion and args.straight_heading_deg > args.curve_heading_deg:
+        raise ValueError("--straight_heading_deg must be <= --curve_heading_deg")
 
     device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
     dataset = WaymoVectorDataset(args.data_dir)
@@ -358,14 +443,56 @@ def main() -> None:
             chunk_window = int(args.chunk_window)
 
         accum = MetricAccumulator()
+        motion_accums = {
+            "straight": MetricAccumulator(),
+            "curve": MetricAccumulator(),
+            "motion_mid": MetricAccumulator(),
+        }
         loss_totals: Dict[str, float] = {}
         loss_count = 0
+        agent_xy_loss = getattr(ckpt_args, "agent_xy_loss", "smooth_l1")
+        agent_xy_parameterization = getattr(ckpt_args, "agent_xy_parameterization", "absolute")
         started = time.time()
         for batch_idx, batch in enumerate(loader, start=1):
             batch = _move_batch(batch, device)
             pred = _decode(model, batch, mode=mode, chunk_window=chunk_window)
             eval_batch = batch if mode != "window" else _slice_time_window(batch, chunk_window)
-            accum.update_physical(pred, eval_batch, chunk_window=(chunk_window if mode == "chunked" else 0))
+            accum.update_physical(
+                pred,
+                eval_batch,
+                chunk_window=(chunk_window if mode == "chunked" else 0),
+                agent_xy_loss=agent_xy_loss,
+                agent_xy_parameterization=agent_xy_parameterization,
+            )
+            if args.stratify_focus_motion:
+                heading_change = _focus_heading_change_deg(eval_batch)
+                straight_mask = heading_change <= float(args.straight_heading_deg)
+                curve_mask = (heading_change >= float(args.curve_heading_deg)) & ~straight_mask
+                mid_mask = ~(straight_mask | curve_mask)
+                motion_accums["straight"].update_physical(
+                    pred,
+                    eval_batch,
+                    chunk_window=(chunk_window if mode == "chunked" else 0),
+                    agent_xy_loss=agent_xy_loss,
+                    agent_xy_parameterization=agent_xy_parameterization,
+                    sample_mask=straight_mask,
+                )
+                motion_accums["curve"].update_physical(
+                    pred,
+                    eval_batch,
+                    chunk_window=(chunk_window if mode == "chunked" else 0),
+                    agent_xy_loss=agent_xy_loss,
+                    agent_xy_parameterization=agent_xy_parameterization,
+                    sample_mask=curve_mask,
+                )
+                motion_accums["motion_mid"].update_physical(
+                    pred,
+                    eval_batch,
+                    chunk_window=(chunk_window if mode == "chunked" else 0),
+                    agent_xy_loss=agent_xy_loss,
+                    agent_xy_parameterization=agent_xy_parameterization,
+                    sample_mask=mid_mask,
+                )
             loss, loss_metrics = compute_loss(SimpleNamespace(decoder=pred), eval_batch, ckpt_args)
             values = metric_values(loss_metrics)
             values["loss_total"] = float(loss.detach().float().item())
@@ -390,6 +517,12 @@ def main() -> None:
         }
         for key, value in metrics.items():
             row[key] = value
+        if args.stratify_focus_motion:
+            row["straight_heading_deg"] = float(args.straight_heading_deg)
+            row["curve_heading_deg"] = float(args.curve_heading_deg)
+            for group, group_accum in motion_accums.items():
+                for key, value in group_accum.to_dict().items():
+                    row[f"{group}_{key}"] = value
         for key, total in sorted(loss_totals.items()):
             row[f"batchavg_{key}"] = total / max(1, loss_count)
         rows.append(row)
@@ -409,6 +542,17 @@ def main() -> None:
     for row in rows:
         parts = [f"{key}={float(row[key]):.4f}" for key in key_metrics if key in row and row[key] == row[key]]
         print(f"  {row['label']}: " + ", ".join(parts))
+        if args.stratify_focus_motion:
+            for group in ("straight", "curve", "motion_mid"):
+                group_parts = [
+                    f"{key}={float(row[f'{group}_{key}']):.4f}"
+                    for key in key_metrics
+                    if f"{group}_{key}" in row and row[f"{group}_{key}"] == row[f"{group}_{key}"]
+                ]
+                n_samples = row.get(f"{group}_selected_samples")
+                if group_parts:
+                    sample_text = f" n={float(n_samples):.0f}" if isinstance(n_samples, (float, int)) and n_samples == n_samples else ""
+                    print(f"    {group}{sample_text}: " + ", ".join(group_parts))
 
 
 if __name__ == "__main__":

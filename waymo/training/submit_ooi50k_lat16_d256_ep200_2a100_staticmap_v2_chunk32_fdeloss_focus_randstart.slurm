@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=ooi50k_chunk32_fde_focus
+#SBATCH --job-name=ooi50k_chunk32_fde_focus_noamp
 #SBATCH --account=lia-lab-members
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:2
@@ -29,15 +29,18 @@ cd "$REPO_ROOT"
 
 export REPO_ROOT
 export DATA_DIR="$REPO_ROOT/waymo/data/waymo_vector_dataset_ooi_centered_50k"
-export RUN_NAME="${RUN_NAME:-ooi50k_lat16_d256_ep200_2a100_staticmap_v2_chunk32_fdeloss_focus_randstart}"
-export SESSION_NAME="${SESSION_NAME:-ooi50k_staticmap_v2_chunk32_fdeloss_focus_randstart}"
+export RUN_NAME="${RUN_NAME:-ooi50k_lat16_d256_ep200_anygpu_staticmap_v2_chunk32_fdeloss_focus_randstart_noamp}"
+export SESSION_NAME="${SESSION_NAME:-ooi50k_staticmap_v2_chunk32_fdeloss_focus_randstart_noamp}"
 export RUN_INSIDE_TMUX=1
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
 export NPROC_PER_NODE="${NPROC_PER_NODE:-2}"
-export BATCH_SIZE="${BATCH_SIZE:-64}"
-export NUM_WORKERS="${NUM_WORKERS:-8}"
+export BATCH_SIZE="${BATCH_SIZE:-32}"
+export NUM_WORKERS="${NUM_WORKERS:-4}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 export WANDB_MODE="${WANDB_MODE:-online}"
+export NO_AMP="${NO_AMP:-1}"
+export LR="${LR:-3e-4}"
+export GRAD_CLIP="${GRAD_CLIP:-1.0}"
 
 export AGENT_DELTA_XY_WEIGHT="${AGENT_DELTA_XY_WEIGHT:-0}"
 export AGENT_FDE_XY_WEIGHT="${AGENT_FDE_XY_WEIGHT:-2}"

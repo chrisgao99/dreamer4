@@ -1,0 +1,10 @@
+/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val/273a9bd7dfd404e3_focus_755_src0.npz
+/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val/308590dd313c3488_focus_611_src2.npz
+/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val/31c2d6d244063410_focus_4_src1.npz
+/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val/593acba97f597707_focus_12_src1.npz
+/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val/96d32815c8752396_focus_9_src1.npz
+/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val/a7f18baa0d6428a_focus_1650_src4.npz
+/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val/a9e8e9640833918a_focus_151_src1.npz
+/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val/e7010b9b1841ad94_focus_19_src1.npz
+/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val/ed376b12f2873f0d_focus_981_src0.npz
+/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val/f8da3a9f7169857d_focus_2781_src4.npz

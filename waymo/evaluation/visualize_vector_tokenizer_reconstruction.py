@@ -35,6 +35,7 @@ for path in (REPO_ROOT, WAYMO_ROOT / "training", WAYMO_ROOT / "core", EVAL_ROOT)
         sys.path.insert(0, str(path))
 
 from train_waymo_vector_tokenizer import build_model  # noqa: E402
+from vector_tokenizer_decoder import decoder_agent_xy  # noqa: E402
 from waymo_vector_dataset import WaymoVectorDataset  # noqa: E402
 
 
@@ -54,6 +55,10 @@ DEFAULT_ARGS = {
     "map_depth": 2,
     "map_cross_every": 1,
     "map_query_tokens": "latent_agent",
+    "bottleneck_output": "tanh",
+    "decoder_use_agent_tokens": False,
+    "agent_xy_loss": "smooth_l1",
+    "agent_xy_parameterization": "absolute",
 }
 
 DEFAULT_COMPARE_CHECKPOINTS = [
@@ -166,13 +171,42 @@ def _load_model(checkpoint: str, sample: Dict[str, torch.Tensor], device: torch.
     n_agents = int(sample["agent_mask"].shape[-1])
     n_lights = int(sample["lights"].shape[1])
     model = build_model(args, n_agents=n_agents, n_lights=n_lights)
-    model.load_state_dict(ckpt["model"], strict=True)
+    try:
+        model.load_state_dict(ckpt["model"], strict=True)
+    except RuntimeError:
+        incompatible = model.load_state_dict(ckpt["model"], strict=False)
+        allowed_gmm_keys = {
+            "decoder.agent_xy_gmm_head.weight",
+            "decoder.agent_xy_gmm_head.bias",
+        }
+        if (
+            not set(incompatible.missing_keys).issubset(allowed_gmm_keys)
+            or not set(incompatible.unexpected_keys).issubset(allowed_gmm_keys)
+            or getattr(args, "agent_xy_loss", "smooth_l1") == "gmm"
+        ):
+            raise
+        print(f"loaded {checkpoint} with optional xy GMM head mismatch")
     model.to(device).eval()
     return model, args
 
 
+def _uses_raw_agent_targets(checkpoint: str, args: SimpleNamespace) -> bool:
+    value = getattr(args, "agent_target_scale", None)
+    if value is not None:
+        return float(value) == 1.0
+    return "_raw_" in str(checkpoint)
+
+
 @torch.no_grad()
-def _reconstruct(model: torch.nn.Module, batch: Dict[str, torch.Tensor]) -> Dict[str, np.ndarray]:
+def _reconstruct(
+    model: torch.nn.Module,
+    batch: Dict[str, torch.Tensor],
+    *,
+    agent_xy_loss: str = "smooth_l1",
+    agent_xy_parameterization: str = "absolute",
+    xy_scale: float = 100.0,
+    speed_scale: float = 30.0,
+) -> Dict[str, np.ndarray]:
     out = model(
         agents=batch["agents"],
         agent_mask=batch["agent_mask"],
@@ -182,9 +216,17 @@ def _reconstruct(model: torch.nn.Module, batch: Dict[str, torch.Tensor]) -> Dict
         light_mask=batch["light_mask"],
     )
     pred = out.decoder.agent_continuous[0].detach().float().cpu()
-    pred_xy = pred[..., 0:2].numpy() * 100.0
-    pred_speed = pred[..., 2].numpy() * 30.0
-    pred_vel = pred[..., 3:5].numpy() * 30.0
+    agents_btkf = _agents_btkf(batch["agents"], batch["agent_mask"])
+    anchor_xy = agents_btkf[:, 0, :, 0:2] if agent_xy_parameterization == "delta" else None
+    pred_xy_raw = decoder_agent_xy(
+        out.decoder,
+        agent_xy_loss,
+        agent_xy_parameterization,
+        anchor_xy=anchor_xy,
+    )[0].detach().float().cpu()
+    pred_xy = pred_xy_raw.numpy() * float(xy_scale)
+    pred_speed = pred[..., 2].numpy() * float(speed_scale)
+    pred_vel = pred[..., 3:5].numpy() * float(speed_scale)
     pred_yaw = torch.atan2(pred[..., 5], pred[..., 6]).numpy()
     pred_valid_prob = torch.sigmoid(out.decoder.agent_valid_logits[0].detach().float().cpu()).numpy()
     return {
@@ -216,6 +258,10 @@ def _reconstruct_chunked(
     batch: Dict[str, torch.Tensor],
     *,
     chunk_window: int,
+    agent_xy_loss: str = "smooth_l1",
+    agent_xy_parameterization: str = "absolute",
+    xy_scale: float = 100.0,
+    speed_scale: float = 30.0,
 ) -> Dict[str, np.ndarray]:
     if chunk_window <= 0:
         raise ValueError(f"chunk_window must be positive, got {chunk_window}")
@@ -223,7 +269,16 @@ def _reconstruct_chunked(
     parts = []
     for start in range(0, input_steps, chunk_window):
         end = min(start + chunk_window, input_steps)
-        parts.append(_reconstruct(model, _slice_batch_time(batch, start, end)))
+        parts.append(
+            _reconstruct(
+                model,
+                _slice_batch_time(batch, start, end),
+                agent_xy_loss=agent_xy_loss,
+                agent_xy_parameterization=agent_xy_parameterization,
+                xy_scale=xy_scale,
+                speed_scale=speed_scale,
+            )
+        )
     return _concat_predictions(parts, chunk_window=chunk_window, input_steps=input_steps)
 
 
@@ -727,13 +782,33 @@ def visualize(args: argparse.Namespace) -> None:
     metric_rows: List[Dict[str, object]] = []
     for ckpt_path, label in zip(args.checkpoint, labels):
         model, ckpt_args = _load_model(ckpt_path, item, device)
+        agent_xy_loss = getattr(ckpt_args, "agent_xy_loss", "smooth_l1")
+        agent_xy_parameterization = getattr(ckpt_args, "agent_xy_parameterization", "absolute")
+        raw_targets = _uses_raw_agent_targets(ckpt_path, ckpt_args)
+        xy_scale = 1.0 if raw_targets else 100.0
+        speed_scale = 1.0 if raw_targets else 30.0
         if args.chunked_full_trajectory:
             chunk_window = int(args.time_window) if args.time_window > 0 else int(getattr(ckpt_args, "time_window", 0))
-            pred = _reconstruct_chunked(model, batch, chunk_window=chunk_window)
+            pred = _reconstruct_chunked(
+                model,
+                batch,
+                chunk_window=chunk_window,
+                agent_xy_loss=agent_xy_loss,
+                agent_xy_parameterization=agent_xy_parameterization,
+                xy_scale=xy_scale,
+                speed_scale=speed_scale,
+            )
             mode = "chunked"
         else:
             chunk_window = int(_batch_time_length(batch))
-            pred = _reconstruct(model, batch)
+            pred = _reconstruct(
+                model,
+                batch,
+                agent_xy_loss=agent_xy_loss,
+                agent_xy_parameterization=agent_xy_parameterization,
+                xy_scale=xy_scale,
+                speed_scale=speed_scale,
+            )
             mode = "single"
         preds.append((label, pred))
         metrics = _prediction_metrics(gt_tkf, pred, agent_mask)

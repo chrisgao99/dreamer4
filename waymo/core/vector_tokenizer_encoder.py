@@ -36,6 +36,22 @@ from dreamer4.model import MLP, RMSNorm, add_sinusoidal_positions
 from waymo_vector_dataset import WaymoVectorDataset
 
 
+def _build_bottleneck_norm(mode: str, d_bottleneck: int) -> nn.Module:
+    if mode == "tanh":
+        return nn.Identity()
+    if mode == "layernorm":
+        return nn.LayerNorm(d_bottleneck)
+    raise ValueError(f"bottleneck_output must be one of: tanh, layernorm; got {mode!r}")
+
+
+def _apply_bottleneck_output(x: torch.Tensor, mode: str, norm: nn.Module) -> torch.Tensor:
+    if mode == "tanh":
+        return torch.tanh(x)
+    if mode == "layernorm":
+        return norm(x)
+    raise ValueError(f"bottleneck_output must be one of: tanh, layernorm; got {mode!r}")
+
+
 @dataclass(frozen=True)
 class VectorEncoderOutput:
     z: torch.Tensor                 # (B,T,N_latents,D_bottleneck)
@@ -158,14 +174,13 @@ class AgentFeatureEncoder(nn.Module):
     def forward(self, agents: torch.Tensor) -> torch.Tensor:
         agent_type = agents[..., 7].long().clamp(min=0, max=self.type_emb.num_embeddings - 1)
         yaw = agents[..., 6]
-        # Mild scale normalization for meter-like fields.
         cont = torch.stack(
             [
-                agents[..., 0] / 100.0,
-                agents[..., 1] / 100.0,
-                agents[..., 2] / 30.0,
-                agents[..., 3] / 30.0,
-                agents[..., 4] / 30.0,
+                agents[..., 0],
+                agents[..., 1],
+                agents[..., 2],
+                agents[..., 3],
+                agents[..., 4],
                 agents[..., 5],
                 torch.sin(yaw),
                 torch.cos(yaw),
@@ -191,8 +206,8 @@ class TrafficLightEncoder(nn.Module):
         state = lights[..., 2].long().clamp(min=0, max=self.state_emb.num_embeddings - 1)
         cont = torch.stack(
             [
-                lights[..., 0] / 100.0,
-                lights[..., 1] / 100.0,
+                lights[..., 0],
+                lights[..., 1],
                 lights[..., 3],
                 (lights[..., 2] > 0).to(lights.dtype),
             ],
@@ -214,8 +229,8 @@ class MapFeatureEncoder(nn.Module):
         lane_type = map_polylines[..., 4].long().clamp(min=0, max=self.type_emb.num_embeddings - 1)
         cont = torch.stack(
             [
-                map_polylines[..., 0] / 100.0,
-                map_polylines[..., 1] / 100.0,
+                map_polylines[..., 0],
+                map_polylines[..., 1],
                 map_polylines[..., 2],
                 map_polylines[..., 3],
                 map_polylines[..., 5],
@@ -415,12 +430,14 @@ class VectorBlockCausalEncoder(nn.Module):
         mlp_ratio: float = 4.0,
         time_every: int = 1,
         scale_pos_embeds: bool = True,
+        bottleneck_output: str = "tanh",
     ):
         super().__init__()
         self.d_model = int(d_model)
         self.n_latents = int(n_latents)
         self.d_bottleneck = int(d_bottleneck)
         self.scale_pos_embeds = bool(scale_pos_embeds)
+        self.bottleneck_output = str(bottleneck_output)
 
         self.agent_encoder = AgentFeatureEncoder(d_model=d_model, hidden_dim=hidden_dim)
         self.map_encoder = MapFeatureEncoder(d_model=d_model, hidden_dim=hidden_dim)
@@ -443,6 +460,7 @@ class VectorBlockCausalEncoder(nn.Module):
             ]
         )
         self.bottleneck_proj = nn.Linear(d_model, d_bottleneck)
+        self.bottleneck_norm = _build_bottleneck_norm(self.bottleneck_output, d_bottleneck)
 
     @staticmethod
     def _maybe_transpose_agents(agents: torch.Tensor, agent_mask: torch.Tensor) -> torch.Tensor:
@@ -505,7 +523,11 @@ class VectorBlockCausalEncoder(nn.Module):
         map_slice = slice(agent_slice.stop, agent_slice.stop + m)
         light_slice = slice(map_slice.stop, map_slice.stop + l)
 
-        z = torch.tanh(self.bottleneck_proj(tokens[:, :, latent_slice, :]))
+        z = _apply_bottleneck_output(
+            self.bottleneck_proj(tokens[:, :, latent_slice, :]),
+            self.bottleneck_output,
+            self.bottleneck_norm,
+        )
         return VectorEncoderOutput(
             z=z,
             agent_tokens=tokens[:, :, agent_slice, :],
@@ -535,6 +557,7 @@ class VectorStaticMapQueryEncoder(nn.Module):
         map_depth: int = 2,
         map_cross_every: int = 1,
         map_query_tokens: str = "latent_agent",
+        bottleneck_output: str = "tanh",
     ):
         super().__init__()
         self.d_model = int(d_model)
@@ -542,6 +565,7 @@ class VectorStaticMapQueryEncoder(nn.Module):
         self.d_bottleneck = int(d_bottleneck)
         self.scale_pos_embeds = bool(scale_pos_embeds)
         self.map_query_tokens = str(map_query_tokens)
+        self.bottleneck_output = str(bottleneck_output)
 
         self.agent_encoder = AgentFeatureEncoder(d_model=d_model, hidden_dim=hidden_dim)
         self.map_encoder = MapFeatureEncoder(d_model=d_model, hidden_dim=hidden_dim)
@@ -571,6 +595,7 @@ class VectorStaticMapQueryEncoder(nn.Module):
             ]
         )
         self.bottleneck_proj = nn.Linear(d_model, d_bottleneck)
+        self.bottleneck_norm = _build_bottleneck_norm(self.bottleneck_output, d_bottleneck)
 
     @staticmethod
     def _maybe_transpose_agents(agents: torch.Tensor, agent_mask: torch.Tensor) -> torch.Tensor:
@@ -647,7 +672,11 @@ class VectorStaticMapQueryEncoder(nn.Module):
         agent_slice = slice(self.n_latents, self.n_latents + k)
         light_slice = slice(agent_slice.stop, agent_slice.stop + l)
 
-        z = torch.tanh(self.bottleneck_proj(tokens[:, :, latent_slice, :]))
+        z = _apply_bottleneck_output(
+            self.bottleneck_proj(tokens[:, :, latent_slice, :]),
+            self.bottleneck_output,
+            self.bottleneck_norm,
+        )
         map_tokens_btmd = map_tokens[:, None, :, :].expand(b, t, m, self.d_model)
         return VectorEncoderOutput(
             z=z,

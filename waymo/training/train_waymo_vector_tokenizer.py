@@ -152,6 +152,7 @@ def build_model(args: argparse.Namespace, n_agents: int, n_lights: int) -> Vecto
         mlp_ratio=args.mlp_ratio,
         time_every=args.time_every,
         scale_pos_embeds=args.scale_pos_embeds,
+        bottleneck_output=args.bottleneck_output,
     )
     if args.encoder_variant == "repeat_map":
         encoder = VectorBlockCausalEncoder(**encoder_kwargs)
@@ -176,6 +177,9 @@ def build_model(args: argparse.Namespace, n_agents: int, n_lights: int) -> Vecto
         mlp_ratio=args.mlp_ratio,
         time_every=args.time_every,
         scale_pos_embeds=args.scale_pos_embeds,
+        use_agent_tokens=args.decoder_use_agent_tokens,
+        agent_token_mode=args.decoder_agent_token_mode,
+        predict_agent_xy_gmm=args.agent_xy_loss == "gmm",
     )
     return VectorTokenizer(encoder=encoder, decoder=decoder)
 
@@ -204,6 +208,8 @@ def compute_loss(out, batch: Dict[str, torch.Tensor], args: argparse.Namespace):
         agent_speed_yaw_kinematic_weight=args.agent_speed_yaw_kinematic_weight,
         kinematic_dt=args.kinematic_dt,
         focus_agent_weight=args.focus_agent_weight,
+        agent_xy_loss=args.agent_xy_loss,
+        agent_xy_parameterization=args.agent_xy_parameterization,
     )
 
 
@@ -345,9 +351,34 @@ def save_ckpt(
 
 def load_ckpt(path: Path, model: VectorTokenizer, opt: torch.optim.Optimizer, scaler: GradScaler) -> tuple[int, int]:
     ckpt = torch.load(path, map_location="cpu")
-    unwrap_model(model).load_state_dict(ckpt["model"], strict=True)
-    opt.load_state_dict(ckpt["opt"])
-    if ckpt.get("scaler") is not None:
+    ckpt_args = ckpt.get("args", {})
+    if isinstance(ckpt_args, argparse.Namespace):
+        ckpt_agent_xy_loss = getattr(ckpt_args, "agent_xy_loss", "smooth_l1")
+    elif isinstance(ckpt_args, dict):
+        ckpt_agent_xy_loss = ckpt_args.get("agent_xy_loss", "smooth_l1")
+    else:
+        ckpt_agent_xy_loss = "smooth_l1"
+    model_to_load = unwrap_model(model)
+    model_changed = False
+    try:
+        model_to_load.load_state_dict(ckpt["model"], strict=True)
+    except RuntimeError:
+        incompatible = model_to_load.load_state_dict(ckpt["model"], strict=False)
+        allowed_gmm_keys = {
+            "decoder.agent_xy_gmm_head.weight",
+            "decoder.agent_xy_gmm_head.bias",
+        }
+        if (
+            not set(incompatible.missing_keys).issubset(allowed_gmm_keys)
+            or not set(incompatible.unexpected_keys).issubset(allowed_gmm_keys)
+            or ckpt_agent_xy_loss == "gmm"
+        ):
+            raise
+        model_changed = True
+        print(f"Loaded {path} without optimizer state because optional xy GMM head differs.")
+    if not model_changed:
+        opt.load_state_dict(ckpt["opt"])
+    if not model_changed and ckpt.get("scaler") is not None:
         scaler.load_state_dict(ckpt["scaler"])
     return int(ckpt.get("step", 0)), int(ckpt.get("epoch", 0))
 
@@ -434,7 +465,10 @@ def train(args: argparse.Namespace) -> None:
             f"device={device} amp={use_amp} ddp={ddp} world_size={world_size} "
             f"train={len(train_ds)} val={0 if val_ds is None else len(val_ds)}"
         )
-        print(f"n_agents={n_agents} n_lights={n_lights} n_latents={args.n_latents} d_bottleneck={args.d_bottleneck}")
+        print(
+            f"n_agents={n_agents} n_lights={n_lights} n_latents={args.n_latents} "
+            f"d_bottleneck={args.d_bottleneck} decoder_agent_token_mode={args.decoder_agent_token_mode}"
+        )
         print(
             f"encoder_variant={args.encoder_variant} depth={args.depth} decoder_depth={args.decoder_depth} "
             f"map_depth={args.map_depth} map_cross_every={args.map_cross_every} map_query_tokens={args.map_query_tokens}"
@@ -550,8 +584,13 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--map_depth", type=int, default=2)
     p.add_argument("--map_cross_every", type=int, default=1)
     p.add_argument("--map_query_tokens", choices=["latent", "agent", "latent_agent", "all"], default="latent_agent")
+    p.add_argument("--bottleneck_output", choices=["tanh", "layernorm"], default="tanh")
+    p.add_argument("--decoder_use_agent_tokens", action="store_true")
+    p.add_argument("--decoder_agent_token_mode", choices=["none", "all", "focus"], default="none")
 
     p.add_argument("--agent_xy_weight", type=float, default=1.0)
+    p.add_argument("--agent_xy_loss", choices=["smooth_l1", "gmm"], default="smooth_l1")
+    p.add_argument("--agent_xy_parameterization", choices=["absolute", "delta"], default="absolute")
     p.add_argument("--agent_vel_weight", type=float, default=0.5)
     p.add_argument("--agent_yaw_weight", type=float, default=0.5)
     p.add_argument("--agent_valid_weight", type=float, default=0.2)
@@ -582,6 +621,10 @@ def build_argparser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_argparser().parse_args()
+    if args.decoder_use_agent_tokens and args.decoder_agent_token_mode == "none":
+        args.decoder_agent_token_mode = "all"
+    if args.decoder_agent_token_mode != "none":
+        args.decoder_use_agent_tokens = True
     train(args)
 
 
