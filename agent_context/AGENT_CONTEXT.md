@@ -1,6 +1,6 @@
 # Agent Context
 
-Last updated: 2026-05-13
+Last updated: 2026-06-25
 
 ## Source
 
@@ -21,6 +21,45 @@ The current working belief is:
 2. Dreamer 4 is especially promising because its transformer-style space-time structure can preserve richer multi-agent information than Dreamer 3 / RSSM-style compression.
 3. Tokenizer pretraining should focus on bottleneck latents `z` and ordinary per-agent state tokens for selected tracks. Learned scene/task/policy-agent tokens should not be part of tokenizer pretraining; add them only when finetuning the dynamics model into a policy.
 4. Contrastive learning is still relevant, but likely as an enhancement on top of pooled latents, selected-agent tokens, or downstream policy finetuning tokens, not as the first standalone path.
+5. As of 2026-06-25, the tokenizer bottleneck `Z` should be treated as a **scene-level dynamic memory**. Agent-specific and pair-specific meanings should be extracted with explicit queries, such as `read(Z, query(focus, candidate))`, rather than by assuming fixed latent slots correspond to fixed agents.
+
+## Latest Representation Evaluation Plan
+
+See `DYNAMIC_MEMORY_REPRESENTATION_PLAN_2026_06_25.md` for the current plan to evaluate tokenizer latents as interaction-aware dynamic representations.
+
+The revised core questions are:
+
+1. **Relevance:** Can the representation identify interaction-relevant agents?
+2. **Relations:** Can it predict future pairwise relations and risks?
+3. **Counterfactuality:** Does it respond to relevant-agent changes and stay stable for irrelevant changes?
+4. **Temporal Sufficiency:** Is it a useful compact state for predicting future dynamics?
+5. **Transfer:** Does it improve downstream policy, value, or world-model learning?
+6. **Semantic Geometry:** Are similar interaction behaviors close in representation space?
+
+The preferred probe design is:
+
+```text
+Z = encoder(scene)
+q_ij = raw current or short-history pair query for agents i and j
+h_pair_ij = CrossAttention(query=q_ij, key/value=Z_flat)
+head(h_pair_ij) -> objective future-relation targets
+```
+
+The hidden `h_pair` is then used for clustering and nearest-neighbor analysis.
+Important baselines are `pair_raw_only`, `pair_raw + Z`, and `pair_raw +
+shuffled_Z`.
+
+## Latest World Model Coding Plan
+
+See `WORLD_MODEL_CODING_PLAN_2026_06_30.md` for the current plan to implement
+the Waymo world model after tokenizer pretraining.
+
+The near-term decision is to freeze the best current Waymo vector tokenizer
+(`lat64_b64`) and train DreamerV4-style shortcut/flow dynamics on tokenizer
+latents. The first version should be action-free latent forecasting with decoded
+Waymo metrics; action conditioning, exact paper-style step-size sampling,
+`tau_ctx` context corruption, static-map conditioning, and downstream
+policy/reward/value heads should be staged after that baseline works.
 
 ## What Changed Across the Three Meetings
 

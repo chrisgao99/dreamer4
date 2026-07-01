@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=ooi50k_lat64b128
+#SBATCH --job-name=ooi50k_lat64b16
 #SBATCH --account=lia-lab-members
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:2
-#SBATCH --constraint="h200|a100"
+#SBATCH --constraint="h200|a100|a6000|a40"
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
@@ -23,8 +23,8 @@ cd "$REPO_ROOT"
 
 export REPO_ROOT
 export DATA_DIR="$REPO_ROOT/waymo/data/waymo_vector_dataset_ooi_centered_50k"
-export RUN_NAME="${RUN_NAME:-ooi50k_lat64_b128_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_nofde_focus_randstart_noamp}"
-export SESSION_NAME="${SESSION_NAME:-ooi50k_raw_kin_nofde_lat64_b128_noamp}"
+export RUN_NAME="${RUN_NAME:-ooi50k_lat64_b16_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_nofde_focus_randstart_noamp}"
+export SESSION_NAME="${SESSION_NAME:-ooi50k_raw_kin_nofde_lat64_b16_noamp}"
 export RUN_INSIDE_TMUX=1
 export OVERWRITE_RUN="${OVERWRITE_RUN:-1}"
 
@@ -48,14 +48,14 @@ export KINEMATIC_DT="${KINEMATIC_DT:-0.1}"
 export FOCUS_AGENT_WEIGHT="${FOCUS_AGENT_WEIGHT:-4}"
 
 export N_LATENTS="64"
-export D_BOTTLENECK="128"
+export D_BOTTLENECK="16"
 export BOTTLENECK_OUTPUT="${BOTTLENECK_OUTPUT:-tanh}"
 export DECODER_USE_AGENT_TOKENS="0"
 export DECODER_AGENT_TOKEN_MODE="none"
 
 echo "===== Slurm job start: $(date) ====="
 echo "RUN_NAME=$RUN_NAME"
-echo "ABLATION=lat64_b128"
+echo "ABLATION=lat64_b16"
 echo "SLURM_JOB_ID=${SLURM_JOB_ID:-}"
 echo "SLURM_JOB_NODELIST=${SLURM_JOB_NODELIST:-}"
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}"

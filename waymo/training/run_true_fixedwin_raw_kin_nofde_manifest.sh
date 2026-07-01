@@ -171,6 +171,12 @@ if is_truthy "$USE_WANDB"; then
   train_args+=(--wandb --wandb_project waymo-vector-tokenizer --wandb_run_name "$RUN_NAME")
 fi
 
+if [[ -n "$RESUME" ]]; then
+  LOG_TEE_ARGS=(-a "$LOG")
+else
+  LOG_TEE_ARGS=("$LOG")
+fi
+
 {
   echo "===== $(date) ====="
   echo "run_name=$RUN_NAME"
@@ -191,7 +197,7 @@ fi
   echo "selected_scenes:"
   sed 's/^/  /' "$MANIFEST_RESOLVED"
   echo "========================"
-} | tee "$LOG"
+} | tee "${LOG_TEE_ARGS[@]}"
 
 if [[ "$NPROC_PER_NODE" -gt 1 ]]; then
   "$PYTHON" -m torch.distributed.run \
