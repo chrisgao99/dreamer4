@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WAYMO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "$WAYMO_ROOT/.." && pwd)}"
-PYTHON="${PYTHON:-$HOME/.conda/envs/dreamer4/bin/python}"
+PYTHON="${PYTHON:-/p/yufeng/.conda/envs/dreamer4/bin/python}"
 
 STATS_CSV="${STATS_CSV:-$WAYMO_ROOT/evaluation/reports/ooi_raw_stats_train/waymo_ooi_scenario_stats.csv}"
 BASE_DATA_DIR="${BASE_DATA_DIR:-$WAYMO_ROOT/data/waymo_vector_dataset_ooi_centered_50k}"

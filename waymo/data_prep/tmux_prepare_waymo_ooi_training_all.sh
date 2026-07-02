@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_PATH="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 WAYMO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "$WAYMO_ROOT/.." && pwd)}"
-PYTHON="${PYTHON:-$HOME/.conda/envs/dreamer4/bin/python}"
+PYTHON="${PYTHON:-/p/yufeng/.conda/envs/dreamer4/bin/python}"
 RAW_DIR="${RAW_DIR:-/p/liverobotics/waymo_open_dataset_motion/tf_example/training}"
 
 RUN_NAME="${RUN_NAME:-waymo_ooi_training_all}"
