@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 WAYMO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "$WAYMO_ROOT/.." && pwd)}"
 PYTHON="${PYTHON:-$HOME/.conda/envs/dreamer4/bin/python}"
@@ -116,13 +117,21 @@ if [[ "${1:-}" == "--worker" ]]; then
 fi
 
 mkdir -p "$LOG_DIR"
+{
+  echo "===== tmux launch requested: $(date) ====="
+  echo "SCRIPT_PATH=$SCRIPT_PATH"
+  echo "REPO_ROOT=$REPO_ROOT"
+  echo "RAW_DIR=$RAW_DIR"
+  echo "STATS_DIR=$STATS_DIR"
+  echo "OUT_DIR=$OUT_DIR"
+} >> "$LOG_FILE"
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
   echo "tmux session already exists: $SESSION_NAME"
   echo "Attach with: tmux attach -t $SESSION_NAME"
   exit 1
 fi
 
-tmux new-session -d -s "$SESSION_NAME" "$0" --worker
+tmux new-session -d -s "$SESSION_NAME" "bash '$SCRIPT_PATH' --worker"
 echo "Started detached tmux session: $SESSION_NAME"
 echo "Attach: tmux attach -t $SESSION_NAME"
 echo "Tail log: tail -f $LOG_FILE"
