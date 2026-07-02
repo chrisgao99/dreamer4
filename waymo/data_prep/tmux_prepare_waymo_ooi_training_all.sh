@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-/sfs/weka/scratch/baz7dy/tri30/dreamer4}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WAYMO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd "$WAYMO_ROOT/.." && pwd)}"
 PYTHON="${PYTHON:-$HOME/.conda/envs/dreamer4/bin/python}"
 RAW_DIR="${RAW_DIR:-/p/liverobotics/waymo_open_dataset_motion/tf_example/training}"
 
 RUN_NAME="${RUN_NAME:-waymo_ooi_training_all}"
 SESSION_NAME="${SESSION_NAME:-prep_${RUN_NAME}}"
-STATS_DIR="${STATS_DIR:-$REPO_ROOT/waymo/evaluation/reports/ooi_raw_stats_train_all}"
-OUT_DIR="${OUT_DIR:-$REPO_ROOT/waymo/data/waymo_vector_dataset_ooi_centered_training_all}"
-LOG_DIR="${LOG_DIR:-$REPO_ROOT/waymo/logs/data_prep}"
+STATS_DIR="${STATS_DIR:-$WAYMO_ROOT/evaluation/reports/ooi_raw_stats_train_all}"
+OUT_DIR="${OUT_DIR:-$WAYMO_ROOT/data/waymo_vector_dataset_ooi_centered_training_all}"
+LOG_DIR="${LOG_DIR:-$WAYMO_ROOT/logs/data_prep}"
 LOG_FILE="${LOG_FILE:-$LOG_DIR/${RUN_NAME}.log}"
 
 MAX_FILES="${MAX_FILES:-0}"
@@ -27,7 +29,7 @@ MAX_POINTS_PER_POLYLINE="${MAX_POINTS_PER_POLYLINE:-20}"
 
 # Optional: set this to skip samples already listed in an existing manifest.
 # Example:
-#   EXCLUDE_MANIFEST=$REPO_ROOT/waymo/data/waymo_vector_dataset_ooi_centered_50k/manifest.csv
+#   EXCLUDE_MANIFEST=$WAYMO_ROOT/data/waymo_vector_dataset_ooi_centered_50k/manifest.csv
 EXCLUDE_MANIFEST="${EXCLUDE_MANIFEST:-}"
 EXCLUDE_LEVEL="${EXCLUDE_LEVEL:-sample}"
 

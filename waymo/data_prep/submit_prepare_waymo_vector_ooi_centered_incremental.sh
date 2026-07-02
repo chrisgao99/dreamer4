@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-/sfs/weka/scratch/baz7dy/tri30/dreamer4}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WAYMO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd "$WAYMO_ROOT/.." && pwd)}"
 PYTHON="${PYTHON:-$HOME/.conda/envs/dreamer4/bin/python}"
 
-STATS_CSV="${STATS_CSV:-$REPO_ROOT/waymo/evaluation/reports/ooi_raw_stats_train/waymo_ooi_scenario_stats.csv}"
-BASE_DATA_DIR="${BASE_DATA_DIR:-$REPO_ROOT/waymo/data/waymo_vector_dataset_ooi_centered_50k}"
-OUT="${OUT:-$REPO_ROOT/waymo/data/waymo_vector_dataset_ooi_centered_extra_50k_seed1}"
+STATS_CSV="${STATS_CSV:-$WAYMO_ROOT/evaluation/reports/ooi_raw_stats_train/waymo_ooi_scenario_stats.csv}"
+BASE_DATA_DIR="${BASE_DATA_DIR:-$WAYMO_ROOT/data/waymo_vector_dataset_ooi_centered_50k}"
+OUT="${OUT:-$WAYMO_ROOT/data/waymo_vector_dataset_ooi_centered_extra_50k_seed1}"
 EXCLUDE_MANIFEST="${EXCLUDE_MANIFEST:-$BASE_DATA_DIR/manifest.csv}"
-LOG="${LOG:-$REPO_ROOT/waymo/prepare_waymo_vector_ooi_centered_incremental.log}"
-PIDFILE="${PIDFILE:-$REPO_ROOT/waymo/prepare_waymo_vector_ooi_centered_incremental.pid}"
+LOG="${LOG:-$WAYMO_ROOT/prepare_waymo_vector_ooi_centered_incremental.log}"
+PIDFILE="${PIDFILE:-$WAYMO_ROOT/prepare_waymo_vector_ooi_centered_incremental.pid}"
 
 cd "$REPO_ROOT"
 mkdir -p "$(dirname "$LOG")" "$OUT"
