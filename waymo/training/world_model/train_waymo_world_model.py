@@ -199,6 +199,22 @@ def unwrap_model(model: torch.nn.Module) -> torch.nn.Module:
     return model._orig_mod if hasattr(model, "_orig_mod") else model
 
 
+def freeze_unused_action_mlp(model: torch.nn.Module) -> int:
+    """Freeze action MLP weights for latent pretraining runs that pass actions=None."""
+    action_encoder = getattr(unwrap_model(model), "action_encoder", None)
+    if action_encoder is None:
+        return 0
+    frozen = 0
+    for name in ("fc1", "fc2"):
+        layer = getattr(action_encoder, name, None)
+        if layer is None:
+            continue
+        for param in layer.parameters():
+            param.requires_grad_(False)
+            frozen += param.numel()
+    return frozen
+
+
 def _as_args_dict(value: Any) -> Dict[str, Any]:
     if isinstance(value, argparse.Namespace):
         return vars(value)
@@ -697,6 +713,7 @@ def train(args: argparse.Namespace) -> None:
         space_mode="wm_agent_isolated",
         scale_pos_embeds=args.scale_pos_embeds,
     ).to(device)
+    frozen_action_mlp_params = freeze_unused_action_mlp(dyn)
 
     if args.compile:
         dyn = torch.compile(dyn)
@@ -744,7 +761,10 @@ def train(args: argparse.Namespace) -> None:
             f"seq_len={args.seq_len} max_rollout_window={args.max_rollout_window} "
             f"eval_ctx={args.eval_ctx} eval_horizon={args.eval_horizon}"
         )
-        print(f"parameters dynamics={dyn_params:,} frozen_tokenizer={tok_params:,}")
+        print(
+            f"parameters dynamics={dyn_params:,} frozen_action_mlp={frozen_action_mlp_params:,} "
+            f"frozen_tokenizer={tok_params:,}"
+        )
 
     t0 = time.time()
     latest = Path(args.ckpt_dir) / "latest.pt"
