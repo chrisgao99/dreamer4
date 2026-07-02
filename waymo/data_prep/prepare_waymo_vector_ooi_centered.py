@@ -81,6 +81,46 @@ def read_ooi_rows(stats_csv: str) -> List[Dict[str, str]]:
     return rows
 
 
+def read_excluded_samples(manifest_paths: List[str], level: str) -> set:
+    excluded = set()
+    for manifest_path in manifest_paths:
+        if not manifest_path:
+            continue
+        path = Path(manifest_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Exclude manifest not found: {path}")
+        with path.open(newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                scenario_id = row.get("scenario_id", "")
+                if level == "scenario":
+                    excluded.add((scenario_id,))
+                else:
+                    excluded.add((scenario_id, str(row.get("focus_src_index", ""))))
+    return excluded
+
+
+def filter_excluded_rows(rows: List[Dict[str, str]], excluded: set, level: str) -> List[Dict[str, str]]:
+    if not excluded:
+        return rows
+    filtered: List[Dict[str, str]] = []
+    for row in rows:
+        scenario_id = row["scenario_id"]
+        if level == "scenario":
+            if (scenario_id,) not in excluded:
+                filtered.append(row)
+            continue
+
+        keep_ooi = [idx for idx in row["_ooi_src_indices"] if (scenario_id, str(int(idx))) not in excluded]
+        if not keep_ooi:
+            continue
+        kept = dict(row)
+        kept["_ooi_src_indices"] = keep_ooi
+        kept["_num_focus_samples"] = len(keep_ooi)
+        filtered.append(kept)
+    return filtered
+
+
 def sample_rows(rows: List[Dict[str, str]], num_focus_samples: int, seed: int) -> List[Dict[str, str]]:
     rng = random.Random(seed)
     rows = list(rows)
@@ -230,6 +270,13 @@ def prepare(args: argparse.Namespace) -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     rows = read_ooi_rows(args.stats_csv)
+    raw_rows = len(rows)
+    raw_focus_samples = int(sum(int(r["_num_focus_samples"]) for r in rows))
+    excluded = read_excluded_samples(args.exclude_manifest, args.exclude_level)
+    rows = filter_excluded_rows(rows, excluded, args.exclude_level)
+    available_focus_samples = int(sum(int(r["_num_focus_samples"]) for r in rows))
+    if not rows:
+        raise ValueError("No OOI rows left after applying exclude manifests")
     selected = sample_rows(rows, args.num_focus_samples, args.seed)
     splits = split_rows(selected, args.val_fraction, args.seed)
 
@@ -251,6 +298,13 @@ def prepare(args: argparse.Namespace) -> None:
         "stats_csv": args.stats_csv,
         "output_dir": str(output_dir),
         "seed": args.seed,
+        "exclude_manifest": args.exclude_manifest,
+        "exclude_level": args.exclude_level,
+        "excluded_entries": len(excluded),
+        "raw_scenarios": raw_rows,
+        "raw_focus_samples": raw_focus_samples,
+        "available_scenarios_after_exclude": len(rows),
+        "available_focus_samples_after_exclude": available_focus_samples,
         "requested_num_focus_samples": args.num_focus_samples,
         "selected_scenarios": len(selected),
         "selected_focus_samples": int(sum(int(r["_num_focus_samples"]) for r in selected)),
@@ -317,6 +371,19 @@ def build_argparser() -> argparse.ArgumentParser:
         default="/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k",
     )
     p.add_argument("--num_focus_samples", type=int, default=50_000, help="0 means use all OOI focus samples.")
+    p.add_argument(
+        "--exclude_manifest",
+        type=str,
+        nargs="*",
+        default=[],
+        help="Existing OOI-centered manifest.csv files to exclude from this extraction.",
+    )
+    p.add_argument(
+        "--exclude_level",
+        choices=["sample", "scenario"],
+        default="sample",
+        help="Exclude exact (scenario, focus_src_index) samples or whole scenarios from exclude manifests.",
+    )
     p.add_argument("--val_fraction", type=float, default=0.1)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--log_every", type=int, default=1000)
