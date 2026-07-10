@@ -132,6 +132,9 @@ def build_waymo_vector_tokenizer_from_args(args: Dict[str, Any], n_agents: int, 
         scale_pos_embeds=bool(_arg(args, "scale_pos_embeds", True)),
         use_agent_tokens=bool(_arg(args, "decoder_use_agent_tokens", False)),
         agent_token_mode=str(_arg(args, "decoder_agent_token_mode", "none")),
+        attend_map=bool(_arg(args, "decoder_attend_map", False)),
+        map_cross_every=int(_arg(args, "decoder_map_cross_every", 1)),
+        map_query_tokens=str(_arg(args, "decoder_map_query_tokens", "all")),
         predict_agent_xy_gmm=agent_xy_loss == "gmm",
     )
     return FrozenWaymoVectorTokenizer(encoder=encoder, decoder=decoder)
@@ -169,4 +172,3 @@ def worker_init_fn(worker_id: int) -> None:
     info = torch.utils.data.get_worker_info()
     if info is not None:
         seed_everything(info.seed)
-

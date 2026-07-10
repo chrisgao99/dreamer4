@@ -503,10 +503,11 @@ class ActionEncoder(nn.Module):
     Continuous actions in [-1,1], shape (B,T,A) -> token (B,T,1,D).
     If actions is None (unlabeled pretrain), emits a learned base token.
     """
-    def __init__(self, d_model: int, action_dim: int = 16, hidden_mult: float = 2.0):
+    def __init__(self, d_model: int, action_dim: int = 16, hidden_mult: float = 2.0, clamp_inputs: bool = True):
         super().__init__()
         self.d_model = int(d_model)
         self.action_dim = int(action_dim)
+        self.clamp_inputs = bool(clamp_inputs)
 
         hidden = int(self.d_model * hidden_mult)
         self.base = nn.Parameter(torch.empty(self.d_model))
@@ -534,7 +535,8 @@ class ActionEncoder(nn.Module):
             x = actions
             if act_mask is not None:
                 x = x * act_mask
-            x = x.clamp(-1, 1)
+            if self.clamp_inputs:
+                x = x.clamp(-1, 1)
             out = self.fc2(F.silu(self.fc1(x))) + self.base.view(1, 1, -1)
 
         return out[:, :, None, :] if as_tokens else out
@@ -592,6 +594,7 @@ class Dynamics(nn.Module):
         time_every: int = 4,
         space_mode: str = "wm_agent_isolated",  # or "wm_agent"
         scale_pos_embeds: bool = True,
+        action_clamp_inputs: bool = True,
     ):
         super().__init__()
         assert d_spatial % d_bottleneck == 0, "expected packing: d_spatial = d_bottleneck * packing_factor"
@@ -607,7 +610,7 @@ class Dynamics(nn.Module):
         self.register_tokens = nn.Parameter(torch.empty(self.n_register, self.d_model))
         nn.init.normal_(self.register_tokens, std=0.02)
 
-        self.action_encoder = ActionEncoder(d_model=self.d_model, action_dim=16)
+        self.action_encoder = ActionEncoder(d_model=self.d_model, action_dim=16, clamp_inputs=action_clamp_inputs)
 
         # shortcut conditioning
         self.num_step_bins = int(math.log2(self.k_max)) + 1

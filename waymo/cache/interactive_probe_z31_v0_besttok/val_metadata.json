@@ -1,0 +1,199 @@
+{
+  "context_steps": 32,
+  "data_dir": "/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val",
+  "focus_index": 0,
+  "label_config": {
+    "converging_current_lateral_m": 2.0,
+    "converging_future_lateral_m": 3.5,
+    "crossing_heading_deg": 60.0,
+    "decel_mps2": 1.0,
+    "dt": 0.1,
+    "following_headway_m": 30.0,
+    "following_relevant_headway_m": 20.0,
+    "future_steps": 50,
+    "oncoming_heading_deg": 135.0,
+    "path_overlap_dist_m": 4.0,
+    "pet_relevant_s": 3.0,
+    "priority_pet_s": 4.0,
+    "priority_time_margin_s": 0.2,
+    "relevance_dist_m": 8.0,
+    "same_corridor_lateral_m": 4.5,
+    "same_direction_deg": 45.0,
+    "speed_drop_mps": 1.5,
+    "yield_time_margin_s": 0.5
+  },
+  "label_counts": {
+    "relevance_positive": 18299,
+    "relevance_total": 95493,
+    "response_binary_positive": {
+      "focus_decelerates_for_interaction": 2625,
+      "focus_goes_first": 953,
+      "focus_yields_to_other": 259
+    },
+    "response_binary_total": {
+      "focus_decelerates_for_interaction": 7816,
+      "focus_goes_first": 2267,
+      "focus_yields_to_other": 2267
+    },
+    "type_counts": {
+      "converging_conflict": 1922,
+      "crossing_or_oncoming_conflict": 807,
+      "other_follows_focus": 4888,
+      "other_leads_focus": 5087
+    }
+  },
+  "labels": {
+    "diagnostic_names": [
+      "future_min_time_aligned_dist_m",
+      "future_min_spatial_dist_m",
+      "pet_s",
+      "future_min_abs_lateral_m",
+      "future_min_abs_longitudinal_m",
+      "focus_speed_drop_mps",
+      "focus_max_decel_mps2"
+    ],
+    "feature_names": [
+      "focus_x",
+      "focus_y",
+      "focus_speed",
+      "focus_vx",
+      "focus_vy",
+      "focus_sin_yaw",
+      "focus_cos_yaw",
+      "focus_type",
+      "cand_x",
+      "cand_y",
+      "cand_speed",
+      "cand_vx",
+      "cand_vy",
+      "cand_sin_yaw",
+      "cand_cos_yaw",
+      "cand_type",
+      "rel_dx",
+      "rel_dy",
+      "rel_dist",
+      "rel_vx",
+      "rel_vy",
+      "rel_speed",
+      "bearing_sin",
+      "bearing_cos",
+      "heading_diff_sin",
+      "heading_diff_cos",
+      "longitudinal_offset",
+      "lateral_offset",
+      "abs_lateral_offset",
+      "closing_speed",
+      "same_direction_proxy",
+      "crossing_angle_proxy",
+      "current_close_5m",
+      "current_close_10m"
+    ],
+    "response_binary_names": [
+      "focus_goes_first",
+      "focus_yields_to_other",
+      "focus_decelerates_for_interaction"
+    ],
+    "response_regression_names": [
+      "delta_arrival_time_s"
+    ],
+    "type_names": [
+      "other_leads_focus",
+      "other_follows_focus",
+      "crossing_or_oncoming_conflict",
+      "converging_conflict"
+    ]
+  },
+  "num_pairs": 95493,
+  "num_scenes": 5002,
+  "pair_raw_shape": [
+    95493,
+    34
+  ],
+  "query_step": 31,
+  "relevance_shape": [
+    95493,
+    1
+  ],
+  "response_bin_shape": [
+    95493,
+    3
+  ],
+  "response_reg_shape": [
+    95493,
+    1
+  ],
+  "split": "val",
+  "tokenizer_args": {
+    "agent_delta_xy_weight": 0.0,
+    "agent_fde_xy_weight": 0.0,
+    "agent_kinematic_xy_weight": 5.0,
+    "agent_speed_yaw_kinematic_weight": 2.0,
+    "agent_valid_weight": 0.2,
+    "agent_vel_weight": 0.5,
+    "agent_xy_loss": "smooth_l1",
+    "agent_xy_parameterization": "absolute",
+    "agent_xy_weight": 1.0,
+    "agent_yaw_weight": 0.5,
+    "batch_size": 32,
+    "bottleneck_output": "tanh",
+    "ckpt_dir": "/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/ooi50k_lat64_b64_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_nofde_focus_randstart_noamp",
+    "compile": false,
+    "d_bottleneck": 64,
+    "d_model": 256,
+    "data_dir": [
+      "/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/train"
+    ],
+    "decoder_agent_token_mode": "none",
+    "decoder_depth": 4,
+    "decoder_use_agent_tokens": false,
+    "depth": 4,
+    "device": null,
+    "dropout": 0.05,
+    "encoder_variant": "static_map_query",
+    "epochs": 200,
+    "eval_every": 500,
+    "eval_random_time_window_start": false,
+    "focus_agent_weight": 4.0,
+    "grad_clip": 1.0,
+    "hidden_dim": 64,
+    "kinematic_dt": 0.1,
+    "light_state_weight": 0.5,
+    "light_valid_weight": 0.1,
+    "log_every": 20,
+    "lr": 0.0003,
+    "map_cross_every": 1,
+    "map_depth": 2,
+    "map_query_tokens": "latent_agent",
+    "max_steps": 0,
+    "mlp_ratio": 4.0,
+    "n_heads": 4,
+    "n_latents": 64,
+    "no_amp": true,
+    "num_workers": 4,
+    "random_time_window_start": true,
+    "resume": null,
+    "save_every": 500,
+    "scale_pos_embeds": true,
+    "seed": 0,
+    "time_every": 1,
+    "time_window": 32,
+    "val_data_dir": [
+      "/scratch/baz7dy/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_50k/val"
+    ],
+    "val_fraction": 0.1,
+    "wandb": true,
+    "wandb_entity": null,
+    "wandb_project": "waymo-vector-tokenizer",
+    "wandb_run_name": "ooi50k_lat64_b64_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_nofde_focus_randstart_noamp",
+    "weight_decay": 0.0001
+  },
+  "tokenizer_ckpt": "/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/ooi50k_lat64_b64_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_nofde_focus_randstart_noamp/best.pt",
+  "type_shape": [
+    95493
+  ],
+  "z_shape": [
+    5002,
+    64,
+    64
+  ]
+}

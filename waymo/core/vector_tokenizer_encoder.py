@@ -472,6 +472,11 @@ class VectorBlockCausalEncoder(nn.Module):
             return agents.transpose(1, 2).contiguous()
         return agents
 
+    def encode_static_map(self, map_polylines: torch.Tensor, map_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        map_valid = map_mask.bool().any(dim=-1)
+        map_tokens = self.map_encoder(map_polylines, map_mask.bool()) * map_valid[..., None].to(map_polylines.dtype)
+        return map_tokens, map_valid
+
     def forward(
         self,
         agents: torch.Tensor,
@@ -501,7 +506,7 @@ class VectorBlockCausalEncoder(nn.Module):
         light_valid = light_mask.bool()
 
         agent_tokens = self.agent_encoder(agents) * agent_valid[..., None].to(agents.dtype)
-        map_once = self.map_encoder(map_polylines, map_mask.bool()) * map_valid[..., None].to(map_polylines.dtype)
+        map_once, map_valid = self.encode_static_map(map_polylines, map_mask)
         map_tokens = map_once[:, None, :, :].expand(b, t, m, self.d_model)
         light_tokens = self.light_encoder(lights) * light_valid[..., None].to(lights.dtype)
 
@@ -601,6 +606,15 @@ class VectorStaticMapQueryEncoder(nn.Module):
     def _maybe_transpose_agents(agents: torch.Tensor, agent_mask: torch.Tensor) -> torch.Tensor:
         return VectorBlockCausalEncoder._maybe_transpose_agents(agents, agent_mask)
 
+    def encode_static_map(self, map_polylines: torch.Tensor, map_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        map_valid = map_mask.bool().any(dim=-1)
+        map_tokens = self.map_encoder(map_polylines, map_mask.bool()) * map_valid[..., None].to(map_polylines.dtype)
+        map_tokens = add_sinusoidal_positions(map_tokens[:, None, :, :], self.scale_pos_embeds).squeeze(1)
+        map_tokens = map_tokens * map_valid[..., None].to(map_tokens.dtype)
+        for layer in self.map_layers:
+            map_tokens = layer(map_tokens, map_mask=map_valid)
+        return map_tokens, map_valid
+
     def _map_query_slice(self, k: int, l: int) -> slice:
         if self.map_query_tokens == "latent":
             return slice(0, self.n_latents)
@@ -642,12 +656,7 @@ class VectorStaticMapQueryEncoder(nn.Module):
         light_valid = light_mask.bool()
 
         agent_tokens = self.agent_encoder(agents) * agent_valid[..., None].to(agents.dtype)
-        map_tokens = self.map_encoder(map_polylines, map_mask.bool()) * map_valid[..., None].to(map_polylines.dtype)
-        map_tokens = add_sinusoidal_positions(map_tokens[:, None, :, :], self.scale_pos_embeds).squeeze(1)
-        map_tokens = map_tokens * map_valid[..., None].to(map_tokens.dtype)
-        for layer in self.map_layers:
-            map_tokens = layer(map_tokens, map_mask=map_valid)
-
+        map_tokens, map_valid = self.encode_static_map(map_polylines, map_mask)
         light_tokens = self.light_encoder(lights) * light_valid[..., None].to(lights.dtype)
         latents = self.latent_tokens.view(1, 1, self.n_latents, self.d_model).expand(b, t, self.n_latents, self.d_model)
         tokens = torch.cat([latents, agent_tokens, light_tokens], dim=2)

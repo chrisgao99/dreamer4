@@ -59,6 +59,23 @@ class WaymoVectorDataset(Dataset):
                 "ego_origin_xy": torch.from_numpy(data["ego_origin_xy"]).float(),
                 "ego_heading": torch.as_tensor(float(data["ego_heading"]), dtype=torch.float32),
             }
+            optional_long_keys = (
+                "agent_src_indices",
+                "focus_src_index",
+                "focus_track_id",
+                "original_sdc_src_index",
+                "original_sdc_track_id",
+            )
+            optional_bool_keys = (
+                "agent_objects_of_interest",
+                "agent_tracks_to_predict",
+            )
+            for key in optional_long_keys:
+                if key in data:
+                    item[key] = torch.from_numpy(np.asarray(data[key])).long()
+            for key in optional_bool_keys:
+                if key in data:
+                    item[key] = torch.from_numpy(np.asarray(data[key])).bool()
             if "scenario_id" in data:
                 item["scenario_id"] = str(data["scenario_id"])
 

@@ -31,6 +31,7 @@ try:
         VectorBlockCausalEncoder,
         VectorBlockCausalLayer,
         VectorEncoderOutput,
+        VectorStaticMapQueryLayer,
         _collate,
     )
     from waymo_vector_dataset import WaymoVectorDataset
@@ -39,6 +40,7 @@ except ModuleNotFoundError:
         VectorBlockCausalEncoder,
         VectorBlockCausalLayer,
         VectorEncoderOutput,
+        VectorStaticMapQueryLayer,
         _collate,
     )
     from waymo.core.waymo_vector_dataset import WaymoVectorDataset
@@ -130,6 +132,9 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
         scale_pos_embeds: bool = True,
         use_agent_tokens: bool = False,
         agent_token_mode: str = "none",
+        attend_map: bool = False,
+        map_cross_every: int = 1,
+        map_query_tokens: str = "all",
         predict_agent_xy_gmm: bool = False,
     ):
         super().__init__()
@@ -145,6 +150,14 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
             raise ValueError(f"agent_token_mode must be one of none, all, focus; got {agent_token_mode!r}")
         self.agent_token_mode = agent_token_mode
         self.use_agent_tokens = self.agent_token_mode != "none"
+        self.attend_map = bool(attend_map)
+        self.map_cross_every = int(map_cross_every)
+        if map_query_tokens not in {"latent", "agent", "light", "latent_agent", "agent_light", "all"}:
+            raise ValueError(
+                "map_query_tokens must be one of: latent, agent, light, latent_agent, agent_light, all; "
+                f"got {map_query_tokens!r}"
+            )
+        self.map_query_tokens = str(map_query_tokens)
         self.predict_agent_xy_gmm = bool(predict_agent_xy_gmm)
 
         self.up_proj = nn.Linear(d_bottleneck, d_model)
@@ -156,13 +169,25 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
 
         self.layers = nn.ModuleList(
             [
-                VectorBlockCausalLayer(
-                    d_model=d_model,
-                    n_heads=n_heads,
-                    dropout=dropout,
-                    mlp_ratio=mlp_ratio,
-                    layer_index=i,
-                    time_every=time_every,
+                (
+                    VectorStaticMapQueryLayer(
+                        d_model=d_model,
+                        n_heads=n_heads,
+                        dropout=dropout,
+                        mlp_ratio=mlp_ratio,
+                        layer_index=i,
+                        time_every=time_every,
+                        map_cross_every=map_cross_every,
+                    )
+                    if self.attend_map
+                    else VectorBlockCausalLayer(
+                        d_model=d_model,
+                        n_heads=n_heads,
+                        dropout=dropout,
+                        mlp_ratio=mlp_ratio,
+                        layer_index=i,
+                        time_every=time_every,
+                    )
                 )
                 for i in range(depth)
             ]
@@ -174,6 +199,50 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
         self.light_state_head = nn.Linear(d_model, num_light_states)
         self.light_valid_head = nn.Linear(d_model, 1)
 
+    def _map_query_slice(self, agent_skip_count: int, k: int, l: int) -> slice:
+        latent_start = 0
+        latent_end = self.n_latents
+        agent_start = latent_end + agent_skip_count
+        agent_end = agent_start + k
+        light_start = agent_end
+        light_end = light_start + l
+        if self.map_query_tokens == "latent":
+            return slice(latent_start, latent_end)
+        if self.map_query_tokens == "agent":
+            return slice(agent_start, agent_end)
+        if self.map_query_tokens == "light":
+            return slice(light_start, light_end)
+        if self.map_query_tokens == "latent_agent":
+            return slice(latent_start, agent_end)
+        if self.map_query_tokens == "agent_light":
+            return slice(agent_start, light_end)
+        if self.map_query_tokens == "all":
+            return slice(latent_start, light_end)
+        raise ValueError(f"Unknown decoder map_query_tokens={self.map_query_tokens!r}")
+
+    @staticmethod
+    def _static_map_memory(
+        encoder_map_tokens: torch.Tensor,
+        encoder_map_mask: torch.Tensor,
+        *,
+        time_steps: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if encoder_map_tokens.dim() == 4:
+            if encoder_map_tokens.shape[1] != time_steps:
+                raise ValueError(
+                    "encoder_map_tokens with shape (B,T,M,D) must match decoder T; "
+                    f"got T={encoder_map_tokens.shape[1]} expected {time_steps}"
+                )
+            encoder_map_tokens = encoder_map_tokens[:, 0]
+        elif encoder_map_tokens.dim() != 3:
+            raise ValueError(
+                "encoder_map_tokens must have shape (B,M,D) or (B,T,M,D), "
+                f"got {tuple(encoder_map_tokens.shape)}"
+            )
+        if encoder_map_mask.dim() != 2:
+            raise ValueError(f"encoder_map_mask must have shape (B,M), got {tuple(encoder_map_mask.shape)}")
+        return encoder_map_tokens, encoder_map_mask.to(device=encoder_map_tokens.device, dtype=torch.bool)
+
     def forward(
         self,
         z: torch.Tensor,
@@ -182,6 +251,8 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
         light_mask: Optional[torch.Tensor] = None,
         encoder_agent_tokens: Optional[torch.Tensor] = None,
         encoder_agent_mask: Optional[torch.Tensor] = None,
+        encoder_map_tokens: Optional[torch.Tensor] = None,
+        encoder_map_mask: Optional[torch.Tensor] = None,
     ) -> VectorDecoderOutput:
         """Decode bottleneck latents.
 
@@ -245,8 +316,26 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
 
         tokens = add_sinusoidal_positions(tokens, self.scale_pos_embeds)
         tokens = tokens * token_mask[..., None].to(tokens.dtype)
+        map_query_slice = self._map_query_slice(agent_skip_count=agent_skip_count, k=k, l=l)
+        if self.attend_map:
+            if encoder_map_tokens is None or encoder_map_mask is None:
+                raise ValueError("Decoder was built with attend_map=True but encoder_map_tokens or encoder_map_mask is None")
+            encoder_map_tokens, encoder_map_mask = self._static_map_memory(
+                encoder_map_tokens,
+                encoder_map_mask,
+                time_steps=t,
+            )
         for layer in self.layers:
-            tokens = layer(tokens, token_mask=token_mask)
+            if self.attend_map:
+                tokens = layer(
+                    tokens,
+                    token_mask=token_mask,
+                    map_tokens=encoder_map_tokens,
+                    map_mask=encoder_map_mask,
+                    map_query_slice=map_query_slice,
+                )
+            else:
+                tokens = layer(tokens, token_mask=token_mask)
 
         agent_start = self.n_latents + agent_skip_count
         light_start = agent_start + k
@@ -298,6 +387,9 @@ class VectorTokenizer(nn.Module):
             decoder_kwargs["encoder_agent_mask"] = (agents_btkf[..., 5] > 0.5) & agent_mask[:, None, :].to(
                 device=agents_btkf.device, dtype=torch.bool
             )
+        if getattr(self.decoder, "attend_map", False):
+            decoder_kwargs["encoder_map_tokens"] = enc.map_tokens
+            decoder_kwargs["encoder_map_mask"] = enc.map_token_mask
         dec = self.decoder(enc.z, agent_mask=agent_mask, light_mask=light_mask, **decoder_kwargs)
         return VectorTokenizerOutput(encoder=enc, decoder=dec)
 
@@ -394,6 +486,7 @@ def vector_tokenizer_reconstruction_loss(
     focus_agent_weight: float = 1.0,
     agent_xy_loss: str = "smooth_l1",
     agent_xy_parameterization: str = "absolute",
+    agent_loss_weight_multiplier: Optional[torch.Tensor] = None,
 ) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     """Compute first-pass reconstruction losses for tokenizer training."""
     agents_btkf = _maybe_transpose_agents(agents, agent_mask)
@@ -401,6 +494,17 @@ def vector_tokenizer_reconstruction_loss(
     agent_valid_target = (agents_btkf[..., 5] > 0.5) & agent_slot_mask
     agent_target = agent_reconstruction_targets(agents_btkf, agent_mask, already_btkf=True)
     agent_loss_weight = agent_valid_target.to(dtype=agents_btkf.dtype)
+    if agent_loss_weight_multiplier is not None:
+        mult = agent_loss_weight_multiplier.to(device=agents_btkf.device, dtype=agents_btkf.dtype)
+        if mult.dim() == 2:
+            mult = mult[:, None, :]
+        if mult.shape != agent_loss_weight.shape:
+            raise ValueError(
+                "agent_loss_weight_multiplier must have shape "
+                f"{tuple(agent_loss_weight.shape)} or {(agent_loss_weight.shape[0], agent_loss_weight.shape[2])}, "
+                f"got {tuple(mult.shape)}"
+            )
+        agent_loss_weight = agent_loss_weight * mult
     if focus_agent_weight != 1.0 and agent_loss_weight.shape[-1] > 0:
         agent_loss_weight = agent_loss_weight.clone()
         agent_loss_weight[..., 0] = agent_loss_weight[..., 0] * float(focus_agent_weight)
@@ -430,6 +534,11 @@ def vector_tokenizer_reconstruction_loss(
 
     consecutive_valid = agent_valid_target[:, 1:, :] & agent_valid_target[:, :-1, :]
     consecutive_weight = consecutive_valid.to(dtype=agents_btkf.dtype)
+    if agent_loss_weight_multiplier is not None:
+        mult = agent_loss_weight_multiplier.to(device=agents_btkf.device, dtype=agents_btkf.dtype)
+        if mult.dim() == 2:
+            mult = mult[:, None, :]
+        consecutive_weight = consecutive_weight * mult[:, 1:, :]
     if focus_agent_weight != 1.0 and consecutive_weight.shape[-1] > 0:
         consecutive_weight = consecutive_weight.clone()
         consecutive_weight[..., 0] = consecutive_weight[..., 0] * float(focus_agent_weight)
@@ -463,6 +572,11 @@ def vector_tokenizer_reconstruction_loss(
     pred_final_xy = pred_xy.gather(dim=1, index=gather_idx).squeeze(1)
     target_final_xy = target_xy.gather(dim=1, index=gather_idx).squeeze(1)
     final_weight = any_valid.to(dtype=agents_btkf.dtype)
+    if agent_loss_weight_multiplier is not None:
+        mult = agent_loss_weight_multiplier.to(device=agents_btkf.device, dtype=agents_btkf.dtype)
+        if mult.dim() == 3:
+            mult = mult.gather(dim=1, index=last_idx[:, None, :]).squeeze(1)
+        final_weight = final_weight * mult
     if focus_agent_weight != 1.0 and final_weight.shape[-1] > 0:
         final_weight = final_weight.clone()
         final_weight[..., 0] = final_weight[..., 0] * float(focus_agent_weight)

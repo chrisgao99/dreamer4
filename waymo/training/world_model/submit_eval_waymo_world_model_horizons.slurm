@@ -54,6 +54,16 @@ AGENT_XY_PARAMETERIZATION="${AGENT_XY_PARAMETERIZATION:-absolute}"
 FOCUS_AGENT_WEIGHT="${FOCUS_AGENT_WEIGHT:-4}"
 AGENT_KINEMATIC_XY_WEIGHT="${AGENT_KINEMATIC_XY_WEIGHT:-5}"
 AGENT_SPEED_YAW_KINEMATIC_WEIGHT="${AGENT_SPEED_YAW_KINEMATIC_WEIGHT:-2}"
+USE_EGO_ACTIONS="${USE_EGO_ACTIONS:-0}"
+EGO_ACTION_SOURCE="${EGO_ACTION_SOURCE:-focus}"
+EGO_ACTION_NORMALIZATION="${EGO_ACTION_NORMALIZATION:-scaled}"
+EGO_ACTION_CLAMP="${EGO_ACTION_CLAMP:-1}"
+EGO_ACTION_XY_SCALE="${EGO_ACTION_XY_SCALE:-5.0}"
+EGO_ACTION_YAW_SCALE="${EGO_ACTION_YAW_SCALE:-3.141592653589793}"
+EGO_ACTION_SPEED_SCALE="${EGO_ACTION_SPEED_SCALE:-30.0}"
+AGENT_FAR_WEIGHT="${AGENT_FAR_WEIGHT:-1.0}"
+AGENT_NEAR_RADIUS_M="${AGENT_NEAR_RADIUS_M:-50.0}"
+AGENT_DISTANCE_SOURCE="${AGENT_DISTANCE_SOURCE:-focus}"
 
 require_file() {
   if [[ ! -f "$1" ]]; then
@@ -100,6 +110,8 @@ echo "EVAL_CKPT=$EVAL_CKPT"
 echo "HORIZONS=$HORIZONS"
 echo "EVAL_MAX_BATCHES=$EVAL_MAX_BATCHES"
 echo "OUTPUT_JSON=$output_json"
+echo "USE_EGO_ACTIONS=$USE_EGO_ACTIONS EGO_ACTION_SOURCE=$EGO_ACTION_SOURCE EGO_ACTION_NORMALIZATION=$EGO_ACTION_NORMALIZATION EGO_ACTION_CLAMP=$EGO_ACTION_CLAMP"
+echo "AGENT_FAR_WEIGHT=$AGENT_FAR_WEIGHT AGENT_NEAR_RADIUS_M=$AGENT_NEAR_RADIUS_M"
 
 eval_args=(
   "$EVAL_SCRIPT"
@@ -128,7 +140,25 @@ eval_args=(
   --focus_agent_weight "$FOCUS_AGENT_WEIGHT"
   --agent_kinematic_xy_weight "$AGENT_KINEMATIC_XY_WEIGHT"
   --agent_speed_yaw_kinematic_weight "$AGENT_SPEED_YAW_KINEMATIC_WEIGHT"
+  --ego_action_source "$EGO_ACTION_SOURCE"
+  --ego_action_normalization "$EGO_ACTION_NORMALIZATION"
+  --ego_action_xy_scale "$EGO_ACTION_XY_SCALE"
+  --ego_action_yaw_scale "$EGO_ACTION_YAW_SCALE"
+  --ego_action_speed_scale "$EGO_ACTION_SPEED_SCALE"
+  --agent_far_weight "$AGENT_FAR_WEIGHT"
+  --agent_near_radius_m "$AGENT_NEAR_RADIUS_M"
+  --agent_distance_source "$AGENT_DISTANCE_SOURCE"
 )
+
+if [[ "$USE_EGO_ACTIONS" == "1" || "$USE_EGO_ACTIONS" == "true" || "$USE_EGO_ACTIONS" == "TRUE" || "$USE_EGO_ACTIONS" == "yes" || "$USE_EGO_ACTIONS" == "YES" ]]; then
+  eval_args+=(--use_ego_actions)
+fi
+
+if [[ "$EGO_ACTION_CLAMP" == "1" || "$EGO_ACTION_CLAMP" == "true" || "$EGO_ACTION_CLAMP" == "TRUE" || "$EGO_ACTION_CLAMP" == "yes" || "$EGO_ACTION_CLAMP" == "YES" ]]; then
+  eval_args+=(--ego_action_clamp)
+else
+  eval_args+=(--no-ego_action_clamp)
+fi
 
 "$PYTHON" -m torch.distributed.run --standalone --nnodes=1 --nproc_per_node="$NPROC_PER_NODE" "${eval_args[@]}"
 

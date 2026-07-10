@@ -32,6 +32,9 @@ SAVE_EVERY="${SAVE_EVERY:-500}"
 BOTTLENECK_OUTPUT="${BOTTLENECK_OUTPUT:-tanh}"
 DECODER_USE_AGENT_TOKENS="${DECODER_USE_AGENT_TOKENS:-0}"
 DECODER_AGENT_TOKEN_MODE="${DECODER_AGENT_TOKEN_MODE:-none}"
+DECODER_ATTEND_MAP="${DECODER_ATTEND_MAP:-0}"
+DECODER_MAP_CROSS_EVERY="${DECODER_MAP_CROSS_EVERY:-1}"
+DECODER_MAP_QUERY_TOKENS="${DECODER_MAP_QUERY_TOKENS:-all}"
 OVERWRITE_RUN="${OVERWRITE_RUN:-0}"
 
 ENCODER_VARIANT="${ENCODER_VARIANT:-static_map_query}"
@@ -198,6 +201,13 @@ fi
 if [[ "$DECODER_AGENT_TOKEN_MODE" != "none" ]]; then
   train_args+=(--decoder_agent_token_mode "$DECODER_AGENT_TOKEN_MODE")
 fi
+if [[ "$DECODER_ATTEND_MAP" == "1" || "$DECODER_ATTEND_MAP" == "true" || "$DECODER_ATTEND_MAP" == "TRUE" ]]; then
+  train_args+=(
+    --decoder_attend_map
+    --decoder_map_cross_every "$DECODER_MAP_CROSS_EVERY"
+    --decoder_map_query_tokens "$DECODER_MAP_QUERY_TOKENS"
+  )
+fi
 
 if [[ -f "$CKPT_DIR/latest.pt" ]]; then
   train_args+=(--resume "$CKPT_DIR/latest.pt")
@@ -217,7 +227,7 @@ fi
   echo "log=$LOG"
   echo "batch_size=$BATCH_SIZE epochs=$EPOCHS d_model=$D_MODEL depth=$DEPTH decoder_depth=$DECODER_DEPTH n_latents=$N_LATENTS d_bottleneck=$D_BOTTLENECK time_window=$TIME_WINDOW random_time_window_start=1"
   echo "encoder_variant=$ENCODER_VARIANT map_depth=$MAP_DEPTH map_cross_every=$MAP_CROSS_EVERY map_query_tokens=$MAP_QUERY_TOKENS"
-  echo "bottleneck_output=$BOTTLENECK_OUTPUT decoder_use_agent_tokens=$DECODER_USE_AGENT_TOKENS decoder_agent_token_mode=$DECODER_AGENT_TOKEN_MODE"
+  echo "bottleneck_output=$BOTTLENECK_OUTPUT decoder_use_agent_tokens=$DECODER_USE_AGENT_TOKENS decoder_agent_token_mode=$DECODER_AGENT_TOKEN_MODE decoder_attend_map=$DECODER_ATTEND_MAP decoder_map_cross_every=$DECODER_MAP_CROSS_EVERY decoder_map_query_tokens=$DECODER_MAP_QUERY_TOKENS"
   echo "agent_xy_loss=$AGENT_XY_LOSS agent_xy_parameterization=$AGENT_XY_PARAMETERIZATION agent_delta_xy_weight=$AGENT_DELTA_XY_WEIGHT agent_fde_xy_weight=$AGENT_FDE_XY_WEIGHT agent_kinematic_xy_weight=$AGENT_KINEMATIC_XY_WEIGHT agent_speed_yaw_kinematic_weight=$AGENT_SPEED_YAW_KINEMATIC_WEIGHT kinematic_dt=$KINEMATIC_DT focus_agent_weight=$FOCUS_AGENT_WEIGHT"
   echo "lr=$LR weight_decay=$WEIGHT_DECAY grad_clip=$GRAD_CLIP no_amp=$NO_AMP"
   echo "loss_fix=normalized_agent_targets_no_double_transpose"

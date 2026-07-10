@@ -122,6 +122,17 @@ def _slice_agents_time(agents: torch.Tensor, agent_mask: torch.Tensor, start: in
     return agents[:, start:end]
 
 
+def agents_to_btkf(agents: torch.Tensor, agent_mask: torch.Tensor) -> torch.Tensor:
+    k = int(agent_mask.shape[-1])
+    if agents.shape[1] == k:
+        return agents.transpose(1, 2).contiguous()
+    return agents
+
+
+def wrap_angle_rad(angle: torch.Tensor) -> torch.Tensor:
+    return torch.atan2(torch.sin(angle), torch.cos(angle))
+
+
 def slice_time_window(
     batch: Dict[str, Any],
     time_window: int,
@@ -154,6 +165,100 @@ def slice_future_batch(batch: Dict[str, Any], start: int, end: int) -> Dict[str,
     return out
 
 
+def _select_action_slots(batch: Dict[str, Any], source: str) -> torch.Tensor:
+    agents = batch["agents"]
+    agent_mask = batch["agent_mask"]
+    bsz = int(agents.shape[0])
+    device = agents.device
+    if source == "focus":
+        return torch.zeros((bsz,), device=device, dtype=torch.long)
+    if source != "sdc":
+        raise ValueError(f"Unknown ego_action_source={source!r}; expected 'sdc' or 'focus'.")
+    if "agent_src_indices" not in batch or "original_sdc_src_index" not in batch:
+        return torch.zeros((bsz,), device=device, dtype=torch.long)
+    src = batch["agent_src_indices"].to(device=device)
+    sdc = batch["original_sdc_src_index"].to(device=device).view(bsz, 1)
+    matches = (src == sdc) & agent_mask.to(device=device, dtype=torch.bool)
+    has_match = matches.any(dim=1)
+    return torch.where(has_match, matches.float().argmax(dim=1).to(torch.long), torch.zeros_like(has_match, dtype=torch.long))
+
+
+def build_ego_action_features(
+    batch: Dict[str, Any],
+    args: argparse.Namespace,
+) -> tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+    if not args.use_ego_actions:
+        return None, None, None
+    agents_btkf = agents_to_btkf(batch["agents"], batch["agent_mask"])
+    bsz, time_steps = agents_btkf.shape[:2]
+    device = agents_btkf.device
+    slots = _select_action_slots(batch, args.ego_action_source)
+    gather = slots.view(bsz, 1, 1, 1).expand(-1, time_steps, 1, agents_btkf.shape[-1])
+    ego = agents_btkf.gather(dim=2, index=gather).squeeze(2)
+
+    valid = ego[..., 5] > 0.5
+    prev_xy = torch.cat([ego[:, :1, 0:2], ego[:, :-1, 0:2]], dim=1)
+    prev_yaw = torch.cat([ego[:, :1, 6], ego[:, :-1, 6]], dim=1)
+    prev_valid = torch.cat([valid[:, :1], valid[:, :-1]], dim=1)
+    step_valid = valid & prev_valid
+
+    delta_xy = ego[..., 0:2] - prev_xy
+    delta_yaw = wrap_angle_rad(ego[..., 6] - prev_yaw).unsqueeze(-1)
+    speed = ego[..., 2:3]
+    vxvy = ego[..., 3:5]
+    if args.ego_action_normalization == "scaled":
+        delta_xy = delta_xy / float(args.ego_action_xy_scale)
+        delta_yaw = delta_yaw / float(args.ego_action_yaw_scale)
+        speed = speed / float(args.ego_action_speed_scale)
+        vxvy = vxvy / float(args.ego_action_speed_scale)
+    valid_f = valid.to(dtype=ego.dtype).unsqueeze(-1)
+
+    actions = torch.zeros((bsz, time_steps, 16), device=device, dtype=ego.dtype)
+    actions[..., 0:2] = delta_xy
+    actions[..., 2:3] = delta_yaw
+    actions[..., 3:4] = speed
+    actions[..., 4:6] = vxvy
+    actions[..., 6:7] = valid_f
+    actions[:, 0, 0:3] = 0.0
+    actions = actions * valid_f
+
+    mask = torch.zeros_like(actions)
+    mask[..., 0:7] = valid_f
+    mask[..., 0:3] = mask[..., 0:3] * step_valid.to(dtype=ego.dtype).unsqueeze(-1)
+    return actions, mask, slots
+
+
+def build_agent_loss_weight_multiplier(
+    batch: Dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    action_slots: Optional[torch.Tensor] = None,
+) -> Optional[torch.Tensor]:
+    if args.agent_far_weight >= 0.999:
+        return None
+    agents_btkf = agents_to_btkf(batch["agents"], batch["agent_mask"])
+    bsz, time_steps, n_agents = agents_btkf.shape[:3]
+    device = agents_btkf.device
+    source_slots = action_slots
+    if source_slots is None:
+        source_slots = _select_action_slots(batch, args.agent_distance_source)
+    gather = source_slots.view(bsz, 1, 1, 1).expand(-1, time_steps, 1, agents_btkf.shape[-1])
+    source = agents_btkf.gather(dim=2, index=gather).squeeze(2)
+    dist = (agents_btkf[..., 0:2] - source[:, :, None, 0:2]).norm(dim=-1)
+    radius = max(1e-6, float(args.agent_near_radius_m))
+    near = torch.exp(-((dist / radius) ** 2))
+    weights = float(args.agent_far_weight) + (1.0 - float(args.agent_far_weight)) * near
+    weights = weights * batch["agent_mask"].to(device=device, dtype=weights.dtype)[:, None, :]
+    weights[..., 0] = torch.maximum(weights[..., 0], torch.ones_like(weights[..., 0]))
+    if "agent_tracks_to_predict" in batch:
+        ttp = batch["agent_tracks_to_predict"].to(device=device, dtype=torch.bool)
+        weights = torch.where(ttp[:, None, :], torch.ones_like(weights), weights)
+    if source_slots is not None:
+        src_mask = torch.nn.functional.one_hot(source_slots.clamp_min(0), num_classes=n_agents).to(device=device, dtype=torch.bool)
+        weights = torch.where(src_mask[:, None, :], torch.ones_like(weights), weights)
+    return weights
+
+
 def tensor_metrics(metrics: Dict[str, torch.Tensor]) -> Dict[str, float]:
     return {k: float(v.detach().float().item()) for k, v in metrics.items()}
 
@@ -162,6 +267,7 @@ def metric_order(metrics: Dict[str, Any]) -> list[str]:
     preferred = [
         "loss_total",
         "latent_mse_future",
+        "tf_onestep_mse",
         "flow_mse",
         "bootstrap_mse",
         "loss_emp",
@@ -285,6 +391,9 @@ def build_waymo_vector_tokenizer_from_args(args: Dict[str, Any], n_agents: int, 
         scale_pos_embeds=bool(_arg(args, "scale_pos_embeds", True)),
         use_agent_tokens=bool(_arg(args, "decoder_use_agent_tokens", False)),
         agent_token_mode=str(_arg(args, "decoder_agent_token_mode", "none")),
+        attend_map=bool(_arg(args, "decoder_attend_map", False)),
+        map_cross_every=int(_arg(args, "decoder_map_cross_every", 1)),
+        map_query_tokens=str(_arg(args, "decoder_map_query_tokens", "all")),
         predict_agent_xy_gmm=agent_xy_loss == "gmm",
     )
     return FrozenWaymoVectorTokenizer(encoder=encoder, decoder=decoder)
@@ -316,6 +425,14 @@ def encode_batch_z(tokenizer: FrozenWaymoVectorTokenizer, batch: Dict[str, Any])
         light_mask=batch["light_mask"],
     )
     return out.z
+
+
+@torch.no_grad()
+def decoder_map_kwargs(tokenizer: FrozenWaymoVectorTokenizer, batch: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+    if not getattr(tokenizer.decoder, "attend_map", False):
+        return {}
+    map_tokens, map_mask = tokenizer.encoder.encode_static_map(batch["map_polylines"], batch["map_mask"])
+    return {"encoder_map_tokens": map_tokens, "encoder_map_mask": map_mask}
 
 
 def _emax_from_kmax(k_max: int) -> int:
@@ -355,11 +472,14 @@ def dynamics_pretrain_loss(
     dynamics: torch.nn.Module,
     *,
     z1: torch.Tensor,
+    actions: Optional[torch.Tensor],
+    act_mask: Optional[torch.Tensor],
     k_max: int,
     b_self: int,
     step: int,
     bootstrap_start: int,
-) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    return_pred: bool = False,
+) -> tuple[torch.Tensor, Dict[str, torch.Tensor], Optional[torch.Tensor]]:
     device = z1.device
     bsz, time_steps = z1.shape[:2]
     b_self = max(0, min(int(b_self), bsz - 1))
@@ -379,6 +499,8 @@ def dynamics_pretrain_loss(
     sigma_emp = sigma_full[:b_emp]
     sigma_self = sigma_full[b_emp:]
     sigma_idx_self = sigma_idx_full[b_emp:]
+    actions_self = None if actions is None else actions[b_emp:]
+    act_mask_self = None if act_mask is None or act_mask.dim() < 3 else act_mask[b_emp:]
 
     z0_full = torch.randn_like(z1)
     z_tilde_full = (1.0 - sigma_full)[..., None, None] * z0_full + sigma_full[..., None, None] * z1
@@ -387,7 +509,7 @@ def dynamics_pretrain_loss(
     w_emp = 0.9 * sigma_emp + 0.1
     w_self = 0.9 * sigma_self + 0.1
 
-    z1_hat_full, _ = dynamics(None, step_idx_full, sigma_idx_full, z_tilde_full, act_mask=None, agent_tokens=None)
+    z1_hat_full, _ = dynamics(actions, step_idx_full, sigma_idx_full, z_tilde_full, act_mask=act_mask, agent_tokens=None)
     z1_hat_emp = z1_hat_full[:b_emp]
     z1_hat_self = z1_hat_full[b_emp:]
 
@@ -402,11 +524,25 @@ def dynamics_pretrain_loss(
         sigma_plus = sigma_self + d_half
         sigma_idx_plus = sigma_idx_self + (torch.tensor(k_max, device=device, dtype=torch.float32) * d_half).to(torch.long)
 
-        z1_hat_half1, _ = dynamics(None, step_idx_half, sigma_idx_self, z_tilde_self, act_mask=None, agent_tokens=None)
+        z1_hat_half1, _ = dynamics(
+            actions_self,
+            step_idx_half,
+            sigma_idx_self,
+            z_tilde_self,
+            act_mask=act_mask_self,
+            agent_tokens=None,
+        )
         b_prime = (z1_hat_half1.float() - z_tilde_self.float()) / (1.0 - sigma_self).clamp_min(1e-6)[..., None, None]
         z_prime = z_tilde_self.float() + b_prime * d_half[..., None, None]
 
-        z1_hat_half2, _ = dynamics(None, step_idx_half, sigma_idx_plus, z_prime.to(z_tilde_self.dtype), act_mask=None, agent_tokens=None)
+        z1_hat_half2, _ = dynamics(
+            actions_self,
+            step_idx_half,
+            sigma_idx_plus,
+            z_prime.to(z_tilde_self.dtype),
+            act_mask=act_mask_self,
+            agent_tokens=None,
+        )
         b_doubleprime = (z1_hat_half2.float() - z_prime.float()) / (1.0 - sigma_plus).clamp_min(1e-6)[..., None, None]
 
         vhat_sigma = (z1_hat_self.float() - z_tilde_self.float()) / (1.0 - sigma_self).clamp_min(1e-6)[..., None, None]
@@ -423,7 +559,69 @@ def dynamics_pretrain_loss(
         "loss_emp": loss_emp.detach(),
         "loss_self": loss_self.detach(),
         "sigma_mean": sigma_full.mean().detach(),
-    }
+    }, (z1_hat_full if return_pred else None)
+
+
+def _flatten_time_windows(x: torch.Tensor, window: int) -> torch.Tensor:
+    """Return sliding time windows as (B * N, window, ...)."""
+    chunks = [x[:, start : start + window] for start in range(int(x.shape[1]) - window + 1)]
+    return torch.cat(chunks, dim=0)
+
+
+def tf_onestep_loss(
+    dynamics: torch.nn.Module,
+    *,
+    z1: torch.Tensor,
+    actions: Optional[torch.Tensor],
+    act_mask: Optional[torch.Tensor],
+    k_max: int,
+    context: int,
+    return_pred: bool = False,
+) -> tuple[torch.Tensor, Dict[str, torch.Tensor], Optional[torch.Tensor]]:
+    """Teacher-forced next-z baseline.
+
+    Each training example uses real z[t:t+context] as context, predicts only
+    z[t+context], and then the next window is again formed from real z.
+    """
+    device = z1.device
+    bsz, time_steps = z1.shape[:2]
+    context = int(context)
+    if context < 1:
+        raise ValueError(f"tf_context must be >= 1, got {context}")
+    if time_steps <= context:
+        raise ValueError(f"Need seq_len > tf_context for tf_onestep, got seq_len={time_steps} context={context}")
+
+    n_windows = time_steps - context
+    past = _flatten_time_windows(z1[:, : time_steps - 1], context)
+    target = z1[:, context:].transpose(0, 1).reshape(bsz * n_windows, *z1.shape[2:])
+    noise = torch.randn_like(target).unsqueeze(1)
+    packed_seq = torch.cat([past, noise], dim=1)
+
+    emax = _emax_from_kmax(k_max)
+    step_idxs = torch.full((bsz * n_windows, context + 1), emax, device=device, dtype=torch.long)
+    signal_idxs = torch.full((bsz * n_windows, context + 1), k_max - 1, device=device, dtype=torch.long)
+    step_idxs[:, -1] = 0
+    signal_idxs[:, -1] = 0
+
+    actions_seq = None
+    if actions is not None:
+        actions_seq = _flatten_time_windows(actions, context + 1)
+    act_mask_seq = None
+    if act_mask is not None and act_mask.dim() >= 3:
+        act_mask_seq = _flatten_time_windows(act_mask, context + 1)
+
+    pred_full, _ = dynamics(actions_seq, step_idxs, signal_idxs, packed_seq, act_mask=act_mask_seq, agent_tokens=None)
+    pred = pred_full[:, -1]
+    per = (pred.float() - target.float()).pow(2).mean(dim=(1, 2))
+    loss = per.mean()
+
+    pred_seq = None
+    if return_pred:
+        pred_seq = pred.view(n_windows, bsz, *z1.shape[2:]).transpose(0, 1).contiguous()
+    return loss, {
+        "loss_total": loss.detach(),
+        "tf_onestep_mse": per.mean().detach(),
+    }, pred_seq
 
 
 def make_tau_schedule(*, k_max: int, schedule: str, d: Optional[float] = None) -> Dict[str, Any]:
@@ -451,6 +649,8 @@ def sample_one_timestep_packed(
     dyn: Dynamics,
     *,
     past_packed: torch.Tensor,
+    actions_seq: Optional[torch.Tensor],
+    act_mask_seq: Optional[torch.Tensor],
     k_max: int,
     sched: Dict[str, Any],
     max_rollout_window: int,
@@ -458,6 +658,10 @@ def sample_one_timestep_packed(
     if max_rollout_window > 0:
         past_keep = max(1, int(max_rollout_window) - 1)
         past_packed = past_packed[:, -past_keep:]
+        if actions_seq is not None:
+            actions_seq = actions_seq[:, -(past_keep + 1) :]
+        if act_mask_seq is not None and act_mask_seq.dim() == 3:
+            act_mask_seq = act_mask_seq[:, -(past_keep + 1) :]
 
     device = past_packed.device
     dtype = past_packed.dtype
@@ -478,7 +682,7 @@ def sample_one_timestep_packed(
         tau_i = float(tau[i])
         signal_idxs[:, -1] = int(tau_idx[i])
         packed_seq = torch.cat([past_packed, z], dim=1)
-        x1_hat_full, _ = dyn(None, step_idxs, signal_idxs, packed_seq, act_mask=None, agent_tokens=None)
+        x1_hat_full, _ = dyn(actions_seq, step_idxs, signal_idxs, packed_seq, act_mask=act_mask_seq, agent_tokens=None)
         x1_hat = x1_hat_full[:, -1:, :, :]
         denom = max(1e-4, 1.0 - tau_i)
         b = (x1_hat.float() - z.float()) / denom
@@ -491,6 +695,8 @@ def sample_autoregressive_packed_sequence(
     dyn: Dynamics,
     *,
     z_gt_packed: torch.Tensor,
+    actions: Optional[torch.Tensor],
+    act_mask: Optional[torch.Tensor],
     ctx_length: int,
     horizon: int,
     k_max: int,
@@ -503,9 +709,14 @@ def sample_autoregressive_packed_sequence(
     outs = [z_gt_packed[:, t] for t in range(ctx_length)]
     for _ in range(horizon):
         past = torch.stack(outs, dim=1)
+        next_t = past.shape[1]
+        actions_seq = None if actions is None else actions[:, : next_t + 1]
+        act_mask_seq = None if act_mask is None else act_mask[:, : next_t + 1]
         z_next = sample_one_timestep_packed(
             dyn,
             past_packed=past,
+            actions_seq=actions_seq,
+            act_mask_seq=act_mask_seq,
             k_max=k_max,
             sched=sched,
             max_rollout_window=max_rollout_window,
@@ -532,6 +743,8 @@ def reconstruction_metrics(
     pred: VectorDecoderOutput,
     batch: Dict[str, Any],
     args: argparse.Namespace,
+    *,
+    agent_loss_weight_multiplier: Optional[torch.Tensor] = None,
 ) -> Dict[str, torch.Tensor]:
     _, metrics = vector_tokenizer_reconstruction_loss(
         pred,
@@ -553,6 +766,7 @@ def reconstruction_metrics(
         focus_agent_weight=args.focus_agent_weight,
         agent_xy_loss=args.agent_xy_loss,
         agent_xy_parameterization=args.agent_xy_parameterization,
+        agent_loss_weight_multiplier=agent_loss_weight_multiplier,
     )
     return metrics
 
@@ -575,11 +789,14 @@ def evaluate(
 
     for batch in loader:
         batch = slice_time_window(move_batch(batch, device), args.eval_seq_len, random_start=False)
+        actions, act_mask, action_slots = build_ego_action_features(batch, args)
         z_gt = encode_batch_z(tokenizer, batch)
         z_gt_packed = pack_bottleneck_to_spatial(z_gt, n_spatial=args.n_spatial, k=args.packing_factor)
         z_pred_packed = sample_autoregressive_packed_sequence(
             unwrap_model(dyn),
             z_gt_packed=z_gt_packed,
+            actions=actions,
+            act_mask=act_mask,
             ctx_length=args.eval_ctx,
             horizon=args.eval_horizon,
             k_max=args.k_max,
@@ -591,13 +808,20 @@ def evaluate(
             z_pred,
             agent_mask=batch["agent_mask"],
             light_mask=batch["light_mask"][:, : z_pred.shape[1]],
+            **decoder_map_kwargs(tokenizer, batch),
         )
 
         score_start = min(int(args.eval_ctx), int(z_pred.shape[1]) - 1)
         score_end = int(z_pred.shape[1])
         decoded_future = slice_decoder_output(decoded, score_start, score_end)
         batch_future = slice_future_batch(batch, score_start, score_end)
-        metrics = reconstruction_metrics(decoded_future, batch_future, args)
+        future_weight = build_agent_loss_weight_multiplier(batch_future, args, action_slots=action_slots)
+        metrics = reconstruction_metrics(
+            decoded_future,
+            batch_future,
+            args,
+            agent_loss_weight_multiplier=future_weight,
+        )
         metrics["latent_mse_future"] = (
             z_pred_packed[:, score_start:score_end].float() - z_gt_packed[:, score_start:score_end].float()
         ).pow(2).mean()
@@ -712,8 +936,9 @@ def train(args: argparse.Namespace) -> None:
         time_every=args.time_every,
         space_mode="wm_agent_isolated",
         scale_pos_embeds=args.scale_pos_embeds,
+        action_clamp_inputs=args.ego_action_clamp,
     ).to(device)
-    frozen_action_mlp_params = freeze_unused_action_mlp(dyn)
+    frozen_action_mlp_params = 0 if args.use_ego_actions else freeze_unused_action_mlp(dyn)
 
     if args.compile:
         dyn = torch.compile(dyn)
@@ -761,6 +986,13 @@ def train(args: argparse.Namespace) -> None:
             f"seq_len={args.seq_len} max_rollout_window={args.max_rollout_window} "
             f"eval_ctx={args.eval_ctx} eval_horizon={args.eval_horizon}"
         )
+        print(f"train_objective={args.train_objective} tf_context={args.tf_context}")
+        print(
+            f"ego_actions={args.use_ego_actions} source={args.ego_action_source} "
+            f"normalization={args.ego_action_normalization} clamp={args.ego_action_clamp} "
+            f"agent_far_weight={args.agent_far_weight} near_radius_m={args.agent_near_radius_m} "
+            f"train_decoded_loss_weight={args.train_decoded_loss_weight}"
+        )
         print(
             f"parameters dynamics={dyn_params:,} frozen_action_mlp={frozen_action_mlp_params:,} "
             f"frozen_tokenizer={tok_params:,}"
@@ -784,6 +1016,8 @@ def train(args: argparse.Namespace) -> None:
                     stop = True
                     break
                 batch = slice_time_window(move_batch(batch, device), args.seq_len, random_start=args.random_time_window_start)
+                actions, act_mask, action_slots = build_ego_action_features(batch, args)
+                agent_weight = build_agent_loss_weight_multiplier(batch, args, action_slots=action_slots)
 
                 with torch.no_grad():
                     z = encode_batch_z(tokenizer, batch)
@@ -791,14 +1025,68 @@ def train(args: argparse.Namespace) -> None:
 
                 b_self = int(round(z_packed.shape[0] * args.self_fraction))
                 with autocast(device_type=device.type, dtype=amp_dtype, enabled=use_amp):
-                    loss, metrics = dynamics_pretrain_loss(
-                        dyn,
-                        z1=z_packed,
-                        k_max=args.k_max,
-                        b_self=b_self,
-                        step=step,
-                        bootstrap_start=args.bootstrap_start,
-                    )
+                    if args.train_objective == "shortcut":
+                        loss, metrics, z_hat_packed = dynamics_pretrain_loss(
+                            dyn,
+                            z1=z_packed,
+                            actions=actions,
+                            act_mask=act_mask,
+                            k_max=args.k_max,
+                            b_self=b_self,
+                            step=step,
+                            bootstrap_start=args.bootstrap_start,
+                            return_pred=args.train_decoded_loss_weight > 0.0,
+                        )
+                        decoded_batch = batch
+                        decoded_agent_weight = agent_weight
+                    elif args.train_objective == "tf_onestep":
+                        loss, metrics, z_hat_packed = tf_onestep_loss(
+                            dyn,
+                            z1=z_packed,
+                            actions=actions,
+                            act_mask=act_mask,
+                            k_max=args.k_max,
+                            context=args.tf_context,
+                            return_pred=args.train_decoded_loss_weight > 0.0,
+                        )
+                        decoded_batch = slice_future_batch(batch, int(args.tf_context), int(z_packed.shape[1]))
+                        decoded_agent_weight = build_agent_loss_weight_multiplier(decoded_batch, args, action_slots=action_slots)
+                    else:
+                        raise ValueError(f"Unknown train_objective={args.train_objective!r}")
+                    if args.train_decoded_loss_weight > 0.0:
+                        z_hat = unpack_spatial_to_bottleneck(z_hat_packed, k=args.packing_factor)
+                        decoded_train = tokenizer.decoder(
+                            z_hat,
+                            agent_mask=decoded_batch["agent_mask"],
+                            light_mask=decoded_batch["light_mask"][:, : z_hat.shape[1]],
+                            **decoder_map_kwargs(tokenizer, decoded_batch),
+                        )
+                        decoded_loss, decoded_metrics = vector_tokenizer_reconstruction_loss(
+                            decoded_train,
+                            agents=decoded_batch["agents"],
+                            agent_mask=decoded_batch["agent_mask"],
+                            lights=decoded_batch["lights"],
+                            light_mask=decoded_batch["light_mask"],
+                            agent_xy_weight=args.agent_xy_weight,
+                            agent_vel_weight=args.agent_vel_weight,
+                            agent_yaw_weight=args.agent_yaw_weight,
+                            agent_valid_weight=args.agent_valid_weight,
+                            light_state_weight=args.light_state_weight,
+                            light_valid_weight=args.light_valid_weight,
+                            agent_delta_xy_weight=args.agent_delta_xy_weight,
+                            agent_fde_xy_weight=args.agent_fde_xy_weight,
+                            agent_kinematic_xy_weight=args.agent_kinematic_xy_weight,
+                            agent_speed_yaw_kinematic_weight=args.agent_speed_yaw_kinematic_weight,
+                            kinematic_dt=args.kinematic_dt,
+                            focus_agent_weight=args.focus_agent_weight,
+                            agent_xy_loss=args.agent_xy_loss,
+                            agent_xy_parameterization=args.agent_xy_parameterization,
+                            agent_loss_weight_multiplier=decoded_agent_weight,
+                        )
+                        loss = loss + float(args.train_decoded_loss_weight) * decoded_loss
+                        metrics["loss_decoded_total"] = decoded_loss.detach()
+                        metrics["decoded_agent_xy_mae_m"] = decoded_metrics["agent_xy_mae_m"].detach()
+                        metrics["decoded_focus_agent_fde_m"] = decoded_metrics["focus_agent_fde_m"].detach()
                     loss = loss / grad_accum
 
                 scaler.scale(loss).backward()
@@ -878,6 +1166,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--k_max", type=int, default=64)
     p.add_argument("--bootstrap_start", type=int, default=0)
     p.add_argument("--self_fraction", type=float, default=0.857142857)
+    p.add_argument("--train_objective", choices=["shortcut", "tf_onestep"], default="shortcut")
+    p.add_argument("--tf_context", type=int, default=10)
 
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--weight_decay", type=float, default=1e-2)
@@ -909,6 +1199,17 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--agent_speed_yaw_kinematic_weight", type=float, default=0.0)
     p.add_argument("--kinematic_dt", type=float, default=0.1)
     p.add_argument("--focus_agent_weight", type=float, default=1.0)
+    p.add_argument("--use_ego_actions", action="store_true")
+    p.add_argument("--ego_action_source", choices=["sdc", "focus"], default="focus")
+    p.add_argument("--ego_action_normalization", choices=["scaled", "raw"], default="scaled")
+    p.add_argument("--ego_action_clamp", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--ego_action_xy_scale", type=float, default=5.0)
+    p.add_argument("--ego_action_yaw_scale", type=float, default=math.pi)
+    p.add_argument("--ego_action_speed_scale", type=float, default=30.0)
+    p.add_argument("--agent_far_weight", type=float, default=1.0)
+    p.add_argument("--agent_near_radius_m", type=float, default=50.0)
+    p.add_argument("--agent_distance_source", choices=["sdc", "focus"], default="focus")
+    p.add_argument("--train_decoded_loss_weight", type=float, default=0.0)
 
     p.add_argument("--log_every", type=int, default=100)
     p.add_argument("--save_every", type=int, default=5000)

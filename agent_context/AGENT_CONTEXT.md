@@ -1,6 +1,6 @@
 # Agent Context
 
-Last updated: 2026-06-25
+Last updated: 2026-07-07
 
 ## Source
 
@@ -48,6 +48,275 @@ head(h_pair_ij) -> objective future-relation targets
 The hidden `h_pair` is then used for clustering and nearest-neighbor analysis.
 Important baselines are `pair_raw_only`, `pair_raw + Z`, and `pair_raw +
 shuffled_Z`.
+
+## Interactive Probe Implementation Note, 2026-07-07
+
+An implemented probe now lives at:
+
+```text
+/scratch/baz7dy/tri30/dreamer4/waymo/interactive_probe
+```
+
+Its purpose is to evaluate whether tokenizer bottleneck latents `z[31]` contain
+future-interaction information beyond current focus-candidate pair geometry.
+The probe uses one sample per valid `(focus agent, candidate agent)` pair. The
+input pair query is current-state only, while labels may use future ground-truth
+trajectories.
+
+### Cache And Data
+
+Built cache:
+
+```text
+/scratch/baz7dy/tri30/dreamer4/waymo/cache/interactive_probe_z31_v0_besttok
+```
+
+Train/val sizes:
+
+```text
+train: 44,998 scenes, 865,398 pairs
+val:    5,002 scenes,  95,493 pairs
+```
+
+Cache fields:
+
+```text
+z_current: scene-level z[31], shape (num_scenes, 64, 64)
+pair_raw: current focus-candidate features, shape (num_pairs, 34)
+relevance_targets / masks
+type_targets / masks
+response_bin_targets / masks
+response_reg_targets / masks
+diagnostics
+```
+
+`pair_raw` is a 34D current-state pair feature:
+
+```text
+8 focus state features:
+  x, y, speed, vx, vy, sin_yaw, cos_yaw, type
+8 candidate state features:
+  x, y, speed, vx, vy, sin_yaw, cos_yaw, type
+18 pair geometry/motion features:
+  rel_dx, rel_dy, rel_dist, rel_vx, rel_vy, rel_speed,
+  bearing_sin, bearing_cos, heading_diff_sin, heading_diff_cos,
+  longitudinal_offset, lateral_offset, abs_lateral_offset,
+  closing_speed, same_direction_proxy, crossing_angle_proxy,
+  current_close_5m, current_close_10m
+```
+
+### Layer 1: Relevance
+
+Question:
+
+```text
+Is this candidate potentially interaction-relevant to the focus agent?
+```
+
+All valid pairs are trained/evaluated for Layer 1.
+
+Positive label if any future cue indicates relevance:
+
+```text
+future time-aligned distance is small
+OR future swept/path spatial overlap with small PET
+OR same-corridor leading/following headway is small
+```
+
+Default thresholds in `interactive_probe/labels.py` include:
+
+```text
+future_steps = 50
+dt = 0.1
+relevance_dist_m = 8.0
+path_overlap_dist_m = 4.0
+pet_relevant_s = 3.0
+following_relevant_headway_m = 20.0
+```
+
+Current label counts:
+
+```text
+train relevance: 166,641 / 865,398
+val relevance:    18,299 /  95,493
+```
+
+### Layer 2: Interaction Type
+
+Question:
+
+```text
+For truly relevant pairs, what type of interaction is this?
+```
+
+Layer 2 uses a ground-truth mask. Only pairs with a clear type contribute to
+the type loss and type metrics. Ambiguous relevant pairs are masked out rather
+than forced into `none`.
+
+Implemented type classes:
+
+```text
+other_leads_focus:
+  candidate is ahead of focus in a same-direction same-corridor future relation;
+  focus may need to follow/control speed.
+
+other_follows_focus:
+  candidate is behind focus in a same-direction same-corridor future relation;
+  candidate is relevant but this type currently does not participate in Layer 3
+  yield/deceleration response labels.
+
+crossing_or_oncoming_conflict:
+  future paths spatially conflict and headings at the conflict are substantially
+  different; this covers crossing and same-space oncoming conflicts.
+
+converging_conflict:
+  future motion converges into the same corridor/space, including cut-in,
+  lane merge, road narrowing, or similar conflict. This intentionally merges
+  separate `merge` and `cut-in` concepts because Waymo support for cleanly
+  separating them is sparse and ambiguous.
+```
+
+Type priority in the labeler:
+
+```text
+crossing_or_oncoming_conflict
+then converging_conflict
+then other_leads_focus
+then other_follows_focus
+```
+
+Current val type supports:
+
+```text
+other_leads_focus: 5087
+other_follows_focus: 4888
+crossing_or_oncoming_conflict: 807
+converging_conflict: 1922
+```
+
+### Layer 3: Response / Priority
+
+Question:
+
+```text
+For clearly interactive pairs, what does focus do or who has priority?
+```
+
+Layer 3 also uses ground-truth masks. Not every type contributes to every
+response. In particular, `other_follows_focus` currently only participates in
+Layer 2 type classification, not Layer 3 yield/deceleration response labels.
+
+Implemented binary response labels:
+
+```text
+focus_goes_first:
+  for crossing/converging conflict pairs with a clear conflict region, focus
+  reaches the closest shared/conflict region before the candidate by a margin.
+
+focus_yields_to_other:
+  for crossing/converging conflict pairs, candidate reaches the conflict region
+  first and focus shows a deceleration/slowdown response.
+
+focus_decelerates_for_interaction:
+  for other_leads_focus, crossing_or_oncoming_conflict, and converging_conflict,
+  focus has a meaningful future speed drop and deceleration.
+```
+
+Implemented regression response label:
+
+```text
+delta_arrival_time_s:
+  focus arrival time at closest shared/conflict region minus candidate arrival
+  time. Negative means focus arrives first; positive means candidate arrives
+  first.
+```
+
+Current val response supports:
+
+```text
+focus_decelerates_for_interaction: 7816 pairs, positive rate 0.3358
+focus_goes_first:                  2267 pairs, positive rate 0.4204
+focus_yields_to_other:             2267 pairs, positive rate 0.1142
+delta_arrival_time_s:              2267 pairs
+```
+
+### Probe Model Structure
+
+Implemented modes:
+
+```text
+raw_only:
+  pair_raw -> pair_encoder -> heads
+
+raw_z:
+  pair_raw -> pair_encoder -> query
+  z_current -> projection -> memory
+  query cross-attends to z memory
+  fused representation -> heads
+
+raw_shuffled_z:
+  same as raw_z, but z_current is shuffled across batch as a control
+```
+
+Default architecture:
+
+```text
+pair_raw dim = 34
+z_current shape per scene = (64 latents, 64 dim)
+d_model = 128
+pair_encoder = MLP(34 -> 128)
+z_proj = Linear(64 -> 128) + LayerNorm
+attention = MultiheadAttention(query=pair embedding, key/value=z latents)
+fuse = MLP([pair embedding, attended z] -> 128)
+heads:
+  relevance_head: binary logit
+  type_head: 4-way classification
+  response_bin_head: 3 binary logits
+  response_reg_head: delta_arrival_time_s regression
+```
+
+Training loss:
+
+```text
+loss = relevance BCE on all pairs
+     + type cross-entropy on GT type mask
+     + response binary BCE on GT response masks
+     + response regression smooth-L1 on GT response masks
+```
+
+### Current Result Summary
+
+Three modes were trained under:
+
+```text
+/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/interactive_probe_z31_v0_besttok
+```
+
+Best-checkpoint headline results:
+
+```text
+raw_only:
+  relevance AP 0.9673, type macro-F1 0.8740,
+  response AP 0.8175, delta MAE 0.8153
+
+raw_z:
+  relevance AP 0.9638, type macro-F1 0.8622,
+  response AP 0.8262, delta MAE 0.8218
+
+raw_shuffled_z:
+  relevance AP 0.9662, type macro-F1 0.8720,
+  response AP 0.8174, delta MAE 0.8146
+```
+
+Interpretation as of 2026-07-07:
+
+```text
+This interactive probe does not yet show a stable broad z advantage over
+current pair geometry. raw_only is already very strong, especially for relevance
+and type. The clearest positive z signal is focus_decelerates_for_interaction:
+best AP raw_only 0.9063, raw_z 0.9294, shuffled_z 0.9056. Other priority/yield
+and type metrics are mostly tied or worse for raw_z.
+```
 
 ## Latest World Model Coding Plan
 

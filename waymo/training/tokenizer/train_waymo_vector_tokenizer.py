@@ -179,6 +179,9 @@ def build_model(args: argparse.Namespace, n_agents: int, n_lights: int) -> Vecto
         scale_pos_embeds=args.scale_pos_embeds,
         use_agent_tokens=args.decoder_use_agent_tokens,
         agent_token_mode=args.decoder_agent_token_mode,
+        attend_map=args.decoder_attend_map,
+        map_cross_every=args.decoder_map_cross_every,
+        map_query_tokens=args.decoder_map_query_tokens,
         predict_agent_xy_gmm=args.agent_xy_loss == "gmm",
     )
     return VectorTokenizer(encoder=encoder, decoder=decoder)
@@ -467,7 +470,8 @@ def train(args: argparse.Namespace) -> None:
         )
         print(
             f"n_agents={n_agents} n_lights={n_lights} n_latents={args.n_latents} "
-            f"d_bottleneck={args.d_bottleneck} decoder_agent_token_mode={args.decoder_agent_token_mode}"
+            f"d_bottleneck={args.d_bottleneck} decoder_agent_token_mode={args.decoder_agent_token_mode} "
+            f"decoder_attend_map={args.decoder_attend_map} decoder_map_query_tokens={args.decoder_map_query_tokens}"
         )
         print(
             f"encoder_variant={args.encoder_variant} depth={args.depth} decoder_depth={args.decoder_depth} "
@@ -587,6 +591,13 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--bottleneck_output", choices=["tanh", "layernorm"], default="tanh")
     p.add_argument("--decoder_use_agent_tokens", action="store_true")
     p.add_argument("--decoder_agent_token_mode", choices=["none", "all", "focus"], default="none")
+    p.add_argument("--decoder_attend_map", action="store_true")
+    p.add_argument("--decoder_map_cross_every", type=int, default=1)
+    p.add_argument(
+        "--decoder_map_query_tokens",
+        choices=["latent", "agent", "light", "latent_agent", "agent_light", "all"],
+        default="all",
+    )
 
     p.add_argument("--agent_xy_weight", type=float, default=1.0)
     p.add_argument("--agent_xy_loss", choices=["smooth_l1", "gmm"], default="smooth_l1")

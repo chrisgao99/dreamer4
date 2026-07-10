@@ -61,6 +61,7 @@ def build_dynamics(args: argparse.Namespace, d_bottleneck: int, device: torch.de
         time_every=args.time_every,
         space_mode="wm_agent_isolated",
         scale_pos_embeds=args.scale_pos_embeds,
+        action_clamp_inputs=args.ego_action_clamp,
     ).to(device)
     wm.freeze_unused_action_mlp(dyn)
     return dyn
@@ -158,6 +159,12 @@ def main(args: argparse.Namespace) -> None:
                 "eval_seq_len": args.eval_seq_len,
                 "eval_ctx": args.eval_ctx,
                 "horizons": args.horizons,
+                "use_ego_actions": bool(args.use_ego_actions),
+                "ego_action_source": args.ego_action_source,
+                "ego_action_normalization": args.ego_action_normalization,
+                "ego_action_clamp": bool(args.ego_action_clamp),
+                "agent_far_weight": float(args.agent_far_weight),
+                "agent_distance_source": args.agent_distance_source,
                 "metrics": results,
             }
             out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
