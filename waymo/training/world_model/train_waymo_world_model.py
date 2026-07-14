@@ -804,10 +804,16 @@ def evaluate(
             max_rollout_window=args.max_rollout_window,
         )
         z_pred = unpack_spatial_to_bottleneck(z_pred_packed, k=args.packing_factor)
+        # Decode at the original sequence length when evaluating very short horizons.
+        # The decoder is causal in time, so scored rollout frames cannot attend to
+        # appended future GT latents, but this avoids short-sequence SDPA edge cases.
+        z_decode = z_pred
+        if z_pred.shape[1] < z_gt.shape[1]:
+            z_decode = torch.cat([z_pred, z_gt[:, z_pred.shape[1] :]], dim=1)
         decoded = tokenizer.decoder(
-            z_pred,
+            z_decode,
             agent_mask=batch["agent_mask"],
-            light_mask=batch["light_mask"][:, : z_pred.shape[1]],
+            light_mask=batch["light_mask"][:, : z_decode.shape[1]],
             **decoder_map_kwargs(tokenizer, batch),
         )
 

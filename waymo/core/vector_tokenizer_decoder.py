@@ -64,6 +64,16 @@ class VectorDecoderOutput:
 class VectorTokenizerOutput:
     encoder: VectorEncoderOutput
     decoder: VectorDecoderOutput
+    interaction: Optional["InteractionAuxOutput"] = None
+
+
+@dataclass(frozen=True)
+class InteractionAuxOutput:
+    relevance_logits: torch.Tensor      # (B,T,K)
+    type_logits: torch.Tensor           # (B,T,K,4)
+    response_bin_logits: torch.Tensor   # (B,T,K,3)
+    response_regression: torch.Tensor   # (B,T,K,1)
+    pair_tokens: torch.Tensor           # (B,T,K,D)
 
 
 def decoder_agent_xy(
@@ -354,13 +364,119 @@ class VectorBlockCausalTokenizerDecoder(nn.Module):
         )
 
 
+class TokenizerInteractionAuxHead(nn.Module):
+    """Read interaction labels from z using decoder-style agent slot queries.
+
+    The head intentionally receives no raw pair geometry. It forms focus-candidate
+    slot queries from learned agent query embeddings, attends those queries to the
+    same z latents that feed the decoder, and predicts pair labels for (focus=0,j).
+    """
+
+    def __init__(
+        self,
+        *,
+        d_bottleneck: int,
+        d_model: int,
+        n_heads: int,
+        n_latents: int,
+        n_agents: int,
+        dropout: float = 0.05,
+        scale_pos_embeds: bool = True,
+        n_types: int = 4,
+        n_response_binary: int = 3,
+        n_response_regression: int = 1,
+    ):
+        super().__init__()
+        self.d_model = int(d_model)
+        self.n_latents = int(n_latents)
+        self.n_agents = int(n_agents)
+        self.scale_pos_embeds = bool(scale_pos_embeds)
+
+        self.z_proj = nn.Linear(d_bottleneck, d_model)
+        self.slot_queries = nn.Parameter(torch.empty(n_agents, d_model))
+        nn.init.normal_(self.slot_queries, std=0.02)
+
+        self.pair_query_mlp = nn.Sequential(
+            nn.Linear(4 * d_model, d_model),
+            nn.LayerNorm(d_model),
+            nn.SiLU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model, d_model),
+        )
+        self.attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout, batch_first=True)
+        self.norm = nn.LayerNorm(d_model)
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, 2 * d_model),
+            nn.SiLU(),
+            nn.Dropout(dropout),
+            nn.Linear(2 * d_model, d_model),
+        )
+        self.relevance_head = nn.Linear(d_model, 1)
+        self.type_head = nn.Linear(d_model, n_types)
+        self.response_bin_head = nn.Linear(d_model, n_response_binary)
+        self.response_reg_head = nn.Linear(d_model, n_response_regression)
+
+    @torch.no_grad()
+    def init_from_agent_queries(self, agent_queries: torch.Tensor) -> None:
+        n = min(self.slot_queries.shape[0], agent_queries.shape[0])
+        self.slot_queries[:n].copy_(agent_queries[:n].detach().to(device=self.slot_queries.device, dtype=self.slot_queries.dtype))
+
+    def forward(self, z: torch.Tensor, *, agent_mask: Optional[torch.Tensor] = None) -> InteractionAuxOutput:
+        if z.dim() != 4:
+            raise ValueError(f"Expected z with shape (B,T,N_latents,D), got {tuple(z.shape)}")
+        b, t, n_latents, _ = z.shape
+        if n_latents != self.n_latents:
+            raise ValueError(f"Expected {self.n_latents} latent slots, got {n_latents}")
+        k = self.n_agents if agent_mask is None else int(agent_mask.shape[-1])
+        if k > self.n_agents:
+            raise ValueError(f"Interaction aux head was built for at most {self.n_agents} agent slots, got {k}")
+
+        z_tokens = torch.tanh(self.z_proj(z))
+        z_tokens = add_sinusoidal_positions(z_tokens, self.scale_pos_embeds)
+        memory = z_tokens.reshape(b * t, n_latents, self.d_model)
+
+        slots = self.slot_queries[:k]
+        focus = slots[:1].expand(k, self.d_model)
+        pair_query = torch.cat([focus, slots, focus * slots, (focus - slots).abs()], dim=-1)
+        pair_query = self.pair_query_mlp(pair_query).view(1, 1, k, self.d_model).expand(b, t, k, self.d_model)
+        query = pair_query.reshape(b * t, k, self.d_model)
+
+        attended, _ = self.attn(query=query, key=memory, value=memory, need_weights=False)
+        pair_tokens = self.norm(query + attended)
+        pair_tokens = self.norm(pair_tokens + self.ff(pair_tokens))
+        pair_tokens = pair_tokens.reshape(b, t, k, self.d_model)
+
+        if agent_mask is not None:
+            mask = agent_mask.to(device=z.device, dtype=torch.bool)[:, None, :, None]
+            pair_tokens = pair_tokens * mask.to(dtype=pair_tokens.dtype)
+
+        return InteractionAuxOutput(
+            relevance_logits=self.relevance_head(pair_tokens).squeeze(-1),
+            type_logits=self.type_head(pair_tokens),
+            response_bin_logits=self.response_bin_head(pair_tokens),
+            response_regression=self.response_reg_head(pair_tokens),
+            pair_tokens=pair_tokens,
+        )
+
+
 class VectorTokenizer(nn.Module):
     """Encoder plus latent-only decoder wrapper."""
 
-    def __init__(self, encoder: VectorBlockCausalEncoder, decoder: VectorBlockCausalTokenizerDecoder):
+    def __init__(
+        self,
+        encoder: VectorBlockCausalEncoder,
+        decoder: VectorBlockCausalTokenizerDecoder,
+        interaction_aux: Optional[TokenizerInteractionAuxHead] = None,
+    ):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
+        self.interaction_aux = interaction_aux
+
+    @torch.no_grad()
+    def init_interaction_aux_from_decoder_queries(self) -> None:
+        if self.interaction_aux is not None:
+            self.interaction_aux.init_from_agent_queries(self.decoder.agent_queries)
 
     def forward(
         self,
@@ -391,7 +507,10 @@ class VectorTokenizer(nn.Module):
             decoder_kwargs["encoder_map_tokens"] = enc.map_tokens
             decoder_kwargs["encoder_map_mask"] = enc.map_token_mask
         dec = self.decoder(enc.z, agent_mask=agent_mask, light_mask=light_mask, **decoder_kwargs)
-        return VectorTokenizerOutput(encoder=enc, decoder=dec)
+        interaction = None
+        if self.interaction_aux is not None:
+            interaction = self.interaction_aux(enc.z, agent_mask=agent_mask)
+        return VectorTokenizerOutput(encoder=enc, decoder=dec, interaction=interaction)
 
 
 def agent_reconstruction_targets(

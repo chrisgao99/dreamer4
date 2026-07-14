@@ -28,13 +28,16 @@ from torch.utils.data import DataLoader, DistributedSampler, random_split
 WAYMO_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = WAYMO_ROOT.parent
 CORE_ROOT = WAYMO_ROOT / "core"
-for path in (REPO_ROOT, CORE_ROOT):
+INTERACTIVE_ROOT = WAYMO_ROOT / "interactive_probe"
+for path in (REPO_ROOT, CORE_ROOT, INTERACTIVE_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
 try:
+    from labels import InteractiveLabelConfig, build_scene_interactive_labels
     from vector_tokenizer_encoder import VectorBlockCausalEncoder, VectorStaticMapQueryEncoder, _collate
     from vector_tokenizer_decoder import (
+        TokenizerInteractionAuxHead,
         VectorBlockCausalTokenizerDecoder,
         VectorTokenizer,
         _slice_time_window,
@@ -42,8 +45,10 @@ try:
     )
     from waymo_vector_dataset import WaymoVectorDataset
 except ModuleNotFoundError:
+    from waymo.interactive_probe.labels import InteractiveLabelConfig, build_scene_interactive_labels
     from waymo.core.vector_tokenizer_encoder import VectorBlockCausalEncoder, VectorStaticMapQueryEncoder, _collate
     from waymo.core.vector_tokenizer_decoder import (
+        TokenizerInteractionAuxHead,
         VectorBlockCausalTokenizerDecoder,
         VectorTokenizer,
         _slice_time_window,
@@ -117,19 +122,24 @@ def slice_time_window(
     time_window: int,
     *,
     random_start: bool = False,
+    required_future_steps: int = 0,
 ) -> Dict[str, torch.Tensor]:
+    out = dict(batch)
     if time_window <= 0:
-        return batch
+        out["_time_start"] = torch.zeros((), device=batch["lights"].device, dtype=torch.long)
+        return out
     total_steps = int(batch["lights"].shape[1])
     if total_steps <= time_window:
-        return _slice_time_window(batch, time_window)
+        out = _slice_time_window(batch, time_window)
+        out["_time_start"] = torch.zeros((), device=batch["lights"].device, dtype=torch.long)
+        return out
     if random_start:
-        start = int(torch.randint(0, total_steps - int(time_window) + 1, (1,)).item())
+        max_start = max(0, total_steps - int(time_window) - int(required_future_steps))
+        start = int(torch.randint(0, max_start + 1, (1,)).item())
     else:
         start = 0
     end = start + int(time_window)
 
-    out = dict(batch)
     k = batch["agent_mask"].shape[-1]
     if batch["agents"].shape[1] == k:
         out["agents"] = batch["agents"][:, :, start:end]
@@ -137,6 +147,7 @@ def slice_time_window(
         out["agents"] = batch["agents"][:, start:end]
     out["lights"] = batch["lights"][:, start:end]
     out["light_mask"] = batch["light_mask"][:, start:end]
+    out["_time_start"] = torch.tensor(start, device=batch["lights"].device, dtype=torch.long)
     return out
 
 
@@ -184,7 +195,21 @@ def build_model(args: argparse.Namespace, n_agents: int, n_lights: int) -> Vecto
         map_query_tokens=args.decoder_map_query_tokens,
         predict_agent_xy_gmm=args.agent_xy_loss == "gmm",
     )
-    return VectorTokenizer(encoder=encoder, decoder=decoder)
+    interaction_aux = None
+    if args.interaction_aux_weight > 0.0:
+        interaction_aux = TokenizerInteractionAuxHead(
+            d_bottleneck=args.d_bottleneck,
+            d_model=args.d_model,
+            n_heads=args.n_heads,
+            n_latents=args.n_latents,
+            n_agents=n_agents,
+            dropout=args.dropout,
+            scale_pos_embeds=args.scale_pos_embeds,
+        )
+    model = VectorTokenizer(encoder=encoder, decoder=decoder, interaction_aux=interaction_aux)
+    if interaction_aux is not None and args.interaction_aux_init_decoder_queries:
+        model.init_interaction_aux_from_decoder_queries()
+    return model
 
 
 def unwrap_model(model: torch.nn.Module) -> torch.nn.Module:
@@ -216,6 +241,153 @@ def compute_loss(out, batch: Dict[str, torch.Tensor], args: argparse.Namespace):
     )
 
 
+def _masked_average(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    mask = mask.to(device=values.device, dtype=values.dtype)
+    while mask.dim() < values.dim():
+        mask = mask.unsqueeze(-1)
+    mask = mask.expand_as(values)
+    denom = mask.sum().clamp_min(1.0)
+    return (values * mask).sum() / denom
+
+
+def compute_interaction_aux_loss(
+    out,
+    full_batch: Dict[str, torch.Tensor],
+    batch: Dict[str, torch.Tensor],
+    args: argparse.Namespace,
+) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    inter = getattr(out, "interaction", None)
+    if inter is None:
+        zero = out.encoder.z.sum() * 0.0
+        return zero, {"loss_interaction_aux": zero.detach()}
+
+    rel_logits_all = inter.relevance_logits
+    bsz, t_window, k = rel_logits_all.shape
+    local_step = int(args.interaction_query_step)
+    if local_step < 0:
+        local_step = t_window + local_step
+    if local_step < 0 or local_step >= t_window:
+        raise ValueError(f"interaction_query_step={args.interaction_query_step} outside T={t_window}")
+    start = int(batch.get("_time_start", torch.zeros((), device=rel_logits_all.device)).detach().cpu().item())
+    query_step = start + local_step
+
+    agents_np = full_batch["agents"].detach().cpu().numpy()
+    mask_np = full_batch["agent_mask"].detach().cpu().numpy()
+    device = rel_logits_all.device
+    rel_target = torch.zeros((bsz, k), device=device, dtype=rel_logits_all.dtype)
+    rel_mask = torch.zeros((bsz, k), device=device, dtype=rel_logits_all.dtype)
+    type_target = torch.zeros((bsz, k), device=device, dtype=torch.long)
+    type_mask = torch.zeros((bsz, k), device=device, dtype=rel_logits_all.dtype)
+    resp_bin_target = torch.zeros((bsz, k, 3), device=device, dtype=rel_logits_all.dtype)
+    resp_bin_mask = torch.zeros((bsz, k, 3), device=device, dtype=rel_logits_all.dtype)
+    resp_reg_target = torch.zeros((bsz, k, 1), device=device, dtype=rel_logits_all.dtype)
+    resp_reg_mask = torch.zeros((bsz, k, 1), device=device, dtype=rel_logits_all.dtype)
+
+    cfg = InteractiveLabelConfig(future_steps=int(args.interaction_future_steps))
+    for b in range(bsz):
+        labels = build_scene_interactive_labels(
+            agents_np[b],
+            mask_np[b],
+            query_step=query_step,
+            focus_index=int(args.interaction_focus_index),
+            cfg=cfg,
+        )
+        if labels.candidate_index.size == 0:
+            continue
+        keep = labels.candidate_index < k
+        idx_np = labels.candidate_index[keep]
+        if idx_np.size == 0:
+            continue
+        rows = np.flatnonzero(keep)
+        idx = torch.as_tensor(idx_np, device=device, dtype=torch.long)
+        rel_target[b, idx] = torch.as_tensor(labels.relevance_targets[rows, 0], device=device, dtype=rel_logits_all.dtype)
+        rel_mask[b, idx] = torch.as_tensor(labels.relevance_masks[rows, 0], device=device, dtype=rel_logits_all.dtype)
+        type_target[b, idx] = torch.as_tensor(labels.type_targets[rows], device=device, dtype=torch.long)
+        type_mask[b, idx] = torch.as_tensor(labels.type_masks[rows], device=device, dtype=rel_logits_all.dtype)
+        resp_bin_target[b, idx] = torch.as_tensor(labels.response_bin_targets[rows], device=device, dtype=rel_logits_all.dtype)
+        resp_bin_mask[b, idx] = torch.as_tensor(labels.response_bin_masks[rows], device=device, dtype=rel_logits_all.dtype)
+        resp_reg_target[b, idx] = torch.as_tensor(labels.response_reg_targets[rows], device=device, dtype=rel_logits_all.dtype)
+        resp_reg_mask[b, idx] = torch.as_tensor(labels.response_reg_masks[rows], device=device, dtype=rel_logits_all.dtype)
+
+    if k > int(args.interaction_focus_index):
+        rel_mask[:, int(args.interaction_focus_index)] = 0.0
+        type_mask[:, int(args.interaction_focus_index)] = 0.0
+        resp_bin_mask[:, int(args.interaction_focus_index)] = 0.0
+        resp_reg_mask[:, int(args.interaction_focus_index)] = 0.0
+
+    rel_logits = inter.relevance_logits[:, local_step]
+    type_logits = inter.type_logits[:, local_step]
+    resp_bin_logits = inter.response_bin_logits[:, local_step]
+    resp_reg = inter.response_regression[:, local_step]
+
+    rel_loss = _masked_average(
+        torch.nn.functional.binary_cross_entropy_with_logits(rel_logits, rel_target, reduction="none"),
+        rel_mask,
+    )
+    type_loss_raw = torch.nn.functional.cross_entropy(
+        type_logits.reshape(-1, type_logits.shape[-1]),
+        type_target.reshape(-1),
+        reduction="none",
+    ).view(bsz, k)
+    type_loss = _masked_average(type_loss_raw, type_mask)
+    resp_bin_loss = _masked_average(
+        torch.nn.functional.binary_cross_entropy_with_logits(resp_bin_logits, resp_bin_target, reduction="none"),
+        resp_bin_mask,
+    )
+    resp_reg_loss = _masked_average(
+        torch.nn.functional.smooth_l1_loss(resp_reg, resp_reg_target, reduction="none"),
+        resp_reg_mask,
+    )
+
+    aux_loss = (
+        float(args.interaction_relevance_weight) * rel_loss
+        + float(args.interaction_type_weight) * type_loss
+        + float(args.interaction_response_bin_weight) * resp_bin_loss
+        + float(args.interaction_response_reg_weight) * resp_reg_loss
+    )
+
+    rel_pred = (torch.sigmoid(rel_logits) >= 0.5).to(rel_target.dtype)
+    rel_acc = _masked_average((rel_pred == rel_target).to(rel_target.dtype), rel_mask)
+    type_pred = type_logits.argmax(dim=-1)
+    type_acc = _masked_average((type_pred == type_target).to(type_mask.dtype), type_mask)
+    resp_bin_pred = (torch.sigmoid(resp_bin_logits) >= 0.5).to(resp_bin_target.dtype)
+    resp_bin_acc = _masked_average((resp_bin_pred == resp_bin_target).to(resp_bin_target.dtype), resp_bin_mask)
+
+    metrics = {
+        "loss_interaction_aux": aux_loss.detach(),
+        "loss_interaction_relevance": rel_loss.detach(),
+        "loss_interaction_type": type_loss.detach(),
+        "loss_interaction_response_bin": resp_bin_loss.detach(),
+        "loss_interaction_response_reg": resp_reg_loss.detach(),
+        "interaction_relevance_acc": rel_acc.detach(),
+        "interaction_type_acc": type_acc.detach(),
+        "interaction_response_bin_acc": resp_bin_acc.detach(),
+        "interaction_relevance_count": rel_mask.sum().detach(),
+        "interaction_type_count": type_mask.sum().detach(),
+        "interaction_response_bin_count": resp_bin_mask.sum().detach(),
+        "interaction_response_reg_count": resp_reg_mask.sum().detach(),
+    }
+    return aux_loss, metrics
+
+
+def compute_total_loss(
+    out,
+    batch: Dict[str, torch.Tensor],
+    full_batch: Dict[str, torch.Tensor],
+    args: argparse.Namespace,
+) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    recon_loss, metrics = compute_loss(out, batch, args)
+    metrics = dict(metrics)
+    metrics["loss_reconstruction"] = recon_loss.detach()
+    total = recon_loss
+    if args.interaction_aux_weight > 0.0:
+        aux_loss, aux_metrics = compute_interaction_aux_loss(out, full_batch, batch, args)
+        total = total + float(args.interaction_aux_weight) * aux_loss
+        metrics.update(aux_metrics)
+    metrics["loss_total"] = total.detach()
+    return total, metrics
+
+
 def metric_values(metrics: Dict[str, torch.Tensor]) -> Dict[str, float]:
     return {k: float(v.detach().float().item()) for k, v in metrics.items()}
 
@@ -233,6 +405,12 @@ def format_metrics(metrics: Dict[str, float]) -> str:
         "loss_agent_speed_yaw_kinematic",
         "loss_light_state",
         "loss_light_valid",
+        "loss_reconstruction",
+        "loss_interaction_aux",
+        "loss_interaction_relevance",
+        "loss_interaction_type",
+        "loss_interaction_response_bin",
+        "loss_interaction_response_reg",
         "agent_xy_mae_m",
         "agent_delta_xy_mae_m",
         "agent_fde_mae_m",
@@ -246,6 +424,13 @@ def format_metrics(metrics: Dict[str, float]) -> str:
         "agent_valid_acc",
         "light_state_acc",
         "light_valid_acc",
+        "interaction_relevance_acc",
+        "interaction_type_acc",
+        "interaction_response_bin_acc",
+        "interaction_relevance_count",
+        "interaction_type_count",
+        "interaction_response_bin_count",
+        "interaction_response_reg_count",
     ]
     return ", ".join(f"{name}={metrics[name]:.4f}" for name in names if name in metrics)
 
@@ -262,6 +447,12 @@ def ordered_metric_names(metrics: Dict[str, torch.Tensor] | Dict[str, float]) ->
         "loss_agent_speed_yaw_kinematic",
         "loss_light_state",
         "loss_light_valid",
+        "loss_reconstruction",
+        "loss_interaction_aux",
+        "loss_interaction_relevance",
+        "loss_interaction_type",
+        "loss_interaction_response_bin",
+        "loss_interaction_response_reg",
         "loss_total",
         "agent_xy_mae_m",
         "agent_delta_xy_mae_m",
@@ -276,6 +467,13 @@ def ordered_metric_names(metrics: Dict[str, torch.Tensor] | Dict[str, float]) ->
         "agent_valid_acc",
         "light_state_acc",
         "light_valid_acc",
+        "interaction_relevance_acc",
+        "interaction_type_acc",
+        "interaction_response_bin_acc",
+        "interaction_relevance_count",
+        "interaction_type_count",
+        "interaction_response_bin_count",
+        "interaction_response_reg_count",
     ]
     return [name for name in preferred if name in metrics] + sorted(set(metrics) - set(preferred))
 
@@ -302,7 +500,13 @@ def evaluate(
     totals: Dict[str, float] = {}
     count = 0
     for batch in loader:
-        batch = slice_time_window(move_batch(batch, device), args.time_window, random_start=args.eval_random_time_window_start)
+        full_batch = move_batch(batch, device)
+        batch = slice_time_window(
+            full_batch,
+            args.time_window,
+            random_start=args.eval_random_time_window_start,
+            required_future_steps=args.interaction_future_steps if args.interaction_aux_weight > 0.0 else 0,
+        )
         out = model(
             agents=batch["agents"],
             agent_mask=batch["agent_mask"],
@@ -311,7 +515,7 @@ def evaluate(
             lights=batch["lights"],
             light_mask=batch["light_mask"],
         )
-        _, metrics = compute_loss(out, batch, args)
+        _, metrics = compute_total_loss(out, batch, full_batch, args)
         values = metric_values(metrics)
         for key, value in values.items():
             totals[key] = totals.get(key, 0.0) + value
@@ -363,6 +567,7 @@ def load_ckpt(path: Path, model: VectorTokenizer, opt: torch.optim.Optimizer, sc
         ckpt_agent_xy_loss = "smooth_l1"
     model_to_load = unwrap_model(model)
     model_changed = False
+    loaded_optional_interaction_aux = False
     try:
         model_to_load.load_state_dict(ckpt["model"], strict=True)
     except RuntimeError:
@@ -371,14 +576,25 @@ def load_ckpt(path: Path, model: VectorTokenizer, opt: torch.optim.Optimizer, sc
             "decoder.agent_xy_gmm_head.weight",
             "decoder.agent_xy_gmm_head.bias",
         }
+        missing = set(incompatible.missing_keys)
+        unexpected = set(incompatible.unexpected_keys)
+        missing_allowed = missing.issubset(allowed_gmm_keys) or all(
+            key in allowed_gmm_keys or key.startswith("interaction_aux.") for key in missing
+        )
+        unexpected_allowed = unexpected.issubset(allowed_gmm_keys)
         if (
-            not set(incompatible.missing_keys).issubset(allowed_gmm_keys)
-            or not set(incompatible.unexpected_keys).issubset(allowed_gmm_keys)
+            not missing_allowed
+            or not unexpected_allowed
             or ckpt_agent_xy_loss == "gmm"
         ):
             raise
+        loaded_optional_interaction_aux = bool(any(key.startswith("interaction_aux.") for key in missing))
         model_changed = True
-        print(f"Loaded {path} without optimizer state because optional xy GMM head differs.")
+        reason = "optional interaction aux head differs" if loaded_optional_interaction_aux else "optional xy GMM head differs"
+        print(f"Loaded {path} without optimizer state because {reason}.")
+    if loaded_optional_interaction_aux and hasattr(model_to_load, "init_interaction_aux_from_decoder_queries"):
+        model_to_load.init_interaction_aux_from_decoder_queries()
+        print("Initialized interaction aux slot queries from loaded decoder.agent_queries.")
     if not model_changed:
         opt.load_state_dict(ckpt["opt"])
     if not model_changed and ckpt.get("scaler") is not None:
@@ -474,6 +690,11 @@ def train(args: argparse.Namespace) -> None:
             f"decoder_attend_map={args.decoder_attend_map} decoder_map_query_tokens={args.decoder_map_query_tokens}"
         )
         print(
+            f"interaction_aux_weight={args.interaction_aux_weight} "
+            f"interaction_query_step={args.interaction_query_step} "
+            f"interaction_future_steps={args.interaction_future_steps}"
+        )
+        print(
             f"encoder_variant={args.encoder_variant} depth={args.depth} decoder_depth={args.decoder_depth} "
             f"map_depth={args.map_depth} map_cross_every={args.map_cross_every} map_query_tokens={args.map_query_tokens}"
         )
@@ -489,7 +710,13 @@ def train(args: argparse.Namespace) -> None:
             train_sampler.set_epoch(epoch)
         model.train()
         for batch in train_loader:
-            batch = slice_time_window(move_batch(batch, device), args.time_window, random_start=args.random_time_window_start)
+            full_batch = move_batch(batch, device)
+            batch = slice_time_window(
+                full_batch,
+                args.time_window,
+                random_start=args.random_time_window_start,
+                required_future_steps=args.interaction_future_steps if args.interaction_aux_weight > 0.0 else 0,
+            )
             opt.zero_grad(set_to_none=True)
             with autocast(device_type=device.type, enabled=use_amp):
                 out = model(
@@ -500,7 +727,7 @@ def train(args: argparse.Namespace) -> None:
                     lights=batch["lights"],
                     light_mask=batch["light_mask"],
                 )
-                loss, metrics = compute_loss(out, batch, args)
+                loss, metrics = compute_total_loss(out, batch, full_batch, args)
 
             scaler.scale(loss).backward()
             if args.grad_clip > 0:
@@ -613,6 +840,16 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--agent_speed_yaw_kinematic_weight", type=float, default=0.0)
     p.add_argument("--kinematic_dt", type=float, default=0.1)
     p.add_argument("--focus_agent_weight", type=float, default=1.0)
+
+    p.add_argument("--interaction_aux_weight", type=float, default=0.0)
+    p.add_argument("--interaction_relevance_weight", type=float, default=1.0)
+    p.add_argument("--interaction_type_weight", type=float, default=1.0)
+    p.add_argument("--interaction_response_bin_weight", type=float, default=1.0)
+    p.add_argument("--interaction_response_reg_weight", type=float, default=0.2)
+    p.add_argument("--interaction_query_step", type=int, default=-1)
+    p.add_argument("--interaction_future_steps", type=int, default=50)
+    p.add_argument("--interaction_focus_index", type=int, default=0)
+    p.add_argument("--interaction_aux_init_decoder_queries", action=argparse.BooleanOptionalAction, default=True)
 
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--weight_decay", type=float, default=1e-4)

@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="780" viewBox="0 0 1400 780" role="img" aria-labelledby="title desc">
+  <title id="title">Tokenizer vs latent-space world model</title>
+  <desc id="desc">A comparison of the Waymo vector tokenizer setup and the latent-space world model setup.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#2f3a4a"/>
+    </marker>
+    <style>
+      .bg { fill: #f7f4ed; }
+      .panel { fill: #ffffff; stroke: #d6cfc1; stroke-width: 2; rx: 8; }
+      .panel-title { font: 700 30px Arial, sans-serif; fill: #18212f; }
+      .subtitle { font: 400 16px Arial, sans-serif; fill: #596171; }
+      .label { font: 700 17px Arial, sans-serif; fill: #1f2937; }
+      .small { font: 400 14px Arial, sans-serif; fill: #4b5563; }
+      .tiny { font: 400 12px Arial, sans-serif; fill: #4b5563; }
+      .box { fill: #f8fafc; stroke: #c4cad4; stroke-width: 1.5; rx: 8; }
+      .raw { fill: #eaf3ff; stroke: #86aee8; }
+      .latent { fill: #ecfdf3; stroke: #74b889; }
+      .model { fill: #fff3dd; stroke: #dda64b; }
+      .frozen { fill: #edf1f7; stroke: #9aa6b8; }
+      .loss { fill: #fce8e6; stroke: #d98278; }
+      .trainable { fill: #fff8ea; stroke: #d59a34; }
+      .token-dot { stroke: #ffffff; stroke-width: 1; }
+      .arrow { stroke: #2f3a4a; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .soft-arrow { stroke: #7a8494; stroke-width: 1.5; stroke-dasharray: 5 5; fill: none; marker-end: url(#arrow); }
+      .axis { stroke: #344054; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .layer-s { fill: #e0f2fe; stroke: #4a90c2; }
+      .layer-t { fill: #ede9fe; stroke: #8b74c9; }
+      .layer-st { fill: #f0f9ff; stroke: #5b7ebd; }
+      .note { fill: #fffbeb; stroke: #e3b44f; stroke-width: 1.5; rx: 8; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1400" height="780"/>
+  <text x="700" y="54" text-anchor="middle" class="panel-title">Tokenizer vs. World Model</text>
+  <text x="700" y="82" text-anchor="middle" class="subtitle">Tokenizer learns a compact scene representation; world model learns dynamics in that frozen latent space.</text>
+
+  <!-- Left panel: tokenizer -->
+  <rect class="panel" x="48" y="116" width="620" height="500"/>
+  <text x="78" y="158" class="panel-title">Tokenizer setup</text>
+  <text x="78" y="184" class="subtitle">Train encoder and decoder with reconstruction losses.</text>
+
+  <rect class="box raw" x="82" y="230" width="150" height="110"/>
+  <text x="157" y="258" text-anchor="middle" class="label">Raw vector scene</text>
+  <text x="157" y="286" text-anchor="middle" class="small">agents</text>
+  <text x="157" y="309" text-anchor="middle" class="small">traffic lights</text>
+  <text x="157" y="332" text-anchor="middle" class="small">static map</text>
+
+  <line class="arrow" x1="232" y1="285" x2="286" y2="285"/>
+
+  <rect class="box model" x="292" y="218" width="164" height="134"/>
+  <text x="374" y="247" text-anchor="middle" class="label">Encoder</text>
+  <text x="374" y="274" text-anchor="middle" class="small">block-causal</text>
+  <text x="374" y="296" text-anchor="middle" class="small">transformer</text>
+  <text x="374" y="326" text-anchor="middle" class="tiny">raw tokens -> z</text>
+
+  <line class="arrow" x1="456" y1="285" x2="512" y2="285"/>
+
+  <rect class="box latent" x="518" y="232" width="110" height="106"/>
+  <text x="573" y="260" text-anchor="middle" class="label">Latent z</text>
+  <text x="573" y="288" text-anchor="middle" class="small">L tokens</text>
+  <text x="573" y="311" text-anchor="middle" class="small">per frame</text>
+
+  <line class="arrow" x1="573" y1="338" x2="573" y2="384"/>
+
+  <rect class="box model" x="492" y="390" width="162" height="106"/>
+  <text x="573" y="420" text-anchor="middle" class="label">Decoder</text>
+  <text x="573" y="447" text-anchor="middle" class="small">z + queries</text>
+  <text x="573" y="470" text-anchor="middle" class="small">-> scene states</text>
+
+  <line class="arrow" x1="492" y1="443" x2="418" y2="443"/>
+
+  <rect class="box loss" x="246" y="392" width="166" height="102"/>
+  <text x="329" y="421" text-anchor="middle" class="label">Reconstruct</text>
+  <text x="329" y="449" text-anchor="middle" class="small">agents + lights</text>
+  <text x="329" y="472" text-anchor="middle" class="small">loss to raw scene</text>
+
+  <!-- Tokenizer mini grid -->
+  <g transform="translate(94,386)">
+    <text x="0" y="0" class="label">One transformer block</text>
+    <line class="axis" x1="18" y1="110" x2="18" y2="35"/>
+    <line class="axis" x1="18" y1="110" x2="150" y2="110"/>
+    <text x="24" y="32" class="tiny">time</text>
+    <text x="112" y="130" class="tiny">tokens in a frame</text>
+    <g>
+      <circle class="token-dot" cx="45" cy="52" r="8" fill="#60a5fa"/>
+      <circle class="token-dot" cx="75" cy="52" r="8" fill="#34d399"/>
+      <circle class="token-dot" cx="105" cy="52" r="8" fill="#f59e0b"/>
+      <circle class="token-dot" cx="135" cy="52" r="8" fill="#a78bfa"/>
+      <circle class="token-dot" cx="45" cy="80" r="8" fill="#60a5fa"/>
+      <circle class="token-dot" cx="75" cy="80" r="8" fill="#34d399"/>
+      <circle class="token-dot" cx="105" cy="80" r="8" fill="#f59e0b"/>
+      <circle class="token-dot" cx="135" cy="80" r="8" fill="#a78bfa"/>
+      <circle class="token-dot" cx="45" cy="108" r="8" fill="#60a5fa"/>
+      <circle class="token-dot" cx="75" cy="108" r="8" fill="#34d399"/>
+      <circle class="token-dot" cx="105" cy="108" r="8" fill="#f59e0b"/>
+      <circle class="token-dot" cx="135" cy="108" r="8" fill="#a78bfa"/>
+    </g>
+    <path class="soft-arrow" d="M45,78 C55,66 95,66 135,78"/>
+    <path class="soft-arrow" d="M75,108 C75,96 75,72 75,58"/>
+    <text x="178" y="62" class="tiny">Space attention:</text>
+    <text x="178" y="80" class="tiny">mix tokens within one time step.</text>
+    <text x="178" y="107" class="tiny">Time attention:</text>
+    <text x="178" y="125" class="tiny">causal history along each token slot.</text>
+  </g>
+
+  <!-- Right panel: world model -->
+  <rect class="panel" x="732" y="116" width="620" height="500"/>
+  <text x="762" y="158" class="panel-title">World model setup</text>
+  <text x="762" y="184" class="subtitle">Freeze tokenizer; train only the latent dynamics model.</text>
+
+  <rect class="box raw" x="766" y="230" width="148" height="110"/>
+  <text x="840" y="258" text-anchor="middle" class="label">Raw scene</text>
+  <text x="840" y="288" text-anchor="middle" class="small">context + future</text>
+  <text x="840" y="313" text-anchor="middle" class="small">training only</text>
+
+  <line class="arrow" x1="914" y1="285" x2="972" y2="285"/>
+
+  <rect class="box frozen" x="978" y="220" width="160" height="130"/>
+  <text x="1058" y="248" text-anchor="middle" class="label">Frozen</text>
+  <text x="1058" y="273" text-anchor="middle" class="label">tokenizer encoder</text>
+  <text x="1058" y="303" text-anchor="middle" class="small">raw scene -> z</text>
+  <text x="1058" y="326" text-anchor="middle" class="tiny">no gradient update</text>
+
+  <line class="arrow" x1="1138" y1="285" x2="1194" y2="285"/>
+
+  <rect class="box latent" x="1200" y="232" width="110" height="106"/>
+  <text x="1255" y="260" text-anchor="middle" class="label">Latent z</text>
+  <text x="1255" y="288" text-anchor="middle" class="small">targets</text>
+  <text x="1255" y="311" text-anchor="middle" class="small">for dynamics</text>
+
+  <line class="arrow" x1="1255" y1="338" x2="1255" y2="382"/>
+
+  <rect class="box trainable" x="930" y="386" width="380" height="130"/>
+  <text x="1120" y="416" text-anchor="middle" class="label">Trainable latent dynamics</text>
+  <text x="1120" y="442" text-anchor="middle" class="small">input: noisy/partial z, ego action, shortcut signal, registers</text>
+  <text x="1120" y="466" text-anchor="middle" class="small">output: predicted clean/future latent z_hat</text>
+  <text x="1120" y="492" text-anchor="middle" class="tiny">loss is mainly latent MSE / flow matching in z-space</text>
+
+  <line class="arrow" x1="930" y1="451" x2="864" y2="451"/>
+
+  <rect class="box frozen" x="762" y="400" width="146" height="102"/>
+  <text x="835" y="428" text-anchor="middle" class="label">Frozen</text>
+  <text x="835" y="452" text-anchor="middle" class="label">decoder</text>
+  <text x="835" y="480" text-anchor="middle" class="small">for eval / optional</text>
+
+  <!-- layer schedule -->
+  <g transform="translate(770,542)">
+    <text x="0" y="0" class="label">8-layer dynamics transformer schedule</text>
+    <g transform="translate(0,22)">
+      <rect class="layer-s" x="0" y="0" width="58" height="42" rx="6"/>
+      <rect class="layer-s" x="66" y="0" width="58" height="42" rx="6"/>
+      <rect class="layer-s" x="132" y="0" width="58" height="42" rx="6"/>
+      <rect class="layer-st" x="198" y="0" width="74" height="42" rx="6"/>
+      <rect class="layer-s" x="288" y="0" width="58" height="42" rx="6"/>
+      <rect class="layer-s" x="354" y="0" width="58" height="42" rx="6"/>
+      <rect class="layer-s" x="420" y="0" width="58" height="42" rx="6"/>
+      <rect class="layer-st" x="486" y="0" width="74" height="42" rx="6"/>
+      <text x="29" y="27" text-anchor="middle" class="label">S</text>
+      <text x="95" y="27" text-anchor="middle" class="label">S</text>
+      <text x="161" y="27" text-anchor="middle" class="label">S</text>
+      <text x="235" y="27" text-anchor="middle" class="label">S+T</text>
+      <text x="317" y="27" text-anchor="middle" class="label">S</text>
+      <text x="383" y="27" text-anchor="middle" class="label">S</text>
+      <text x="449" y="27" text-anchor="middle" class="label">S</text>
+      <text x="523" y="27" text-anchor="middle" class="label">S+T</text>
+    </g>
+    <text x="0" y="90" class="tiny">S = spatial attention inside each time step. T = temporal causal attention along time.</text>
+  </g>
+
+  <!-- Bottom note -->
+  <rect class="note" x="170" y="656" width="1060" height="80"/>
+  <text x="700" y="687" text-anchor="middle" class="label">Main difference</text>
+  <text x="700" y="715" text-anchor="middle" class="small">Tokenizer: raw vector scene -> latent z -> reconstructed scene.</text>
+  <text x="700" y="738" text-anchor="middle" class="small">World model: frozen tokenizer provides z; dynamics predicts how z evolves over time, then the frozen decoder turns predicted z back into scene states.</text>
+</svg>

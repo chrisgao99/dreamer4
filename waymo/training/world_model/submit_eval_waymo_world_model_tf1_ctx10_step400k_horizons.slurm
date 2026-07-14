@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH --job-name=wm_eval_tf1c10_400k
+#SBATCH --account=lia-lab-members
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:2
+#SBATCH --constraint="h200|a100|a40|a6000"
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=256G
+#SBATCH --time=1-00:00:00
+#SBATCH --open-mode=truncate
+#SBATCH --output=/scratch/baz7dy/tri30/dreamer4/waymo/logs/wm/slurm-%x-%j.out
+#SBATCH --error=/scratch/baz7dy/tri30/dreamer4/waymo/logs/wm/slurm-%x-%j.err
+
+set -euo pipefail
+
+REPO_ROOT="${REPO_ROOT:-/scratch/baz7dy/tri30/dreamer4}"
+BASE_SCRIPT="$REPO_ROOT/waymo/training/world_model/submit_eval_waymo_world_model_horizons.slurm"
+
+export RUN_NAME="${RUN_NAME:-waymo_wm_tf_onestep_focus_raw_noclamp_full91_ctx10_h81_norecon_1m}"
+export TOKENIZER_CKPT="${TOKENIZER_CKPT:-$REPO_ROOT/waymo/checkpoints/ooi50k_lat64_b64_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_nofde_focus_randstart_noamp/best.pt}"
+export EVAL_CKPT="${EVAL_CKPT:-$REPO_ROOT/waymo/checkpoints/$RUN_NAME/step_00400000.pt}"
+export HORIZONS="${HORIZONS:-1 5 10 20 40 60 81}"
+export EVAL_MAX_BATCHES="${EVAL_MAX_BATCHES:-0}"
+
+export EVAL_SEQ_LEN="${EVAL_SEQ_LEN:-91}"
+export EVAL_CTX="${EVAL_CTX:-10}"
+export MAX_ROLLOUT_WINDOW="${MAX_ROLLOUT_WINDOW:-11}"
+
+export USE_EGO_ACTIONS="${USE_EGO_ACTIONS:-1}"
+export EGO_ACTION_SOURCE="${EGO_ACTION_SOURCE:-focus}"
+export EGO_ACTION_NORMALIZATION="${EGO_ACTION_NORMALIZATION:-raw}"
+export EGO_ACTION_CLAMP="${EGO_ACTION_CLAMP:-0}"
+
+export AGENT_FAR_WEIGHT="${AGENT_FAR_WEIGHT:-0.25}"
+export AGENT_NEAR_RADIUS_M="${AGENT_NEAR_RADIUS_M:-50.0}"
+export AGENT_DISTANCE_SOURCE="${AGENT_DISTANCE_SOURCE:-focus}"
+
+bash "$BASE_SCRIPT"

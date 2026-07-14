@@ -11,6 +11,7 @@ CKPT_DIR="${CKPT_DIR:-$REPO_ROOT/waymo/checkpoints/$RUN_NAME}"
 LOG_DIR="${LOG_DIR:-$REPO_ROOT/waymo/logs}"
 LOG="${LOG:-$LOG_DIR/${RUN_NAME}.log}"
 WANDB_DIR="${WANDB_DIR:-$REPO_ROOT/waymo/wandb}"
+RESUME="${RESUME:-}"
 
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-2}"
@@ -49,6 +50,14 @@ AGENT_KINEMATIC_XY_WEIGHT="${AGENT_KINEMATIC_XY_WEIGHT:-0}"
 AGENT_SPEED_YAW_KINEMATIC_WEIGHT="${AGENT_SPEED_YAW_KINEMATIC_WEIGHT:-0}"
 KINEMATIC_DT="${KINEMATIC_DT:-0.1}"
 FOCUS_AGENT_WEIGHT="${FOCUS_AGENT_WEIGHT:-4}"
+INTERACTION_AUX_WEIGHT="${INTERACTION_AUX_WEIGHT:-0}"
+INTERACTION_RELEVANCE_WEIGHT="${INTERACTION_RELEVANCE_WEIGHT:-1}"
+INTERACTION_TYPE_WEIGHT="${INTERACTION_TYPE_WEIGHT:-1}"
+INTERACTION_RESPONSE_BIN_WEIGHT="${INTERACTION_RESPONSE_BIN_WEIGHT:-1}"
+INTERACTION_RESPONSE_REG_WEIGHT="${INTERACTION_RESPONSE_REG_WEIGHT:-0.2}"
+INTERACTION_QUERY_STEP="${INTERACTION_QUERY_STEP:--1}"
+INTERACTION_FUTURE_STEPS="${INTERACTION_FUTURE_STEPS:-50}"
+INTERACTION_FOCUS_INDEX="${INTERACTION_FOCUS_INDEX:-0}"
 LR="${LR:-3e-4}"
 WEIGHT_DECAY="${WEIGHT_DECAY:-1e-4}"
 GRAD_CLIP="${GRAD_CLIP:-1.0}"
@@ -209,7 +218,26 @@ if [[ "$DECODER_ATTEND_MAP" == "1" || "$DECODER_ATTEND_MAP" == "true" || "$DECOD
   )
 fi
 
-if [[ -f "$CKPT_DIR/latest.pt" ]]; then
+if [[ "$INTERACTION_AUX_WEIGHT" != "0" && "$INTERACTION_AUX_WEIGHT" != "0.0" ]]; then
+  train_args+=(
+    --interaction_aux_weight "$INTERACTION_AUX_WEIGHT"
+    --interaction_relevance_weight "$INTERACTION_RELEVANCE_WEIGHT"
+    --interaction_type_weight "$INTERACTION_TYPE_WEIGHT"
+    --interaction_response_bin_weight "$INTERACTION_RESPONSE_BIN_WEIGHT"
+    --interaction_response_reg_weight "$INTERACTION_RESPONSE_REG_WEIGHT"
+    --interaction_query_step "$INTERACTION_QUERY_STEP"
+    --interaction_future_steps "$INTERACTION_FUTURE_STEPS"
+    --interaction_focus_index "$INTERACTION_FOCUS_INDEX"
+  )
+fi
+
+if [[ -n "$RESUME" ]]; then
+  if [[ ! -f "$RESUME" ]]; then
+    echo "Resume checkpoint not found: $RESUME" >&2
+    exit 1
+  fi
+  train_args+=(--resume "$RESUME")
+elif [[ -f "$CKPT_DIR/latest.pt" ]]; then
   train_args+=(--resume "$CKPT_DIR/latest.pt")
 fi
 
@@ -224,11 +252,13 @@ fi
   echo "overwrite_run=$OVERWRITE_RUN"
   echo "data_dir=$DATA_DIR"
   echo "ckpt_dir=$CKPT_DIR"
+  echo "resume=${RESUME:-auto_latest_if_present}"
   echo "log=$LOG"
   echo "batch_size=$BATCH_SIZE epochs=$EPOCHS d_model=$D_MODEL depth=$DEPTH decoder_depth=$DECODER_DEPTH n_latents=$N_LATENTS d_bottleneck=$D_BOTTLENECK time_window=$TIME_WINDOW random_time_window_start=1"
   echo "encoder_variant=$ENCODER_VARIANT map_depth=$MAP_DEPTH map_cross_every=$MAP_CROSS_EVERY map_query_tokens=$MAP_QUERY_TOKENS"
   echo "bottleneck_output=$BOTTLENECK_OUTPUT decoder_use_agent_tokens=$DECODER_USE_AGENT_TOKENS decoder_agent_token_mode=$DECODER_AGENT_TOKEN_MODE decoder_attend_map=$DECODER_ATTEND_MAP decoder_map_cross_every=$DECODER_MAP_CROSS_EVERY decoder_map_query_tokens=$DECODER_MAP_QUERY_TOKENS"
   echo "agent_xy_loss=$AGENT_XY_LOSS agent_xy_parameterization=$AGENT_XY_PARAMETERIZATION agent_delta_xy_weight=$AGENT_DELTA_XY_WEIGHT agent_fde_xy_weight=$AGENT_FDE_XY_WEIGHT agent_kinematic_xy_weight=$AGENT_KINEMATIC_XY_WEIGHT agent_speed_yaw_kinematic_weight=$AGENT_SPEED_YAW_KINEMATIC_WEIGHT kinematic_dt=$KINEMATIC_DT focus_agent_weight=$FOCUS_AGENT_WEIGHT"
+  echo "interaction_aux_weight=$INTERACTION_AUX_WEIGHT interaction_relevance_weight=$INTERACTION_RELEVANCE_WEIGHT interaction_type_weight=$INTERACTION_TYPE_WEIGHT interaction_response_bin_weight=$INTERACTION_RESPONSE_BIN_WEIGHT interaction_response_reg_weight=$INTERACTION_RESPONSE_REG_WEIGHT interaction_query_step=$INTERACTION_QUERY_STEP interaction_future_steps=$INTERACTION_FUTURE_STEPS interaction_focus_index=$INTERACTION_FOCUS_INDEX"
   echo "lr=$LR weight_decay=$WEIGHT_DECAY grad_clip=$GRAD_CLIP no_amp=$NO_AMP"
   echo "loss_fix=normalized_agent_targets_no_double_transpose"
   echo "========================"
