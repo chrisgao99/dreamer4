@@ -455,15 +455,20 @@ def load_frozen_waymo_vector_tokenizer(ckpt_path: str, device: torch.device) -> 
 
 
 @torch.no_grad()
-def encode_batch_z(tokenizer: torch.nn.Module, batch: Dict[str, Any]) -> torch.Tensor:
+def encode_batch_dynamics_inputs(
+    tokenizer: torch.nn.Module,
+    batch: Dict[str, Any],
+    *,
+    return_map: bool = False,
+) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
     if isinstance(tokenizer, FrozenWaymoFocusTokenizer):
-        representation, _, _ = tokenizer.model.encode(
+        representation, map_tokens, map_mask = tokenizer.model.encode(
             agents=batch["agents"],
             agent_mask=batch["agent_mask"],
             map_polylines=batch["map_polylines"],
             map_mask=batch["map_mask"],
         )
-        return representation
+        return representation, (map_tokens if return_map else None), (map_mask if return_map else None)
     out = tokenizer.encoder(
         agents=batch["agents"],
         agent_mask=batch["agent_mask"],
@@ -472,7 +477,22 @@ def encode_batch_z(tokenizer: torch.nn.Module, batch: Dict[str, Any]) -> torch.T
         lights=batch["lights"],
         light_mask=batch["light_mask"],
     )
-    return out.z
+    map_tokens = out.map_tokens
+    if return_map and map_tokens.dim() == 4:
+        map_tokens = map_tokens[:, 0]
+    return out.z, (map_tokens if return_map else None), (out.map_token_mask if return_map else None)
+
+
+@torch.no_grad()
+def encode_batch_z(tokenizer: torch.nn.Module, batch: Dict[str, Any]) -> torch.Tensor:
+    z, _, _ = encode_batch_dynamics_inputs(tokenizer, batch, return_map=False)
+    return z
+
+
+def tokenizer_map_memory_dim(tokenizer: torch.nn.Module) -> int:
+    if isinstance(tokenizer, FrozenWaymoFocusTokenizer):
+        return int(tokenizer.model.d_model)
+    return int(tokenizer.encoder.d_model)
 
 
 @torch.no_grad()
@@ -548,6 +568,8 @@ def dynamics_pretrain_loss(
     b_self: int,
     step: int,
     bootstrap_start: int,
+    map_tokens: Optional[torch.Tensor] = None,
+    map_mask: Optional[torch.Tensor] = None,
     return_pred: bool = False,
 ) -> tuple[torch.Tensor, Dict[str, torch.Tensor], Optional[torch.Tensor]]:
     device = z1.device
@@ -571,6 +593,8 @@ def dynamics_pretrain_loss(
     sigma_idx_self = sigma_idx_full[b_emp:]
     actions_self = None if actions is None else actions[b_emp:]
     act_mask_self = None if act_mask is None or act_mask.dim() < 3 else act_mask[b_emp:]
+    map_tokens_self = None if map_tokens is None else map_tokens[b_emp:]
+    map_mask_self = None if map_mask is None else map_mask[b_emp:]
 
     z0_full = torch.randn_like(z1)
     z_tilde_full = (1.0 - sigma_full)[..., None, None] * z0_full + sigma_full[..., None, None] * z1
@@ -579,7 +603,16 @@ def dynamics_pretrain_loss(
     w_emp = 0.9 * sigma_emp + 0.1
     w_self = 0.9 * sigma_self + 0.1
 
-    z1_hat_full, _ = dynamics(actions, step_idx_full, sigma_idx_full, z_tilde_full, act_mask=act_mask, agent_tokens=None)
+    z1_hat_full, _ = dynamics(
+        actions,
+        step_idx_full,
+        sigma_idx_full,
+        z_tilde_full,
+        act_mask=act_mask,
+        agent_tokens=None,
+        map_tokens=map_tokens,
+        map_mask=map_mask,
+    )
     z1_hat_emp = z1_hat_full[:b_emp]
     z1_hat_self = z1_hat_full[b_emp:]
 
@@ -601,6 +634,8 @@ def dynamics_pretrain_loss(
             z_tilde_self,
             act_mask=act_mask_self,
             agent_tokens=None,
+            map_tokens=map_tokens_self,
+            map_mask=map_mask_self,
         )
         b_prime = (z1_hat_half1.float() - z_tilde_self.float()) / (1.0 - sigma_self).clamp_min(1e-6)[..., None, None]
         z_prime = z_tilde_self.float() + b_prime * d_half[..., None, None]
@@ -612,6 +647,8 @@ def dynamics_pretrain_loss(
             z_prime.to(z_tilde_self.dtype),
             act_mask=act_mask_self,
             agent_tokens=None,
+            map_tokens=map_tokens_self,
+            map_mask=map_mask_self,
         )
         b_doubleprime = (z1_hat_half2.float() - z_prime.float()) / (1.0 - sigma_plus).clamp_min(1e-6)[..., None, None]
 
@@ -646,6 +683,8 @@ def tf_onestep_loss(
     act_mask: Optional[torch.Tensor],
     k_max: int,
     context: int,
+    map_tokens: Optional[torch.Tensor] = None,
+    map_mask: Optional[torch.Tensor] = None,
     return_pred: bool = False,
 ) -> tuple[torch.Tensor, Dict[str, torch.Tensor], Optional[torch.Tensor]]:
     """Teacher-forced next-z baseline.
@@ -680,7 +719,19 @@ def tf_onestep_loss(
     if act_mask is not None and act_mask.dim() >= 3:
         act_mask_seq = _flatten_time_windows(act_mask, context + 1)
 
-    pred_full, _ = dynamics(actions_seq, step_idxs, signal_idxs, packed_seq, act_mask=act_mask_seq, agent_tokens=None)
+    map_tokens_seq = None if map_tokens is None else map_tokens.repeat(n_windows, 1, 1)
+    map_mask_seq = None if map_mask is None else map_mask.repeat(n_windows, 1)
+
+    pred_full, _ = dynamics(
+        actions_seq,
+        step_idxs,
+        signal_idxs,
+        packed_seq,
+        act_mask=act_mask_seq,
+        agent_tokens=None,
+        map_tokens=map_tokens_seq,
+        map_mask=map_mask_seq,
+    )
     pred = pred_full[:, -1]
     per = (pred.float() - target.float()).pow(2).mean(dim=(1, 2))
     loss = per.mean()
@@ -721,6 +772,8 @@ def sample_one_timestep_packed(
     past_packed: torch.Tensor,
     actions_seq: Optional[torch.Tensor],
     act_mask_seq: Optional[torch.Tensor],
+    map_tokens: Optional[torch.Tensor],
+    map_mask: Optional[torch.Tensor],
     k_max: int,
     sched: Dict[str, Any],
     max_rollout_window: int,
@@ -752,7 +805,16 @@ def sample_one_timestep_packed(
         tau_i = float(tau[i])
         signal_idxs[:, -1] = int(tau_idx[i])
         packed_seq = torch.cat([past_packed, z], dim=1)
-        x1_hat_full, _ = dyn(actions_seq, step_idxs, signal_idxs, packed_seq, act_mask=act_mask_seq, agent_tokens=None)
+        x1_hat_full, _ = dyn(
+            actions_seq,
+            step_idxs,
+            signal_idxs,
+            packed_seq,
+            act_mask=act_mask_seq,
+            agent_tokens=None,
+            map_tokens=map_tokens,
+            map_mask=map_mask,
+        )
         x1_hat = x1_hat_full[:, -1:, :, :]
         denom = max(1e-4, 1.0 - tau_i)
         b = (x1_hat.float() - z.float()) / denom
@@ -767,6 +829,8 @@ def sample_autoregressive_packed_sequence(
     z_gt_packed: torch.Tensor,
     actions: Optional[torch.Tensor],
     act_mask: Optional[torch.Tensor],
+    map_tokens: Optional[torch.Tensor],
+    map_mask: Optional[torch.Tensor],
     ctx_length: int,
     horizon: int,
     k_max: int,
@@ -787,6 +851,8 @@ def sample_autoregressive_packed_sequence(
             past_packed=past,
             actions_seq=actions_seq,
             act_mask_seq=act_mask_seq,
+            map_tokens=map_tokens,
+            map_mask=map_mask,
             k_max=k_max,
             sched=sched,
             max_rollout_window=max_rollout_window,
@@ -929,13 +995,19 @@ def evaluate(
     for batch in loader:
         batch = slice_time_window(move_batch(batch, device), args.eval_seq_len, random_start=False)
         actions, act_mask, action_slots = build_ego_action_features(batch, args)
-        z_gt = encode_batch_z(tokenizer, batch)
+        z_gt, map_tokens, map_mask = encode_batch_dynamics_inputs(
+            tokenizer,
+            batch,
+            return_map=args.dynamics_attend_map,
+        )
         z_gt_packed = pack_bottleneck_to_spatial(z_gt, n_spatial=args.n_spatial, k=args.packing_factor)
         z_pred_packed = sample_autoregressive_packed_sequence(
             unwrap_model(dyn),
             z_gt_packed=z_gt_packed,
             actions=actions,
             act_mask=act_mask,
+            map_tokens=map_tokens,
+            map_mask=map_mask,
             ctx_length=args.eval_ctx,
             horizon=args.eval_horizon,
             k_max=args.k_max,
@@ -1067,6 +1139,11 @@ def train(args: argparse.Namespace) -> None:
     args.n_spatial = n_latents // args.packing_factor
     args.d_spatial = d_bottleneck * args.packing_factor
 
+    if args.dynamics_attend_map and args.dynamics_variant != "standard":
+        raise ValueError("Map conditioning is currently supported only for dynamics_variant=standard")
+    if args.dynamics_attend_map and args.map_cross_every < 1:
+        raise ValueError(f"map_cross_every must be >= 1 when map conditioning is enabled; got {args.map_cross_every}")
+
     if args.dynamics_variant == "focus_film":
         dyn = FocusFiLMDynamics(
             d_model=args.d_model_dyn,
@@ -1098,6 +1175,8 @@ def train(args: argparse.Namespace) -> None:
             space_mode="wm_agent_isolated",
             scale_pos_embeds=args.scale_pos_embeds,
             action_clamp_inputs=args.ego_action_clamp,
+            map_memory_dim=tokenizer_map_memory_dim(tokenizer) if args.dynamics_attend_map else None,
+            map_cross_every=args.map_cross_every if args.dynamics_attend_map else 0,
         ).to(device)
     frozen_action_mlp_params = 0 if args.use_ego_actions else freeze_unused_action_mlp(dyn)
 
@@ -1146,6 +1225,7 @@ def train(args: argparse.Namespace) -> None:
         print(
             f"dynamics variant={args.dynamics_variant} d_model={args.d_model_dyn} "
             f"depth={args.dyn_depth} heads={args.n_heads} registers={args.n_register} "
+            f"attend_map={args.dynamics_attend_map} map_cross_every={args.map_cross_every} "
             f"seq_len={args.seq_len} max_rollout_window={args.max_rollout_window} "
             f"eval_ctx={args.eval_ctx} eval_horizon={args.eval_horizon}"
         )
@@ -1183,7 +1263,11 @@ def train(args: argparse.Namespace) -> None:
                 agent_weight = build_agent_loss_weight_multiplier(batch, args, action_slots=action_slots)
 
                 with torch.no_grad():
-                    z = encode_batch_z(tokenizer, batch)
+                    z, map_tokens, map_mask = encode_batch_dynamics_inputs(
+                        tokenizer,
+                        batch,
+                        return_map=args.dynamics_attend_map,
+                    )
                     z_packed = pack_bottleneck_to_spatial(z, n_spatial=args.n_spatial, k=args.packing_factor)
 
                 b_self = int(round(z_packed.shape[0] * args.self_fraction))
@@ -1198,6 +1282,8 @@ def train(args: argparse.Namespace) -> None:
                             b_self=b_self,
                             step=step,
                             bootstrap_start=args.bootstrap_start,
+                            map_tokens=map_tokens,
+                            map_mask=map_mask,
                             return_pred=args.train_decoded_loss_weight > 0.0,
                         )
                         decoded_batch = batch
@@ -1210,6 +1296,8 @@ def train(args: argparse.Namespace) -> None:
                             act_mask=act_mask,
                             k_max=args.k_max,
                             context=args.tf_context,
+                            map_tokens=map_tokens,
+                            map_mask=map_mask,
                             return_pred=args.train_decoded_loss_weight > 0.0,
                         )
                         decoded_batch = slice_future_batch(batch, int(args.tf_context), int(z_packed.shape[1]))
@@ -1265,7 +1353,7 @@ def train(args: argparse.Namespace) -> None:
 
             if stop:
                 break
-            if is_rank0():
+            if is_rank0() and args.save_latest_each_epoch:
                 save_ckpt(latest, dyn=dyn, opt=opt, scaler=scaler, args=args, step=step, epoch=epoch + 1)
 
         if stop:
@@ -1302,6 +1390,8 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--dropout", type=float, default=0.0)
     p.add_argument("--mlp_ratio", type=float, default=4.0)
     p.add_argument("--time_every", type=int, default=4)
+    p.add_argument("--dynamics_attend_map", action=argparse.BooleanOptionalAction, default=False)
+    p.add_argument("--map_cross_every", type=int, default=1)
     p.add_argument("--packing_factor", type=int, default=2)
     p.add_argument("--n_register", type=int, default=8)
     p.add_argument("--scale_pos_embeds", action=argparse.BooleanOptionalAction, default=True)
@@ -1357,6 +1447,12 @@ def build_argparser() -> argparse.ArgumentParser:
 
     p.add_argument("--log_every", type=int, default=100)
     p.add_argument("--save_every", type=int, default=5000)
+    p.add_argument(
+        "--save_latest_each_epoch",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save latest.pt after every epoch. Disable for tiny datasets where epochs contain very few steps.",
+    )
     p.add_argument("--wandb", action="store_true")
     p.add_argument("--wandb_project", type=str, default="waymo-world-model")
     p.add_argument("--wandb_run_name", type=str, default="waymo_latent_dynamics_v0")

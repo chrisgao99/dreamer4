@@ -1,0 +1,8 @@
+/p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_training_all/train/9fe8e4d271f493fa_focus_320_src1.npz
+/p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_training_all/train/d7c4e418072b4a27_focus_882_src0.npz
+/p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_training_all/train/8462c84695658044_focus_459_src1.npz
+/p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_training_all/train/6f96ff3040cc98e6_focus_1479_src0.npz
+/p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_training_all/train/b0b2cc06ef6dfdcb_focus_2235_src1.npz
+/p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_training_all/train/c7ba731843cd5531_focus_446_src3.npz
+/p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_training_all/train/e7c2b672698a3df1_focus_7_src0.npz
+/p/yufeng/tri30/dreamer4/waymo/data/waymo_vector_dataset_ooi_centered_training_all/train/75d3b83c3338731d_focus_150_src6.npz

@@ -195,6 +195,81 @@ class MultiheadSelfAttention(nn.Module):
         return self.out(y)
 
 
+class MultiheadCrossAttention(nn.Module):
+    """Cross-attention from a dynamic query sequence to static memory."""
+
+    def __init__(self, d_model: int, n_heads: int, dropout: float = 0.0):
+        super().__init__()
+        assert d_model % n_heads == 0
+        self.d_model = int(d_model)
+        self.n_heads = int(n_heads)
+        self.head_dim = self.d_model // self.n_heads
+        self.dropout_p = float(dropout)
+
+        self.q = nn.Linear(self.d_model, self.d_model, bias=True)
+        self.kv = nn.Linear(self.d_model, 2 * self.d_model, bias=True)
+        self.out = nn.Linear(self.d_model, self.d_model, bias=True)
+
+    def forward(
+        self,
+        query_nqd: torch.Tensor,
+        memory_nmd: torch.Tensor,
+        *,
+        memory_mask_nm: torch.Tensor,
+    ) -> torch.Tensor:
+        n, q_len, dim = query_nqd.shape
+        m_len = memory_nmd.shape[1]
+        q = self.q(query_nqd)
+        k, v = self.kv(memory_nmd).chunk(2, dim=-1)
+
+        q = q.view(n, q_len, self.n_heads, self.head_dim).transpose(1, 2)
+        k = k.view(n, m_len, self.n_heads, self.head_dim).transpose(1, 2)
+        v = v.view(n, m_len, self.n_heads, self.head_dim).transpose(1, 2)
+
+        attn_mask = memory_mask_nm[:, None, None, :]
+        drop = self.dropout_p if self.training else 0.0
+        y = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=drop, is_causal=False)
+        y = y.transpose(1, 2).contiguous().view(n, q_len, dim)
+        return self.out(y)
+
+
+class StaticMemoryCrossAttention(nn.Module):
+    """Broadcast one static memory bank over all dynamics timesteps."""
+
+    def __init__(self, d_model: int, n_heads: int, dropout: float = 0.0):
+        super().__init__()
+        self.attn = MultiheadCrossAttention(d_model=d_model, n_heads=n_heads, dropout=dropout)
+
+    def forward(
+        self,
+        query_btqd: torch.Tensor,
+        memory_bmd: torch.Tensor,
+        memory_mask_bm: torch.Tensor,
+    ) -> torch.Tensor:
+        b, t, q_len, dim = query_btqd.shape
+        if memory_bmd.dim() != 3 or memory_bmd.shape[0] != b:
+            raise ValueError(
+                f"Expected static memory with shape (B,M,D), got {tuple(memory_bmd.shape)} for B={b}"
+            )
+        if memory_mask_bm.shape != memory_bmd.shape[:2]:
+            raise ValueError(
+                "Static memory mask must have shape (B,M); "
+                f"got {tuple(memory_mask_bm.shape)} for memory {tuple(memory_bmd.shape)}"
+            )
+
+        memory_mask_bm = memory_mask_bm.to(device=memory_bmd.device, dtype=torch.bool)
+        has_memory = memory_mask_bm.any(dim=1)
+        safe_mask = memory_mask_bm.clone()
+        if (~has_memory).any():
+            safe_mask[~has_memory, 0] = True
+
+        query = query_btqd.reshape(b * t, q_len, dim)
+        memory = memory_bmd[:, None, :, :].expand(b, t, -1, -1).reshape(b * t, memory_bmd.shape[1], dim)
+        memory_mask = safe_mask[:, None, :].expand(b, t, -1).reshape(b * t, memory_bmd.shape[1])
+        out = self.attn(query, memory, memory_mask_nm=memory_mask).reshape(b, t, q_len, dim)
+        return out * has_memory[:, None, None, None].to(out.dtype)
+
+
 class SpaceSelfAttentionModality(nn.Module):
     def __init__(self, d_model: int, n_heads: int, modality_ids: torch.Tensor, n_latents: int, mode: str, dropout: float):
         super().__init__()
@@ -298,13 +373,21 @@ class BlockCausalLayer(nn.Module):
         layer_index: int,
         time_every: int,
         latents_only_time: bool,
+        map_cross_every: int = 0,
     ):
         super().__init__()
         self.do_time = ((layer_index + 1) % time_every == 0)
+        self.do_map_cross = int(map_cross_every) > 0 and ((layer_index + 1) % int(map_cross_every) == 0)
 
         self.norm1 = RMSNorm(d_model)
         self.space = SpaceSelfAttentionModality(d_model, n_heads, modality_ids, n_latents, space_mode, dropout)
         self.drop1 = nn.Dropout(dropout)
+
+        if self.do_map_cross:
+            self.norm_map_query = RMSNorm(d_model)
+            self.norm_map_memory = RMSNorm(d_model)
+            self.map_cross = StaticMemoryCrossAttention(d_model=d_model, n_heads=n_heads, dropout=dropout)
+            self.drop_map = nn.Dropout(dropout)
 
         if self.do_time:
             self.norm2 = RMSNorm(d_model)
@@ -314,8 +397,23 @@ class BlockCausalLayer(nn.Module):
         self.norm3 = RMSNorm(d_model)
         self.mlp = MLP(d_model, mlp_ratio=mlp_ratio, dropout=dropout)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        *,
+        map_tokens: Optional[torch.Tensor] = None,
+        map_mask: Optional[torch.Tensor] = None,
+        map_query_slice: Optional[slice] = None,
+    ) -> torch.Tensor:
         x = x + self.drop1(self.space(self.norm1(x)))
+        if self.do_map_cross:
+            if map_tokens is None or map_mask is None or map_query_slice is None:
+                raise ValueError("Map-conditioned transformer layer requires map_tokens, map_mask, and map_query_slice")
+            q = self.norm_map_query(x[:, :, map_query_slice, :])
+            memory = self.norm_map_memory(map_tokens)
+            update = self.drop_map(self.map_cross(q, memory, map_mask))
+            x = x.clone()
+            x[:, :, map_query_slice, :] = x[:, :, map_query_slice, :] + update
         if self.do_time:
             x = x + self.drop2(self.time(self.norm2(x)))
         x = x + self.mlp(self.norm3(x))
@@ -335,6 +433,7 @@ class BlockCausalTransformer(nn.Module):
         mlp_ratio: float,
         time_every: int,
         latents_only_time: bool,
+        map_cross_every: int = 0,
     ):
         super().__init__()
         self.layers = nn.ModuleList([
@@ -344,13 +443,21 @@ class BlockCausalTransformer(nn.Module):
                 dropout=dropout, mlp_ratio=mlp_ratio,
                 layer_index=i, time_every=time_every,
                 latents_only_time=latents_only_time,
+                map_cross_every=map_cross_every,
             )
             for i in range(depth)
         ])
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        *,
+        map_tokens: Optional[torch.Tensor] = None,
+        map_mask: Optional[torch.Tensor] = None,
+        map_query_slice: Optional[slice] = None,
+    ) -> torch.Tensor:
         for layer in self.layers:
-            x = layer(x)
+            x = layer(x, map_tokens=map_tokens, map_mask=map_mask, map_query_slice=map_query_slice)
         return x
 
 
@@ -595,6 +702,8 @@ class Dynamics(nn.Module):
         space_mode: str = "wm_agent_isolated",  # or "wm_agent"
         scale_pos_embeds: bool = True,
         action_clamp_inputs: bool = True,
+        map_memory_dim: Optional[int] = None,
+        map_cross_every: int = 0,
     ):
         super().__init__()
         assert d_spatial % d_bottleneck == 0, "expected packing: d_spatial = d_bottleneck * packing_factor"
@@ -605,6 +714,7 @@ class Dynamics(nn.Module):
         self.n_agent = int(n_agent)
         self.k_max = int(k_max)
         self.scale_pos_embeds = scale_pos_embeds
+        self.attend_map = map_memory_dim is not None and int(map_cross_every) > 0
 
         self.spatial_proj = nn.Linear(self.d_spatial, self.d_model)
         self.register_tokens = nn.Parameter(torch.empty(self.n_register, self.d_model))
@@ -616,6 +726,8 @@ class Dynamics(nn.Module):
         self.num_step_bins = int(math.log2(self.k_max)) + 1
         self.step_embed = nn.Embedding(self.num_step_bins, self.d_model)
         self.signal_embed = nn.Embedding(self.k_max + 1, self.d_model)
+        if self.attend_map:
+            self.map_memory_proj = nn.Linear(int(map_memory_dim), self.d_model)
 
         segments = [
             (Modality.ACTION, 1),
@@ -644,6 +756,7 @@ class Dynamics(nn.Module):
             mlp_ratio=float(mlp_ratio),
             time_every=int(time_every),
             latents_only_time=False,
+            map_cross_every=int(map_cross_every) if self.attend_map else 0,
         )
 
         self.flow_x_head = nn.Linear(self.d_model, self.d_spatial)
@@ -659,6 +772,8 @@ class Dynamics(nn.Module):
         *,
         act_mask: Optional[torch.Tensor] = None,  # (B,T,16) or (16,) or None
         agent_tokens: Optional[torch.Tensor] = None,
+        map_tokens: Optional[torch.Tensor] = None,
+        map_mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         B, T = packed_enc_tokens.shape[:2]
 
@@ -685,7 +800,16 @@ class Dynamics(nn.Module):
 
         tokens = torch.cat(toks, dim=2)  # (B,T,S,D)
         tokens = add_sinusoidal_positions(tokens, self.scale_pos_embeds)
-        x = self.transformer(tokens)
+        if self.attend_map:
+            if map_tokens is None or map_mask is None:
+                raise ValueError("Dynamics was built with map conditioning but map_tokens or map_mask was not provided")
+            map_tokens = self.map_memory_proj(map_tokens)
+        x = self.transformer(
+            tokens,
+            map_tokens=map_tokens,
+            map_mask=map_mask,
+            map_query_slice=self.spatial_slice if self.attend_map else None,
+        )
 
         spatial_out = x[:, :, self.spatial_slice, :]
         x1_hat = self.flow_x_head(spatial_out)  # (B,T,n_spatial,d_spatial)
@@ -802,8 +926,10 @@ class FocusFiLMDynamics(nn.Module):
         *,
         act_mask: Optional[torch.Tensor] = None,
         agent_tokens: Optional[torch.Tensor] = None,
+        map_tokens: Optional[torch.Tensor] = None,
+        map_mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        del actions, act_mask, agent_tokens
+        del actions, act_mask, agent_tokens, map_tokens, map_mask
         bsz, steps = packed_enc_tokens.shape[:2]
         spatial = self.spatial_proj(packed_enc_tokens)
         registers = self.register_tokens.view(1, 1, self.n_register, self.d_model).expand(bsz, steps, -1, -1)
