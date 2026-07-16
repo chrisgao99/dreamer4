@@ -697,6 +697,127 @@ class Dynamics(nn.Module):
         return x1_hat, h_t
 
 
+def _film_modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
+    return x * (1.0 + scale[:, :, None, :]) + shift[:, :, None, :]
+
+
+class FocusFiLMBlock(nn.Module):
+    """One focus-only dynamics block with FiLM conditioning and full causal time mixing."""
+
+    def __init__(self, d_model: int, n_heads: int, dropout: float, mlp_ratio: float):
+        super().__init__()
+        self.norm_space = RMSNorm(d_model)
+        self.space = MultiheadSelfAttention(d_model, n_heads, dropout=dropout)
+        self.drop_space = nn.Dropout(dropout)
+
+        self.norm_time = RMSNorm(d_model)
+        self.time = TimeSelfAttention(dropout=dropout, d_model=d_model, n_heads=n_heads, latents_only=False, n_latents=0)
+        self.drop_time = nn.Dropout(dropout)
+
+        self.norm_mlp = RMSNorm(d_model)
+        self.mlp = MLP(d_model, mlp_ratio=mlp_ratio, dropout=dropout)
+
+        # The condition MLP is shared by the full dynamics model. Each block
+        # only learns inexpensive per-channel FiLM gains/biases instead of a
+        # separate D -> 6D projection.
+        self.film_gain = nn.Parameter(torch.zeros(6, d_model))
+        self.film_bias = nn.Parameter(torch.zeros(6, d_model))
+
+    def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
+        film = condition[:, :, None, :] * self.film_gain[None, None, :, :] + self.film_bias[None, None, :, :]
+        space_shift, space_scale, time_shift, time_scale, mlp_shift, mlp_scale = film.unbind(dim=2)
+
+        space_in = _film_modulate(self.norm_space(x), space_shift, space_scale)
+        bsz, steps, slots, dim = space_in.shape
+        space_out = self.space(space_in.reshape(bsz * steps, slots, dim)).reshape(bsz, steps, slots, dim)
+        x = x + self.drop_space(space_out)
+
+        time_in = _film_modulate(self.norm_time(x), time_shift, time_scale)
+        x = x + self.drop_time(self.time(time_in))
+
+        mlp_in = _film_modulate(self.norm_mlp(x), mlp_shift, mlp_scale)
+        x = x + self.mlp(mlp_in)
+        return x
+
+
+class FocusFiLMDynamics(nn.Module):
+    """Lightweight focus dynamics: one latent, FiLM shortcut conditioning, and register memory."""
+
+    def __init__(
+        self,
+        *,
+        d_model: int,
+        d_bottleneck: int,
+        d_spatial: int,
+        n_spatial: int,
+        n_register: int,
+        n_heads: int,
+        depth: int,
+        k_max: int,
+        dropout: float = 0.0,
+        mlp_ratio: float = 4.0,
+        scale_pos_embeds: bool = True,
+    ):
+        super().__init__()
+        if int(n_spatial) != 1:
+            raise ValueError(f"FocusFiLMDynamics requires exactly one spatial latent; got n_spatial={n_spatial}")
+        if int(d_spatial) != int(d_bottleneck):
+            raise ValueError(
+                "FocusFiLMDynamics requires packing_factor=1 so d_spatial equals d_bottleneck; "
+                f"got d_spatial={d_spatial}, d_bottleneck={d_bottleneck}"
+            )
+        self.d_model = int(d_model)
+        self.d_spatial = int(d_spatial)
+        self.n_spatial = 1
+        self.n_register = int(n_register)
+        self.k_max = int(k_max)
+        self.scale_pos_embeds = bool(scale_pos_embeds)
+
+        self.spatial_proj = nn.Linear(self.d_spatial, self.d_model)
+        self.register_tokens = nn.Parameter(torch.empty(self.n_register, self.d_model))
+        nn.init.normal_(self.register_tokens, std=0.02)
+
+        self.num_step_bins = int(math.log2(self.k_max)) + 1
+        self.step_embed = nn.Embedding(self.num_step_bins, self.d_model)
+        self.signal_embed = nn.Embedding(self.k_max + 1, self.d_model)
+        self.condition_mlp = nn.Sequential(
+            nn.Linear(self.d_model, self.d_model),
+            nn.SiLU(),
+            nn.Linear(self.d_model, self.d_model),
+        )
+
+        self.layers = nn.ModuleList(
+            [FocusFiLMBlock(self.d_model, int(n_heads), float(dropout), float(mlp_ratio)) for _ in range(int(depth))]
+        )
+        self.flow_x_head = nn.Linear(self.d_model, self.d_spatial)
+        nn.init.zeros_(self.flow_x_head.weight)
+        nn.init.zeros_(self.flow_x_head.bias)
+
+    def forward(
+        self,
+        actions: Optional[torch.Tensor],
+        step_idxs: torch.Tensor,
+        signal_idxs: torch.Tensor,
+        packed_enc_tokens: torch.Tensor,
+        *,
+        act_mask: Optional[torch.Tensor] = None,
+        agent_tokens: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        del actions, act_mask, agent_tokens
+        bsz, steps = packed_enc_tokens.shape[:2]
+        spatial = self.spatial_proj(packed_enc_tokens)
+        registers = self.register_tokens.view(1, 1, self.n_register, self.d_model).expand(bsz, steps, -1, -1)
+        x = torch.cat([spatial, registers], dim=2)
+        x = add_sinusoidal_positions(x, self.scale_pos_embeds)
+
+        condition = self.step_embed(step_idxs.to(torch.long)) + self.signal_embed(signal_idxs.to(torch.long))
+        condition = self.condition_mlp(condition)
+        for layer in self.layers:
+            x = layer(x, condition)
+
+        return self.flow_x_head(x[:, :, :1, :]), None
+
+
 def recon_loss_from_mae(pred_btnd: torch.Tensor,
                         target_btnd: torch.Tensor,
                         mae_mask_btNp1: torch.Tensor) -> torch.Tensor:

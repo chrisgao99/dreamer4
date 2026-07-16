@@ -46,6 +46,20 @@ def add_eval_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
 
 def build_dynamics(args: argparse.Namespace, d_bottleneck: int, device: torch.device) -> torch.nn.Module:
+    if args.dynamics_variant == "focus_film":
+        return wm.FocusFiLMDynamics(
+            d_model=args.d_model_dyn,
+            d_bottleneck=d_bottleneck,
+            d_spatial=args.d_spatial,
+            n_spatial=args.n_spatial,
+            n_register=args.n_register,
+            n_heads=args.n_heads,
+            depth=args.dyn_depth,
+            k_max=args.k_max,
+            dropout=args.dropout,
+            mlp_ratio=args.mlp_ratio,
+            scale_pos_embeds=args.scale_pos_embeds,
+        ).to(device)
     dyn = wm.Dynamics(
         d_model=args.d_model_dyn,
         d_bottleneck=d_bottleneck,
@@ -106,8 +120,12 @@ def main(args: argparse.Namespace) -> None:
         )
 
         tokenizer, tok_args = wm.load_frozen_waymo_vector_tokenizer(args.tokenizer_ckpt, device)
-        n_latents = int(tok_args.get("n_latents", tokenizer.decoder.n_latents))
-        d_bottleneck = int(tok_args.get("d_bottleneck", tokenizer.decoder.up_proj.in_features))
+        if isinstance(tokenizer, wm.FrozenWaymoFocusTokenizer):
+            n_latents = tokenizer.n_latents
+            d_bottleneck = tokenizer.d_bottleneck
+        else:
+            n_latents = int(tok_args.get("n_latents", tokenizer.decoder.n_latents))
+            d_bottleneck = int(tok_args.get("d_bottleneck", tokenizer.decoder.up_proj.in_features))
         if n_latents % args.packing_factor != 0:
             raise ValueError(f"n_latents={n_latents} must be divisible by packing_factor={args.packing_factor}")
         args.n_spatial = n_latents // args.packing_factor

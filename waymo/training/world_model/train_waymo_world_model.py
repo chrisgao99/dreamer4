@@ -36,6 +36,7 @@ for path in (REPO_ROOT, CORE_ROOT, DREAMER_ROOT):
         sys.path.insert(0, str(path))
 
 try:
+    from focus_agent_tokenizer import FocusAgentTokenizer, FocusTokenizerOutput, focus_tokenizer_loss
     from vector_tokenizer_encoder import VectorBlockCausalEncoder, VectorStaticMapQueryEncoder, _collate
     from vector_tokenizer_decoder import (
         VectorBlockCausalTokenizerDecoder,
@@ -44,6 +45,7 @@ try:
     )
     from waymo_vector_dataset import WaymoVectorDataset
 except ModuleNotFoundError:
+    from waymo.core.focus_agent_tokenizer import FocusAgentTokenizer, FocusTokenizerOutput, focus_tokenizer_loss
     from waymo.core.vector_tokenizer_encoder import VectorBlockCausalEncoder, VectorStaticMapQueryEncoder, _collate
     from waymo.core.vector_tokenizer_decoder import (
         VectorBlockCausalTokenizerDecoder,
@@ -52,7 +54,7 @@ except ModuleNotFoundError:
     )
     from waymo.core.waymo_vector_dataset import WaymoVectorDataset
 
-from model import Dynamics, pack_bottleneck_to_spatial, unpack_spatial_to_bottleneck
+from model import Dynamics, FocusFiLMDynamics, pack_bottleneck_to_spatial, unpack_spatial_to_bottleneck
 
 
 def seed_everything(seed: int) -> None:
@@ -349,6 +351,32 @@ class FrozenWaymoVectorTokenizer(torch.nn.Module):
         self.decoder = decoder
 
 
+class FrozenWaymoFocusTokenizer(torch.nn.Module):
+    def __init__(self, model: FocusAgentTokenizer):
+        super().__init__()
+        self.model = model
+        self.n_latents = 1
+        self.d_bottleneck = model.d_model if model.representation_type == "agent_token" else model.d_latent
+
+
+def build_waymo_focus_tokenizer_from_args(args: Dict[str, Any], representation: str) -> FrozenWaymoFocusTokenizer:
+    d_latent = int(_arg(args, "d_latent", 16 if representation == "latent_z16" else 64))
+    model = FocusAgentTokenizer(
+        representation=representation,
+        d_model=int(_arg(args, "d_model", 256)),
+        d_latent=d_latent,
+        hidden_dim=int(_arg(args, "hidden_dim", 128)),
+        n_heads=int(_arg(args, "n_heads", 4)),
+        depth=int(_arg(args, "depth", 4)),
+        decoder_depth=int(_arg(args, "decoder_depth", 2)),
+        map_depth=int(_arg(args, "map_depth", 2)),
+        dropout=float(_arg(args, "dropout", 0.05)),
+        mlp_ratio=float(_arg(args, "mlp_ratio", 4.0)),
+        scale_pos_embeds=bool(_arg(args, "scale_pos_embeds", True)),
+    )
+    return FrozenWaymoFocusTokenizer(model)
+
+
 def build_waymo_vector_tokenizer_from_args(args: Dict[str, Any], n_agents: int, n_lights: int) -> FrozenWaymoVectorTokenizer:
     encoder_kwargs = dict(
         d_model=int(_arg(args, "d_model", 256)),
@@ -400,13 +428,25 @@ def build_waymo_vector_tokenizer_from_args(args: Dict[str, Any], n_agents: int, 
 
 
 @torch.no_grad()
-def load_frozen_waymo_vector_tokenizer(ckpt_path: str, device: torch.device) -> tuple[FrozenWaymoVectorTokenizer, Dict[str, Any]]:
+def load_frozen_waymo_vector_tokenizer(ckpt_path: str, device: torch.device) -> tuple[torch.nn.Module, Dict[str, Any]]:
     ckpt = torch.load(ckpt_path, map_location="cpu")
     tok_args = _as_args_dict(ckpt.get("args", {}))
     state = ckpt["model"]
-    n_agents, n_lights = _infer_tokenizer_shapes(state)
-    tokenizer = build_waymo_vector_tokenizer_from_args(tok_args, n_agents=n_agents, n_lights=n_lights)
-    tokenizer.load_state_dict(state, strict=True)
+    if ckpt.get("format") == "waymo_focus_tokenizer_v1":
+        representation = str(ckpt.get("representation", _arg(tok_args, "representation", "agent_token")))
+        tokenizer = build_waymo_focus_tokenizer_from_args(tok_args, representation)
+        tokenizer.model.load_state_dict(state, strict=True)
+        tok_args.update(
+            tokenizer_kind="focus",
+            representation=representation,
+            n_latents=tokenizer.n_latents,
+            d_bottleneck=tokenizer.d_bottleneck,
+        )
+    else:
+        n_agents, n_lights = _infer_tokenizer_shapes(state)
+        tokenizer = build_waymo_vector_tokenizer_from_args(tok_args, n_agents=n_agents, n_lights=n_lights)
+        tokenizer.load_state_dict(state, strict=True)
+        tok_args.update(tokenizer_kind="vector")
     tokenizer = tokenizer.to(device)
     tokenizer.eval()
     for param in tokenizer.parameters():
@@ -415,7 +455,15 @@ def load_frozen_waymo_vector_tokenizer(ckpt_path: str, device: torch.device) -> 
 
 
 @torch.no_grad()
-def encode_batch_z(tokenizer: FrozenWaymoVectorTokenizer, batch: Dict[str, Any]) -> torch.Tensor:
+def encode_batch_z(tokenizer: torch.nn.Module, batch: Dict[str, Any]) -> torch.Tensor:
+    if isinstance(tokenizer, FrozenWaymoFocusTokenizer):
+        representation, _, _ = tokenizer.model.encode(
+            agents=batch["agents"],
+            agent_mask=batch["agent_mask"],
+            map_polylines=batch["map_polylines"],
+            map_mask=batch["map_mask"],
+        )
+        return representation
     out = tokenizer.encoder(
         agents=batch["agents"],
         agent_mask=batch["agent_mask"],
@@ -428,11 +476,33 @@ def encode_batch_z(tokenizer: FrozenWaymoVectorTokenizer, batch: Dict[str, Any])
 
 
 @torch.no_grad()
-def decoder_map_kwargs(tokenizer: FrozenWaymoVectorTokenizer, batch: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+def decoder_map_kwargs(tokenizer: torch.nn.Module, batch: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+    if isinstance(tokenizer, FrozenWaymoFocusTokenizer):
+        return {}
     if not getattr(tokenizer.decoder, "attend_map", False):
         return {}
     map_tokens, map_mask = tokenizer.encoder.encode_static_map(batch["map_polylines"], batch["map_mask"])
     return {"encoder_map_tokens": map_tokens, "encoder_map_mask": map_mask}
+
+
+def decode_batch_z(tokenizer: torch.nn.Module, z: torch.Tensor, batch: Dict[str, Any]) -> Any:
+    if isinstance(tokenizer, FrozenWaymoFocusTokenizer):
+        with torch.no_grad():
+            map_tokens, map_mask = tokenizer.model.encode_static_map(batch["map_polylines"], batch["map_mask"])
+        continuous, valid_logits = tokenizer.model.decode(z, map_tokens=map_tokens, map_mask=map_mask)
+        return FocusTokenizerOutput(
+            representation=z,
+            agent_continuous=continuous,
+            agent_valid_logits=valid_logits,
+            map_tokens=map_tokens,
+            map_mask=map_mask,
+        )
+    return tokenizer.decoder(
+        z,
+        agent_mask=batch["agent_mask"],
+        light_mask=batch["light_mask"][:, : z.shape[1]],
+        **decoder_map_kwargs(tokenizer, batch),
+    )
 
 
 def _emax_from_kmax(k_max: int) -> int:
@@ -725,7 +795,14 @@ def sample_autoregressive_packed_sequence(
     return torch.stack(outs, dim=1)
 
 
-def slice_decoder_output(pred: VectorDecoderOutput, start: int, end: int) -> VectorDecoderOutput:
+def slice_decoder_output(pred: Any, start: int, end: int) -> Any:
+    if isinstance(pred, FocusTokenizerOutput):
+        return replace(
+            pred,
+            representation=pred.representation[:, start:end],
+            agent_continuous=pred.agent_continuous[:, start:end],
+            agent_valid_logits=pred.agent_valid_logits[:, start:end],
+        )
     return replace(
         pred,
         agent_continuous=pred.agent_continuous[:, start:end],
@@ -739,14 +816,59 @@ def slice_decoder_output(pred: VectorDecoderOutput, start: int, end: int) -> Vec
     )
 
 
-def reconstruction_metrics(
-    pred: VectorDecoderOutput,
+def tokenizer_reconstruction_loss(
+    tokenizer: torch.nn.Module,
+    pred: Any,
     batch: Dict[str, Any],
     args: argparse.Namespace,
     *,
     agent_loss_weight_multiplier: Optional[torch.Tensor] = None,
-) -> Dict[str, torch.Tensor]:
-    _, metrics = vector_tokenizer_reconstruction_loss(
+) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    if isinstance(tokenizer, FrozenWaymoFocusTokenizer):
+        loss, focus_metrics = focus_tokenizer_loss(
+            pred,
+            agents=batch["agents"],
+            agent_mask=batch["agent_mask"],
+            xy_weight=args.agent_xy_weight,
+            velocity_weight=args.agent_vel_weight,
+            yaw_weight=args.agent_yaw_weight,
+            valid_weight=args.agent_valid_weight,
+            delta_xy_weight=args.agent_delta_xy_weight,
+            kinematic_xy_weight=args.agent_kinematic_xy_weight,
+            speed_yaw_kinematic_weight=args.agent_speed_yaw_kinematic_weight,
+            kinematic_dt=args.kinematic_dt,
+        )
+        zero = loss.detach() * 0.0
+        metrics = {
+            "loss_total": focus_metrics["loss_total"],
+            "loss_agent_xy": focus_metrics["loss_xy"],
+            "loss_agent_vel": focus_metrics["loss_velocity"],
+            "loss_agent_yaw": focus_metrics["loss_yaw"],
+            "loss_agent_valid": focus_metrics["loss_valid"],
+            "loss_agent_delta_xy": focus_metrics["loss_delta_xy"],
+            "loss_agent_fde_xy": zero,
+            "loss_agent_kinematic_xy": focus_metrics["loss_kinematic_xy"],
+            "loss_agent_speed_yaw_kinematic": focus_metrics["loss_speed_yaw_kinematic"],
+            "loss_light_state": zero,
+            "loss_light_valid": zero,
+            "agent_xy_mae_m": focus_metrics["focus_xy_mae_m"],
+            "agent_delta_xy_mae_m": focus_metrics["loss_delta_xy"],
+            "agent_kinematic_xy_mae_m": focus_metrics["loss_kinematic_xy"],
+            "agent_speed_yaw_kinematic_mae_m": focus_metrics["loss_speed_yaw_kinematic"],
+            "agent_fde_mae_m": focus_metrics["focus_fde_m"],
+            "focus_agent_xy_mae_m": focus_metrics["focus_xy_mae_m"],
+            "focus_agent_fde_m": focus_metrics["focus_fde_m"],
+            "agent_speed_mae_mps": focus_metrics["focus_speed_mae_mps"],
+            "agent_vxvy_mae_mps": focus_metrics["focus_vxvy_mae_mps"],
+            "agent_yaw_mae_deg": focus_metrics["focus_yaw_mae_deg"],
+            "agent_valid_acc": focus_metrics["focus_valid_acc"],
+            "light_state_acc": zero,
+            "light_valid_acc": zero,
+            "representation_rms": focus_metrics["representation_rms"],
+        }
+        return loss, metrics
+
+    return vector_tokenizer_reconstruction_loss(
         pred,
         agents=batch["agents"],
         agent_mask=batch["agent_mask"],
@@ -766,6 +888,23 @@ def reconstruction_metrics(
         focus_agent_weight=args.focus_agent_weight,
         agent_xy_loss=args.agent_xy_loss,
         agent_xy_parameterization=args.agent_xy_parameterization,
+        agent_loss_weight_multiplier=agent_loss_weight_multiplier,
+    )
+
+
+def reconstruction_metrics(
+    tokenizer: torch.nn.Module,
+    pred: Any,
+    batch: Dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    agent_loss_weight_multiplier: Optional[torch.Tensor] = None,
+) -> Dict[str, torch.Tensor]:
+    _, metrics = tokenizer_reconstruction_loss(
+        tokenizer,
+        pred,
+        batch,
+        args,
         agent_loss_weight_multiplier=agent_loss_weight_multiplier,
     )
     return metrics
@@ -810,12 +949,7 @@ def evaluate(
         z_decode = z_pred
         if z_pred.shape[1] < z_gt.shape[1]:
             z_decode = torch.cat([z_pred, z_gt[:, z_pred.shape[1] :]], dim=1)
-        decoded = tokenizer.decoder(
-            z_decode,
-            agent_mask=batch["agent_mask"],
-            light_mask=batch["light_mask"][:, : z_decode.shape[1]],
-            **decoder_map_kwargs(tokenizer, batch),
-        )
+        decoded = decode_batch_z(tokenizer, z_decode, batch)
 
         score_start = min(int(args.eval_ctx), int(z_pred.shape[1]) - 1)
         score_end = int(z_pred.shape[1])
@@ -823,6 +957,7 @@ def evaluate(
         batch_future = slice_future_batch(batch, score_start, score_end)
         future_weight = build_agent_loss_weight_multiplier(batch_future, args, action_slots=action_slots)
         metrics = reconstruction_metrics(
+            tokenizer,
             decoded_future,
             batch_future,
             args,
@@ -855,6 +990,7 @@ def save_ckpt(path: Path, *, dyn: torch.nn.Module, opt: torch.optim.Optimizer, s
         {
             "step": int(step),
             "epoch": int(epoch),
+            "args": vars(args),
             "dynamics": unwrap_model(dyn).state_dict(),
             "opt": opt.state_dict(),
             "scaler": scaler.state_dict() if scaler is not None else None,
@@ -920,30 +1056,49 @@ def train(args: argparse.Namespace) -> None:
         )
 
     tokenizer, tok_args = load_frozen_waymo_vector_tokenizer(args.tokenizer_ckpt, device)
-    n_latents = int(tok_args.get("n_latents", tokenizer.decoder.n_latents))
-    d_bottleneck = int(tok_args.get("d_bottleneck", tokenizer.decoder.up_proj.in_features))
+    if isinstance(tokenizer, FrozenWaymoFocusTokenizer):
+        n_latents = tokenizer.n_latents
+        d_bottleneck = tokenizer.d_bottleneck
+    else:
+        n_latents = int(tok_args.get("n_latents", tokenizer.decoder.n_latents))
+        d_bottleneck = int(tok_args.get("d_bottleneck", tokenizer.decoder.up_proj.in_features))
     if n_latents % args.packing_factor != 0:
         raise ValueError(f"n_latents={n_latents} must be divisible by packing_factor={args.packing_factor}")
     args.n_spatial = n_latents // args.packing_factor
     args.d_spatial = d_bottleneck * args.packing_factor
 
-    dyn = Dynamics(
-        d_model=args.d_model_dyn,
-        d_bottleneck=d_bottleneck,
-        d_spatial=args.d_spatial,
-        n_spatial=args.n_spatial,
-        n_register=args.n_register,
-        n_agent=0,
-        n_heads=args.n_heads,
-        depth=args.dyn_depth,
-        k_max=args.k_max,
-        dropout=args.dropout,
-        mlp_ratio=args.mlp_ratio,
-        time_every=args.time_every,
-        space_mode="wm_agent_isolated",
-        scale_pos_embeds=args.scale_pos_embeds,
-        action_clamp_inputs=args.ego_action_clamp,
-    ).to(device)
+    if args.dynamics_variant == "focus_film":
+        dyn = FocusFiLMDynamics(
+            d_model=args.d_model_dyn,
+            d_bottleneck=d_bottleneck,
+            d_spatial=args.d_spatial,
+            n_spatial=args.n_spatial,
+            n_register=args.n_register,
+            n_heads=args.n_heads,
+            depth=args.dyn_depth,
+            k_max=args.k_max,
+            dropout=args.dropout,
+            mlp_ratio=args.mlp_ratio,
+            scale_pos_embeds=args.scale_pos_embeds,
+        ).to(device)
+    else:
+        dyn = Dynamics(
+            d_model=args.d_model_dyn,
+            d_bottleneck=d_bottleneck,
+            d_spatial=args.d_spatial,
+            n_spatial=args.n_spatial,
+            n_register=args.n_register,
+            n_agent=0,
+            n_heads=args.n_heads,
+            depth=args.dyn_depth,
+            k_max=args.k_max,
+            dropout=args.dropout,
+            mlp_ratio=args.mlp_ratio,
+            time_every=args.time_every,
+            space_mode="wm_agent_isolated",
+            scale_pos_embeds=args.scale_pos_embeds,
+            action_clamp_inputs=args.ego_action_clamp,
+        ).to(device)
     frozen_action_mlp_params = 0 if args.use_ego_actions else freeze_unused_action_mlp(dyn)
 
     if args.compile:
@@ -984,11 +1139,13 @@ def train(args: argparse.Namespace) -> None:
             f"train={len(train_ds)} val={0 if val_ds is None else len(val_ds)}"
         )
         print(
-            f"tokenizer={args.tokenizer_ckpt} n_latents={n_latents} d_bottleneck={d_bottleneck} "
+            f"tokenizer={args.tokenizer_ckpt} kind={tok_args.get('tokenizer_kind', 'vector')} "
+            f"n_latents={n_latents} d_bottleneck={d_bottleneck} "
             f"packing={args.packing_factor} n_spatial={args.n_spatial} d_spatial={args.d_spatial}"
         )
         print(
-            f"dynamics d_model={args.d_model_dyn} depth={args.dyn_depth} heads={args.n_heads} "
+            f"dynamics variant={args.dynamics_variant} d_model={args.d_model_dyn} "
+            f"depth={args.dyn_depth} heads={args.n_heads} registers={args.n_register} "
             f"seq_len={args.seq_len} max_rollout_window={args.max_rollout_window} "
             f"eval_ctx={args.eval_ctx} eval_horizon={args.eval_horizon}"
         )
@@ -1061,32 +1218,12 @@ def train(args: argparse.Namespace) -> None:
                         raise ValueError(f"Unknown train_objective={args.train_objective!r}")
                     if args.train_decoded_loss_weight > 0.0:
                         z_hat = unpack_spatial_to_bottleneck(z_hat_packed, k=args.packing_factor)
-                        decoded_train = tokenizer.decoder(
-                            z_hat,
-                            agent_mask=decoded_batch["agent_mask"],
-                            light_mask=decoded_batch["light_mask"][:, : z_hat.shape[1]],
-                            **decoder_map_kwargs(tokenizer, decoded_batch),
-                        )
-                        decoded_loss, decoded_metrics = vector_tokenizer_reconstruction_loss(
+                        decoded_train = decode_batch_z(tokenizer, z_hat, decoded_batch)
+                        decoded_loss, decoded_metrics = tokenizer_reconstruction_loss(
+                            tokenizer,
                             decoded_train,
-                            agents=decoded_batch["agents"],
-                            agent_mask=decoded_batch["agent_mask"],
-                            lights=decoded_batch["lights"],
-                            light_mask=decoded_batch["light_mask"],
-                            agent_xy_weight=args.agent_xy_weight,
-                            agent_vel_weight=args.agent_vel_weight,
-                            agent_yaw_weight=args.agent_yaw_weight,
-                            agent_valid_weight=args.agent_valid_weight,
-                            light_state_weight=args.light_state_weight,
-                            light_valid_weight=args.light_valid_weight,
-                            agent_delta_xy_weight=args.agent_delta_xy_weight,
-                            agent_fde_xy_weight=args.agent_fde_xy_weight,
-                            agent_kinematic_xy_weight=args.agent_kinematic_xy_weight,
-                            agent_speed_yaw_kinematic_weight=args.agent_speed_yaw_kinematic_weight,
-                            kinematic_dt=args.kinematic_dt,
-                            focus_agent_weight=args.focus_agent_weight,
-                            agent_xy_loss=args.agent_xy_loss,
-                            agent_xy_parameterization=args.agent_xy_parameterization,
+                            decoded_batch,
+                            args,
                             agent_loss_weight_multiplier=decoded_agent_weight,
                         )
                         loss = loss + float(args.train_decoded_loss_weight) * decoded_loss
@@ -1159,6 +1296,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--num_workers", type=int, default=4)
 
     p.add_argument("--d_model_dyn", type=int, default=512)
+    p.add_argument("--dynamics_variant", choices=["standard", "focus_film"], default="standard")
     p.add_argument("--dyn_depth", type=int, default=8)
     p.add_argument("--n_heads", type=int, default=8)
     p.add_argument("--dropout", type=float, default=0.0)

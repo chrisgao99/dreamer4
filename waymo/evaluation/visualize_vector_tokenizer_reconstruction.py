@@ -30,10 +30,11 @@ except ModuleNotFoundError:
 WAYMO_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = WAYMO_ROOT.parent
 EVAL_ROOT = Path(__file__).resolve().parent
-for path in (REPO_ROOT, WAYMO_ROOT / "training", WAYMO_ROOT / "core", EVAL_ROOT):
+for path in (REPO_ROOT, WAYMO_ROOT / "training", WAYMO_ROOT / "training/tokenizer", WAYMO_ROOT / "core", EVAL_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+from focus_agent_tokenizer import FocusAgentTokenizer  # noqa: E402
 from train_waymo_vector_tokenizer import build_model  # noqa: E402
 from vector_tokenizer_decoder import decoder_agent_xy  # noqa: E402
 from waymo_vector_dataset import WaymoVectorDataset  # noqa: E402
@@ -165,9 +166,31 @@ def _agents_btkf(agents: torch.Tensor, agent_mask: torch.Tensor) -> torch.Tensor
     return agents
 
 
-def _load_model(checkpoint: str, sample: Dict[str, torch.Tensor], device: torch.device) -> tuple[torch.nn.Module, SimpleNamespace]:
+def _load_model(
+    checkpoint: str,
+    sample: Dict[str, torch.Tensor],
+    device: torch.device,
+) -> tuple[torch.nn.Module, SimpleNamespace, str]:
     ckpt = torch.load(checkpoint, map_location="cpu")
     args = _checkpoint_args(ckpt)
+    if ckpt.get("format") == "waymo_focus_tokenizer_v1":
+        model = FocusAgentTokenizer(
+            representation=args.representation,
+            d_model=args.d_model,
+            d_latent=getattr(args, "d_latent", 16),
+            hidden_dim=args.hidden_dim,
+            n_heads=args.n_heads,
+            depth=args.depth,
+            decoder_depth=args.decoder_depth,
+            map_depth=args.map_depth,
+            dropout=args.dropout,
+            mlp_ratio=args.mlp_ratio,
+            scale_pos_embeds=args.scale_pos_embeds,
+        )
+        model.load_state_dict(ckpt["model"], strict=True)
+        model.to(device).eval()
+        return model, args, "focus"
+
     n_agents = int(sample["agent_mask"].shape[-1])
     n_lights = int(sample["lights"].shape[1])
     model = build_model(args, n_agents=n_agents, n_lights=n_lights)
@@ -187,7 +210,7 @@ def _load_model(checkpoint: str, sample: Dict[str, torch.Tensor], device: torch.
             raise
         print(f"loaded {checkpoint} with optional xy GMM head mismatch")
     model.to(device).eval()
-    return model, args
+    return model, args, "vector"
 
 
 def _uses_raw_agent_targets(checkpoint: str, args: SimpleNamespace) -> bool:
@@ -206,7 +229,46 @@ def _reconstruct(
     agent_xy_parameterization: str = "absolute",
     xy_scale: float = 100.0,
     speed_scale: float = 30.0,
+    focus_only: bool = False,
 ) -> Dict[str, np.ndarray]:
+    if focus_only:
+        out = model(
+            agents=batch["agents"],
+            agent_mask=batch["agent_mask"],
+            map_polylines=batch["map_polylines"],
+            map_mask=batch["map_mask"],
+        )
+        pred = out.agent_continuous[0].detach().float().cpu()
+        focus_xy = pred[..., 0:2].numpy()
+        focus_speed = pred[..., 2].numpy()
+        focus_vel = pred[..., 3:5].numpy()
+        focus_yaw = torch.atan2(pred[..., 5], pred[..., 6]).numpy()
+        focus_valid_prob = torch.sigmoid(out.agent_valid_logits[0].detach().float().cpu()).numpy()
+
+        # Preserve the legacy (T,K,...) prediction layout while exposing only
+        # the reconstructed focus agent in slot 0.
+        steps = int(focus_xy.shape[0])
+        n_agents = int(batch["agent_mask"].shape[-1])
+        pred_xy = np.full((steps, n_agents, 2), np.nan, dtype=np.float32)
+        pred_speed = np.full((steps, n_agents), np.nan, dtype=np.float32)
+        pred_vel = np.full((steps, n_agents, 2), np.nan, dtype=np.float32)
+        pred_yaw = np.full((steps, n_agents), np.nan, dtype=np.float32)
+        pred_valid_prob = np.full((steps, n_agents), np.nan, dtype=np.float32)
+        pred_xy[:, 0] = focus_xy
+        pred_speed[:, 0] = focus_speed
+        pred_vel[:, 0] = focus_vel
+        pred_yaw[:, 0] = focus_yaw
+        pred_valid_prob[:, 0] = focus_valid_prob
+        return {
+            "xy": pred_xy,
+            "speed": pred_speed,
+            "vel": pred_vel,
+            "yaw": pred_yaw,
+            "valid_prob": pred_valid_prob,
+            "steps": steps,
+            "focus_only": True,
+        }
+
     out = model(
         agents=batch["agents"],
         agent_mask=batch["agent_mask"],
@@ -249,6 +311,7 @@ def _concat_predictions(parts: List[Dict[str, np.ndarray]], *, chunk_window: int
     out["num_chunks"] = int(len(parts))
     out["chunk_lengths"] = [int(part["steps"]) for part in parts]
     out["discarded_steps"] = int(input_steps - out["steps"])
+    out["focus_only"] = bool(parts[0].get("focus_only", False))
     return out
 
 
@@ -262,6 +325,7 @@ def _reconstruct_chunked(
     agent_xy_parameterization: str = "absolute",
     xy_scale: float = 100.0,
     speed_scale: float = 30.0,
+    focus_only: bool = False,
 ) -> Dict[str, np.ndarray]:
     if chunk_window <= 0:
         raise ValueError(f"chunk_window must be positive, got {chunk_window}")
@@ -277,6 +341,7 @@ def _reconstruct_chunked(
                 agent_xy_parameterization=agent_xy_parameterization,
                 xy_scale=xy_scale,
                 speed_scale=speed_scale,
+                focus_only=focus_only,
             )
         )
     return _concat_predictions(parts, chunk_window=chunk_window, input_steps=input_steps)
@@ -284,7 +349,10 @@ def _reconstruct_chunked(
 
 def _prediction_metrics(gt_tkf: np.ndarray, pred: Dict[str, np.ndarray], agent_mask: np.ndarray) -> Dict[str, float]:
     steps = min(int(pred["xy"].shape[0]), int(gt_tkf.shape[0]))
-    valid = (gt_tkf[:steps, :, 5] > 0.5) & agent_mask[None, :]
+    metric_agent_mask = agent_mask.copy()
+    if pred.get("focus_only", False):
+        metric_agent_mask[1:] = False
+    valid = (gt_tkf[:steps, :, 5] > 0.5) & metric_agent_mask[None, :]
     pred_xy = pred["xy"][:steps]
     gt_xy = gt_tkf[:steps, :, 0:2]
     if valid.any():
@@ -571,6 +639,23 @@ def _safe_name(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", text).strip("_") or "unknown"
 
 
+def _resolve_npz_path(value: str) -> Path:
+    path = Path(value).expanduser()
+    candidates = [path]
+    if not path.is_absolute():
+        candidates.extend((REPO_ROOT / path, EVAL_ROOT / path))
+        text = path.as_posix()
+        # Older evaluation lists were written when the dataset lived below
+        # waymo/data. The current workspace stores the same files in data/.
+        if text.startswith("waymo/data/"):
+            candidates.append(REPO_ROOT / text.removeprefix("waymo/"))
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    preview = ", ".join(str(candidate) for candidate in candidates)
+    raise FileNotFoundError(f"Could not resolve NPZ path {value!r}; tried: {preview}")
+
+
 def _panel_output_dir(args: argparse.Namespace, scenario_id: str, sample_path: str, focus_agent_id: int) -> Path:
     prefix = f"{_safe_name(scenario_id or Path(sample_path).stem)}_focus_{int(focus_agent_id)}"
     if args.output_dir:
@@ -753,11 +838,12 @@ def _visualize_pil(
     print(f"wrote {args.output}")
 
 
-def visualize(args: argparse.Namespace) -> None:
+def visualize(args: argparse.Namespace) -> List[Dict[str, object]]:
     device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
     if args.time_window < 0 and not args.chunked_full_trajectory:
         args.time_window = _checkpoint_time_window(args.checkpoint[0]) if args.checkpoint else 0
-    dataset = WaymoVectorDataset(args.npz if args.npz else args.data_dir)
+    dataset_root = str(_resolve_npz_path(args.npz)) if args.npz else args.data_dir
+    dataset = WaymoVectorDataset(dataset_root)
     item_index = _resolve_index(dataset, index=args.index, scenario=args.scenario)
     item = dataset[item_index]
     batch_time_window = 0 if args.chunked_full_trajectory else args.time_window
@@ -780,8 +866,11 @@ def visualize(args: argparse.Namespace) -> None:
     preds = []
     model_summaries = []
     metric_rows: List[Dict[str, object]] = []
+    all_focus_only = bool(args.checkpoint)
     for ckpt_path, label in zip(args.checkpoint, labels):
-        model, ckpt_args = _load_model(ckpt_path, item, device)
+        model, ckpt_args, model_kind = _load_model(ckpt_path, item, device)
+        focus_only = model_kind == "focus"
+        all_focus_only = all_focus_only and focus_only
         agent_xy_loss = getattr(ckpt_args, "agent_xy_loss", "smooth_l1")
         agent_xy_parameterization = getattr(ckpt_args, "agent_xy_parameterization", "absolute")
         raw_targets = _uses_raw_agent_targets(ckpt_path, ckpt_args)
@@ -797,6 +886,7 @@ def visualize(args: argparse.Namespace) -> None:
                 agent_xy_parameterization=agent_xy_parameterization,
                 xy_scale=xy_scale,
                 speed_scale=speed_scale,
+                focus_only=focus_only,
             )
             mode = "chunked"
         else:
@@ -808,6 +898,7 @@ def visualize(args: argparse.Namespace) -> None:
                 agent_xy_parameterization=agent_xy_parameterization,
                 xy_scale=xy_scale,
                 speed_scale=speed_scale,
+                focus_only=focus_only,
             )
             mode = "single"
         preds.append((label, pred))
@@ -836,11 +927,23 @@ def visualize(args: argparse.Namespace) -> None:
             f"lens={'+'.join(str(x) for x in pred.get('chunk_lengths', [int(metrics['steps'])]))}, "
             f"used={int(metrics['steps'])}/{input_steps}, drop={int(pred.get('discarded_steps', max(0, input_steps - int(metrics['steps']))))}"
         )
-        model_summaries.append(
-            f"{label}: {ckpt_args.encoder_variant}, z={ckpt_args.n_latents}x{ckpt_args.d_bottleneck}, "
-            f"D={ckpt_args.d_model}, depth={ckpt_args.depth}{chunk_note}, "
-            f"ADE={metrics['ade_m']:.2f}m FDE={metrics['fde_m']:.2f}m focusFDE={metrics['focus_fde_m']:.2f}m"
-        )
+        if focus_only:
+            representation = str(ckpt_args.representation)
+            latent_dim = int(getattr(ckpt_args, "d_latent", 16))
+            latent_note = "agent-token" if representation == "agent_token" else f"z=1x{latent_dim}"
+            model_summaries.append(
+                f"{label}: focus-only {latent_note}, D={ckpt_args.d_model}, depth={ckpt_args.depth}{chunk_note}, "
+                f"ADE={metrics['focus_ade_m']:.2f}m FDE={metrics['focus_fde_m']:.2f}m"
+            )
+        else:
+            model_summaries.append(
+                f"{label}: {ckpt_args.encoder_variant}, z={ckpt_args.n_latents}x{ckpt_args.d_bottleneck}, "
+                f"D={ckpt_args.d_model}, depth={ckpt_args.depth}{chunk_note}, "
+                f"ADE={metrics['ade_m']:.2f}m FDE={metrics['fde_m']:.2f}m focusFDE={metrics['focus_fde_m']:.2f}m"
+            )
+
+    if all_focus_only:
+        selected_agents = [0] if bool(agent_mask[0]) else []
 
     bounds = _valid_bounds(
         gt_tkf,
@@ -878,7 +981,7 @@ def visualize(args: argparse.Namespace) -> None:
             scenario_id=scenario_id,
             model_summaries=model_summaries,
         )
-        return
+        return metric_rows
 
     num_panels = 1 + len(preds)
     fig, axes = plt.subplots(1, num_panels, figsize=(7 * num_panels, 7), dpi=args.dpi)
@@ -941,12 +1044,14 @@ def visualize(args: argparse.Namespace) -> None:
     fig.savefig(args.output, facecolor=fig.get_facecolor(), bbox_inches="tight")
     plt.close(fig)
     print(f"wrote {args.output}")
+    return metric_rows
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Visualize tokenizer GT vs reconstructed trajectories.")
-    p.add_argument("--data_dir", type=str, default=str(WAYMO_ROOT / "data/waymo_vector_dataset_ooi_centered_50k/val"))
+    p.add_argument("--data_dir", type=str, default=str(REPO_ROOT / "data/waymo_vector_dataset_ooi_centered_50k/val"))
     p.add_argument("--npz", type=str, default=None, help="Visualize one exact filtered scenario .npz file.")
+    p.add_argument("--npz_list", type=str, default=None, help="Text file containing one NPZ path per line.")
     p.add_argument("--scenario", type=str, default=None, help="Scenario id or unique substring of the .npz filename/scenario_id.")
     p.add_argument("--checkpoint", type=str, nargs="+", default=[str(p) for p in DEFAULT_COMPARE_CHECKPOINTS])
     p.add_argument("--label", type=str, nargs="*", default=None)
@@ -975,9 +1080,47 @@ def main() -> None:
         args.backend = "pil" if args.split_panels else ("matplotlib" if plt is not None else "pil")
     if args.backend == "matplotlib" and plt is None:
         raise ModuleNotFoundError("matplotlib is not installed; use --backend pil")
-    if not args.split_panels and not args.output:
+    if not args.split_panels and not args.output and not args.npz_list:
         args.output = str(WAYMO_ROOT / "evaluation/reports/reconstruction_compare.png")
-    visualize(args)
+    if not args.npz_list:
+        visualize(args)
+        return
+
+    if args.npz:
+        p.error("--npz and --npz_list are mutually exclusive")
+    list_path = Path(args.npz_list).expanduser()
+    if not list_path.is_file():
+        candidate = REPO_ROOT / list_path
+        if candidate.is_file():
+            list_path = candidate
+        else:
+            p.error(f"NPZ list does not exist: {args.npz_list}")
+    entries = [line.strip() for line in list_path.read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    if not entries:
+        p.error(f"NPZ list is empty: {list_path}")
+
+    output_root = Path(args.output_dir) if args.output_dir else WAYMO_ROOT / "evaluation/reports/reconstruction_compare_list"
+    summary_rows: List[Dict[str, object]] = []
+    for entry in entries:
+        npz_path = _resolve_npz_path(entry)
+        item_args = argparse.Namespace(**vars(args))
+        item_args.npz = str(npz_path)
+        item_args.index = 0
+        item_args.scenario = None
+        item_args.output_dir = str(output_root)
+        if not item_args.split_panels:
+            item_args.output = str(output_root / f"{_safe_name(npz_path.stem)}.png")
+        rows = visualize(item_args)
+        for row in rows:
+            summary_rows.append({"sample": str(npz_path), **row})
+
+    summary_path = output_root / "summary_metrics.csv"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    with summary_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(summary_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(summary_rows)
+    print(f"wrote {summary_path}")
 
 
 if __name__ == "__main__":

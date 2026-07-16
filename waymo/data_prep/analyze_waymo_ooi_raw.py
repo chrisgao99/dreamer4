@@ -419,6 +419,7 @@ def _ratio(num: int, den: int) -> float:
 def build_summary(rows: Sequence[Dict[str, Any]], args: argparse.Namespace, paths: Dict[str, str]) -> Dict[str, Any]:
     total = len(rows)
     has_ooi = [r for r in rows if bool(r["has_ooi"])]
+    has_ooi_pair = [r for r in rows if int(r["num_ooi_pairs"]) > 0]
     sdc_in_ooi = [r for r in has_ooi if bool(r["sdc_in_ooi"])]
     focus_available = [r for r in has_ooi if bool(r["focus_available"])]
     label_counts: Counter[str] = Counter()
@@ -433,6 +434,10 @@ def build_summary(rows: Sequence[Dict[str, Any]], args: argparse.Namespace, path
         "total_scenarios": total,
         "num_has_ooi": len(has_ooi),
         "ratio_has_ooi": _ratio(len(has_ooi), total),
+        "num_has_ooi_pair": len(has_ooi_pair),
+        "ratio_has_ooi_pair": _ratio(len(has_ooi_pair), total),
+        "ratio_has_ooi_pair_among_ooi": _ratio(len(has_ooi_pair), len(has_ooi)),
+        "total_ooi_pairs": int(sum(int(r["num_ooi_pairs"]) for r in rows)),
         "num_sdc_in_ooi": len(sdc_in_ooi),
         "ratio_sdc_in_ooi_among_ooi": _ratio(len(sdc_in_ooi), len(has_ooi)),
         "num_ooi_without_sdc": len(has_ooi) - len(sdc_in_ooi),
