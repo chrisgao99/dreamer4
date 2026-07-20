@@ -3,7 +3,7 @@ set -euo pipefail
 
 EXPERIMENT="${1:-}"
 if [[ -z "$EXPERIMENT" ]]; then
-  echo "Usage: $0 {fixed_empirical|fixed_bootstrap|eight_random}" >&2
+  echo "Usage: $0 {fixed_empirical|fixed_bootstrap|eight_random|eight_random_empirical|eight_random_half}" >&2
   exit 2
 fi
 
@@ -50,9 +50,29 @@ case "$EXPERIMENT" in
     RANDOM_TIME_WINDOW_START=1
     SELF_FRACTION=0.857142857
     ;;
+  eight_random_empirical)
+    RUN_NAME="${RUN_NAME:-wm_overfit_scenes8_randwin_self0_ctx1_h10_20260720}"
+    NUM_SCENES=8
+    TRAIN_REPEATS=1
+    BATCH_SIZE=8
+    EVAL_BATCH_SIZE=8
+    MAX_STEPS=50000
+    RANDOM_TIME_WINDOW_START=1
+    SELF_FRACTION=0
+    ;;
+  eight_random_half)
+    RUN_NAME="${RUN_NAME:-wm_overfit_scenes8_randwin_self05_ctx1_h10_20260720}"
+    NUM_SCENES=8
+    TRAIN_REPEATS=1
+    BATCH_SIZE=8
+    EVAL_BATCH_SIZE=8
+    MAX_STEPS=50000
+    RANDOM_TIME_WINDOW_START=1
+    SELF_FRACTION=0.5
+    ;;
   *)
     echo "Unknown experiment: $EXPERIMENT" >&2
-    echo "Expected one of: fixed_empirical fixed_bootstrap eight_random" >&2
+    echo "Expected one of: fixed_empirical fixed_bootstrap eight_random eight_random_empirical eight_random_half" >&2
     exit 2
     ;;
 esac

@@ -45,7 +45,13 @@ def add_eval_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     return parser
 
 
-def build_dynamics(args: argparse.Namespace, d_bottleneck: int, device: torch.device) -> torch.nn.Module:
+def build_dynamics(
+    args: argparse.Namespace,
+    d_bottleneck: int,
+    device: torch.device,
+    *,
+    map_memory_dim: int | None = None,
+) -> torch.nn.Module:
     if args.dynamics_variant == "focus_film":
         return wm.FocusFiLMDynamics(
             d_model=args.d_model_dyn,
@@ -76,6 +82,8 @@ def build_dynamics(args: argparse.Namespace, d_bottleneck: int, device: torch.de
         space_mode="wm_agent_isolated",
         scale_pos_embeds=args.scale_pos_embeds,
         action_clamp_inputs=args.ego_action_clamp,
+        map_memory_dim=map_memory_dim if args.dynamics_attend_map else None,
+        map_cross_every=args.map_cross_every if args.dynamics_attend_map else 0,
     ).to(device)
     wm.freeze_unused_action_mlp(dyn)
     return dyn
@@ -131,7 +139,12 @@ def main(args: argparse.Namespace) -> None:
         args.n_spatial = n_latents // args.packing_factor
         args.d_spatial = d_bottleneck * args.packing_factor
 
-        dyn = build_dynamics(args, d_bottleneck, device)
+        dyn = build_dynamics(
+            args,
+            d_bottleneck,
+            device,
+            map_memory_dim=wm.tokenizer_map_memory_dim(tokenizer) if args.dynamics_attend_map else None,
+        )
         ckpt = load_dynamics_state(dyn, args.eval_ckpt)
         dyn.eval()
         if ddp:
