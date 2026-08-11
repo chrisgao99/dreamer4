@@ -1,0 +1,212 @@
+{
+  "version": "full_91_physical_contact_intervals_v2",
+  "data_root": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k",
+  "output_dir": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk",
+  "focus_files": 50000,
+  "raw_tfrecords": 1000,
+  "config": {
+    "dt": 0.1,
+    "contact_buffer_m": 1.0,
+    "pet_soft_scale_s": 3.0,
+    "non_ooi_top_k_per_focus": 0
+  },
+  "feature_names": [
+    "x_m",
+    "y_m",
+    "vx_mps",
+    "vy_mps",
+    "heading_sin",
+    "heading_cos"
+  ],
+  "trajectory_shape_per_sample": [
+    2,
+    91,
+    6
+  ],
+  "valid_mask_shape_per_sample": [
+    2,
+    91
+  ],
+  "expected_original_two_ooi_pairs": 24985,
+  "retained_original_two_ooi_pairs": 24985,
+  "missing_original_two_ooi_pairs": 0,
+  "missing_original_two_ooi_preview": [],
+  "stats": {
+    "retained_ooi_pairs": 24985,
+    "event_mode_path_intersection": 36146,
+    "retained_mined_pairs": 105816,
+    "event_mode_obb_contact_interval": 93268,
+    "event_mode_ooi_closest_fallback": 1387,
+    "processed_focus_files": 50000,
+    "dimension_fallback_agents": 0,
+    "candidate_focus_pairs": 288070,
+    "non_ooi_without_physical_contact": 249787,
+    "non_ooi_with_physical_contact": 26019,
+    "non_ooi_removed_by_top_k": 0,
+    "duplicate_unordered_pairs": 22482
+  },
+  "failures": [],
+  "num_failures": 0,
+  "resume": {
+    "enabled": true,
+    "durable_samples": 115000,
+    "last_durable_raw_file_by_split_1_based": {
+      "train": 893,
+      "val": 755
+    },
+    "restart_raw_file_1_based": 755,
+    "skipped_focus_files_before_restart": 37730,
+    "overlap_is_recomputed_and_deduplicated": true,
+    "stats_note": "retained counts and event-mode counts include durable output; extraction diagnostics such as candidate/non-contact counts cover only the resumed suffix"
+  },
+  "splits": {
+    "train": {
+      "samples": 117540,
+      "csv": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples.csv",
+      "shards": [
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00000.npz",
+          "samples": 5000,
+          "start_index": 0
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00001.npz",
+          "samples": 5000,
+          "start_index": 5000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00002.npz",
+          "samples": 5000,
+          "start_index": 10000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00003.npz",
+          "samples": 5000,
+          "start_index": 15000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00004.npz",
+          "samples": 5000,
+          "start_index": 20000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00005.npz",
+          "samples": 5000,
+          "start_index": 25000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00006.npz",
+          "samples": 5000,
+          "start_index": 30000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00007.npz",
+          "samples": 5000,
+          "start_index": 35000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00008.npz",
+          "samples": 5000,
+          "start_index": 40000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00009.npz",
+          "samples": 5000,
+          "start_index": 45000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00010.npz",
+          "samples": 5000,
+          "start_index": 50000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00011.npz",
+          "samples": 5000,
+          "start_index": 55000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00012.npz",
+          "samples": 5000,
+          "start_index": 60000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00013.npz",
+          "samples": 5000,
+          "start_index": 65000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00014.npz",
+          "samples": 5000,
+          "start_index": 70000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00015.npz",
+          "samples": 5000,
+          "start_index": 75000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00016.npz",
+          "samples": 5000,
+          "start_index": 80000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00017.npz",
+          "samples": 5000,
+          "start_index": 85000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00018.npz",
+          "samples": 5000,
+          "start_index": 90000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00019.npz",
+          "samples": 5000,
+          "start_index": 95000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00020.npz",
+          "samples": 5000,
+          "start_index": 100000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00021.npz",
+          "samples": 5000,
+          "start_index": 105000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00022.npz",
+          "samples": 5000,
+          "start_index": 110000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/train_samples_00023.npz",
+          "samples": 2540,
+          "start_index": 115000
+        }
+      ]
+    },
+    "val": {
+      "samples": 13261,
+      "csv": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/val_samples.csv",
+      "shards": [
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/val_samples_00000.npz",
+          "samples": 5000,
+          "start_index": 0
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/val_samples_00001.npz",
+          "samples": 5000,
+          "start_index": 5000
+        },
+        {
+          "path": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk/val_samples_00002.npz",
+          "samples": 3261,
+          "start_index": 10000
+        }
+      ]
+    }
+  },
+  "elapsed_seconds": 5950.632767677307
+}

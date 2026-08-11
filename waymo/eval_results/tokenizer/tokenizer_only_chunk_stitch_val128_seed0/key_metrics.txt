@@ -1,0 +1,91 @@
+Tokenizer-only GT -> encode -> decode paired reconstruction ablation
+Positive relative improvement means better; lower is better except *_acc.
+
+[full91]
+agent_xy_mae_m: baseline=0.437458245
+  stride16_center=0.430423 improvement=+1.608% win_rate=0.859 delta_ci=[-0.00909797596, -0.00497251535]
+  stride16_keep_first=0.41858315 improvement=+4.315% win_rate=0.852 delta_ci=[-0.0223890639, -0.0153611264]
+agent_fde_mae_m: baseline=0.504789675
+  stride16_center=0.500091763 improvement=+0.931% win_rate=0.547 delta_ci=[-0.00899046771, -0.000405356798]
+  stride16_keep_first=0.505896086 improvement=-0.219% win_rate=0.602 delta_ci=[-0.00776892292, 0.00998174536]
+focus_agent_xy_mae_m: baseline=0.306560133
+  stride16_center=0.298781187 improvement=+2.537% win_rate=0.828 delta_ci=[-0.00993852588, -0.0056193654]
+  stride16_keep_first=0.292404305 improvement=+4.618% win_rate=0.852 delta_ci=[-0.0182960778, -0.0100155778]
+focus_agent_fde_m: baseline=0.499046685
+  stride16_center=0.498027433 improvement=+0.204% win_rate=0.516 delta_ci=[-0.0025618303, 0.00052332761]
+  stride16_keep_first=0.498915435 improvement=+0.026% win_rate=0.508 delta_ci=[-0.004320175, 0.0040576754]
+agent_delta_xy_mae_m: baseline=0.0360918333
+  stride16_center=0.0349735999 improvement=+3.098% win_rate=0.836 delta_ci=[-0.0018923687, -0.000344098114]
+  stride16_keep_first=0.0296934402 improvement=+17.728% win_rate=0.898 delta_ci=[-0.00719371418, -0.005603072]
+agent_kinematic_xy_mae_m: baseline=0.0348428513
+  stride16_center=0.0339382125 improvement=+2.596% win_rate=0.836 delta_ci=[-0.00179117563, -1.81020002e-05]
+  stride16_keep_first=0.0294532458 improvement=+15.468% win_rate=0.875 delta_ci=[-0.00615264463, -0.00462656629]
+agent_speed_yaw_kinematic_mae_m: baseline=0.0371195244
+  stride16_center=0.0360762789 improvement=+2.811% win_rate=0.852 delta_ci=[-0.00189528459, -0.000191206419]
+  stride16_keep_first=0.03124566 improvement=+15.824% win_rate=0.883 delta_ci=[-0.0066387216, -0.00510900726]
+agent_speed_mae_mps: baseline=0.0867999551
+  stride16_center=0.0860135134 improvement=+0.906% win_rate=0.562 delta_ci=[-0.00146011173, -0.000112771691]
+  stride16_keep_first=0.0870710365 improvement=-0.312% win_rate=0.586 delta_ci=[-0.000381788673, 0.000923951503]
+agent_vxvy_mae_mps: baseline=0.144112707
+  stride16_center=0.142875336 improvement=+0.859% win_rate=0.664 delta_ci=[-0.00178542991, -0.000689312389]
+  stride16_keep_first=0.142563239 improvement=+1.075% win_rate=0.711 delta_ci=[-0.00226859925, -0.000830337331]
+agent_yaw_mae_deg: baseline=2.53841784
+  stride16_center=2.5406139 improvement=-0.087% win_rate=0.445 delta_ci=[-0.00623112411, 0.0106232479]
+  stride16_keep_first=2.53254701 improvement=+0.231% win_rate=0.562 delta_ci=[-0.0183217825, 0.00658013031]
+agent_valid_acc: baseline=1
+  stride16_center=1 improvement=+0.000% win_rate=0.000 delta_ci=[0, 0]
+  stride16_keep_first=1 improvement=+0.000% win_rate=0.000 delta_ci=[0, 0]
+light_state_acc: baseline=0.734374997
+  stride16_center=0.734374997 improvement=+0.000% win_rate=0.000 delta_ci=[0, 0]
+  stride16_keep_first=0.734374997 improvement=+0.000% win_rate=0.000 delta_ci=[0, 0]
+light_valid_acc: baseline=1
+  stride16_center=0.999989269 improvement=-0.001% win_rate=0.000 delta_ci=[-3.17642465e-05, 1.03019178e-05]
+  stride16_keep_first=0.999989269 improvement=-0.001% win_rate=0.000 delta_ci=[-3.17642465e-05, 1.03019178e-05]
+loss_total: baseline=0.0902373509
+  stride16_center=0.0842869983 improvement=+6.594% win_rate=0.898 delta_ci=[-0.00725033076, -0.00465037449]
+  stride16_keep_first=0.0794949774 improvement=+11.905% win_rate=0.914 delta_ci=[-0.0124950814, -0.00898966564]
+
+[future_h90]
+agent_xy_mae_m: baseline=0.43577411
+  stride16_center=0.428630243 improvement=+1.639% win_rate=0.859 delta_ci=[-0.00925232932, -0.00503540602]
+  stride16_keep_first=0.416639952 improvement=+4.391% win_rate=0.852 delta_ci=[-0.0226945379, -0.0155737791]
+agent_fde_mae_m: baseline=0.502580181
+  stride16_center=0.497892732 improvement=+0.933% win_rate=0.547 delta_ci=[-0.00899284513, -0.000382052564]
+  stride16_keep_first=0.503734347 improvement=-0.230% win_rate=0.602 delta_ci=[-0.00775754152, 0.0100658734]
+focus_agent_xy_mae_m: baseline=0.308396723
+  stride16_center=0.300532288 improvement=+2.550% win_rate=0.828 delta_ci=[-0.0100462942, -0.00568257542]
+  stride16_keep_first=0.29409187 improvement=+4.638% win_rate=0.852 delta_ci=[-0.018489565, -0.0101201405]
+focus_agent_fde_m: baseline=0.499046685
+  stride16_center=0.498027433 improvement=+0.204% win_rate=0.516 delta_ci=[-0.0025618303, 0.00052332761]
+  stride16_keep_first=0.498915435 improvement=+0.026% win_rate=0.508 delta_ci=[-0.004320175, 0.0040576754]
+agent_delta_xy_mae_m: baseline=0.035949182
+  stride16_center=0.0348171803 improvement=+3.149% win_rate=0.836 delta_ci=[-0.00191662319, -0.000347380164]
+  stride16_keep_first=0.0294626198 improvement=+18.044% win_rate=0.898 delta_ci=[-0.00729291325, -0.00568021105]
+agent_kinematic_xy_mae_m: baseline=0.0348208985
+  stride16_center=0.033905479 improvement=+2.629% win_rate=0.836 delta_ci=[-0.00181375083, -1.70880834e-05]
+  stride16_keep_first=0.0293570942 improvement=+15.691% win_rate=0.875 delta_ci=[-0.00623746647, -0.00469014196]
+agent_speed_yaw_kinematic_mae_m: baseline=0.0371037109
+  stride16_center=0.0360475497 improvement=+2.847% win_rate=0.852 delta_ci=[-0.00191944705, -0.00019287539]
+  stride16_keep_first=0.0311485175 improvement=+16.050% win_rate=0.883 delta_ci=[-0.00673042746, -0.00517995944]
+agent_speed_mae_mps: baseline=0.0868513391
+  stride16_center=0.0860512264 improvement=+0.921% win_rate=0.562 delta_ci=[-0.00148436497, -0.000115860344]
+  stride16_keep_first=0.0871276069 improvement=-0.318% win_rate=0.586 delta_ci=[-0.000385581071, 0.000938116623]
+agent_vxvy_mae_mps: baseline=0.144117031
+  stride16_center=0.142861135 improvement=+0.871% win_rate=0.664 delta_ci=[-0.00181294016, -0.000698852366]
+  stride16_keep_first=0.142547655 improvement=+1.089% win_rate=0.711 delta_ci=[-0.00229842181, -0.000840330787]
+agent_yaw_mae_deg: baseline=2.53286018
+  stride16_center=2.5350872 improvement=-0.088% win_rate=0.445 delta_ci=[-0.00631401323, 0.0107680402]
+  stride16_keep_first=2.52687092 improvement=+0.236% win_rate=0.562 delta_ci=[-0.0186088319, 0.00663030439]
+agent_valid_acc: baseline=1
+  stride16_center=1 improvement=+0.000% win_rate=0.000 delta_ci=[0, 0]
+  stride16_keep_first=1 improvement=+0.000% win_rate=0.000 delta_ci=[0, 0]
+light_state_acc: baseline=0.734374997
+  stride16_center=0.734374997 improvement=+0.000% win_rate=0.000 delta_ci=[0, 0]
+  stride16_keep_first=0.734374997 improvement=+0.000% win_rate=0.000 delta_ci=[0, 0]
+light_valid_acc: baseline=1
+  stride16_center=0.99998915 improvement=-0.001% win_rate=0.000 delta_ci=[-3.2117106e-05, 1.04163587e-05]
+  stride16_keep_first=0.99998915 improvement=-0.001% win_rate=0.000 delta_ci=[-3.2117106e-05, 1.04163587e-05]
+loss_total: baseline=0.0899240589
+  stride16_center=0.0838896463 improvement=+6.711% win_rate=0.898 delta_ci=[-0.00735545068, -0.00471337463]
+  stride16_keep_first=0.0790398644 improvement=+12.104% win_rate=0.914 delta_ci=[-0.0126586194, -0.00910976961]
+

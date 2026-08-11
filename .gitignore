@@ -9,6 +9,7 @@ logs/
 __pycache__/
 *.py[codz]
 *$py.class
+.nfs*
 
 # C extensions
 *.so

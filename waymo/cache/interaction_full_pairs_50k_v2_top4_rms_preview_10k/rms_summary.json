@@ -1,0 +1,269 @@
+{
+  "alignment": {
+    "anchor": "primary_step_first (first-arrival agent)",
+    "anchor_output_index": 19,
+    "fractional_steps": "linear interpolation; heading sin/cos renormalized",
+    "time_offsets": [
+      -19.0,
+      -18.0,
+      -17.0,
+      -16.0,
+      -15.0,
+      -14.0,
+      -13.0,
+      -12.0,
+      -11.0,
+      -10.0,
+      -9.0,
+      -8.0,
+      -7.0,
+      -6.0,
+      -5.0,
+      -4.0,
+      -3.0,
+      -2.0,
+      -1.0,
+      0.0,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0,
+      7.0,
+      8.0,
+      9.0,
+      10.0,
+      11.0,
+      12.0,
+      13.0,
+      14.0,
+      15.0,
+      16.0,
+      17.0,
+      18.0,
+      19.0,
+      20.0,
+      21.0,
+      22.0,
+      23.0,
+      24.0,
+      25.0,
+      26.0,
+      27.0,
+      28.0,
+      29.0,
+      30.0,
+      31.0,
+      32.0,
+      33.0,
+      34.0,
+      35.0,
+      36.0,
+      37.0,
+      38.0,
+      39.0,
+      40.0
+    ]
+  },
+  "config": {
+    "dct_coefficients": 3,
+    "future_steps": 40,
+    "history_steps": 19,
+    "mask_descriptor_weight": 0.25,
+    "min_pair_overlap": 0.7,
+    "min_valid_fraction": 0.8,
+    "num_neighbours": 32,
+    "query_chunk_size": 2048,
+    "retrieval_buffer": 64,
+    "retrieval_candidates": 1024
+  },
+  "dataset_dir": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2",
+  "distance": {
+    "coarse_retrieval": "low-frequency DCT descriptor plus mask DCT",
+    "different_scenario_only": true,
+    "exact_reranking": true,
+    "metric": "RMS Euclidean over common valid normalized T x 2 x 6 states",
+    "strata": [
+      "ordered_first_agent_type",
+      "ordered_second_agent_type",
+      "fallback_vs_contact"
+    ]
+  },
+  "elapsed_seconds": 34.40620946884155,
+  "normalization": {
+    "fit_split": "train",
+    "heading_median": 0.0,
+    "heading_scale": 1.0,
+    "iqr": [
+      [
+        18.06881332397461,
+        1.3816033601760864,
+        8.04822826385498,
+        1.0,
+        1.0,
+        1.0
+      ],
+      [
+        18.79962158203125,
+        2.728350877761841,
+        9.4193696975708,
+        1.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "median": [
+      [
+        6.33358097076416,
+        0.005771697498857975,
+        6.833090305328369,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -5.489707946777344,
+        0.016413051635026932,
+        4.946453094482422,
+        0.00011541135609149933,
+        0.0,
+        0.0
+      ]
+    ],
+    "method": "per-role/channel median and IQR over valid aligned states only",
+    "position_and_velocity_iqr_floor": 1.0
+  },
+  "source_dataset_config": {
+    "contact_buffer_m": 1.0,
+    "dt": 0.1,
+    "non_ooi_top_k_per_focus": 4,
+    "pet_soft_scale_s": 3.0
+  },
+  "source_dataset_version": "full_91_physical_contact_intervals_v2",
+  "splits": {
+    "train": {
+      "coarse_retrieval_validation": {
+        "anchors_checked": 96,
+        "anchors_requested": 96,
+        "coarse_candidates": 1024,
+        "elapsed_seconds": 1.390807867050171,
+        "exact_top_k": 32,
+        "fraction_at_least_0.95": 0.9583333333333334,
+        "mean_recall": 0.9908854365348816,
+        "min_recall": 0.5625,
+        "true_neighbour_count_min": 32
+      },
+      "descriptor_dimension": 42,
+      "eligible_samples": 6505,
+      "neighbors": {
+        "distance_quantiles": {
+          "0.0": 4.0022115399551694e-08,
+          "0.1": 0.13281825184822083,
+          "0.25": 0.18839513137936592,
+          "0.5": 0.31792718172073364,
+          "0.75": 0.5366671681404114,
+          "0.9": 0.8147834479808809,
+          "0.99": 1.8853012871742265,
+          "1.0": 10.160975456237793
+        },
+        "elapsed_seconds": 15.344491958618164,
+        "eligible_samples": 6505,
+        "samples_with_neighbours": 6504,
+        "stored_edges": 207544,
+        "stratum_sizes": {
+          "110": 5563,
+          "111": 45,
+          "120": 252,
+          "130": 118,
+          "131": 2,
+          "210": 212,
+          "211": 1,
+          "220": 111,
+          "230": 5,
+          "310": 162,
+          "320": 7,
+          "330": 27
+        }
+      },
+      "outputs": {
+        "features_npz": "/tmp/full_pair_rms_10k_c1024/train_rms_features.npz",
+        "neighbors_npz": "/tmp/full_pair_rms_10k_c1024/train_rms_neighbors.npz",
+        "top_neighbors_csv": "/tmp/full_pair_rms_10k_c1024/train_rms_top3.csv"
+      },
+      "samples": 10000,
+      "valid_fraction_quantiles": {
+        "0.0": 0.01666666753590107,
+        "0.1": 0.6333333253860474,
+        "0.25": 0.7333333492279053,
+        "0.5": 0.8999999761581421,
+        "0.75": 1.0,
+        "0.9": 1.0,
+        "0.99": 1.0,
+        "1.0": 1.0
+      }
+    },
+    "val": {
+      "coarse_retrieval_validation": {
+        "anchors_checked": 96,
+        "anchors_requested": 96,
+        "coarse_candidates": 1024,
+        "elapsed_seconds": 1.1276535987854004,
+        "exact_top_k": 32,
+        "fraction_at_least_0.95": 0.9791666666666666,
+        "mean_recall": 0.998046875,
+        "min_recall": 0.875,
+        "true_neighbour_count_min": 32
+      },
+      "descriptor_dimension": 42,
+      "eligible_samples": 6440,
+      "neighbors": {
+        "distance_quantiles": {
+          "0.0": 5.940432856732514e-08,
+          "0.1": 0.13222676515579224,
+          "0.25": 0.18900911509990692,
+          "0.5": 0.317307710647583,
+          "0.75": 0.5421185493469238,
+          "0.9": 0.8005930185317993,
+          "0.99": 1.9087760746479034,
+          "1.0": 7.926092624664307
+        },
+        "elapsed_seconds": 13.901636838912964,
+        "eligible_samples": 6440,
+        "samples_with_neighbours": 6439,
+        "stored_edges": 205426,
+        "stratum_sizes": {
+          "110": 5468,
+          "111": 40,
+          "120": 250,
+          "121": 2,
+          "130": 104,
+          "210": 285,
+          "211": 1,
+          "220": 142,
+          "230": 5,
+          "310": 123,
+          "320": 5,
+          "330": 15
+        }
+      },
+      "outputs": {
+        "features_npz": "/tmp/full_pair_rms_10k_c1024/val_rms_features.npz",
+        "neighbors_npz": "/tmp/full_pair_rms_10k_c1024/val_rms_neighbors.npz",
+        "top_neighbors_csv": "/tmp/full_pair_rms_10k_c1024/val_rms_top3.csv"
+      },
+      "samples": 10000,
+      "valid_fraction_quantiles": {
+        "0.0": 0.01666666753590107,
+        "0.1": 0.6333333253860474,
+        "0.25": 0.7166666388511658,
+        "0.5": 0.8999999761581421,
+        "0.75": 1.0,
+        "0.9": 1.0,
+        "0.99": 1.0,
+        "1.0": 1.0
+      }
+    }
+  },
+  "version": "full_pair_event_aligned_masked_rms_v0"
+}

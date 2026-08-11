@@ -1,0 +1,13 @@
+step	focus_fde_m	focus_ade_m	latent_mse	checkpoint
+550000	1.41944214	0.73128913	0.07577150	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00550000.pt
+600000	1.85789805	0.85007186	0.07044386	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00600000.pt
+350000	1.86280759	0.87612624	0.09292942	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00350000.pt
+200000	2.02147375	1.03991710	0.08748372	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00200000.pt
+250000	2.02910562	1.16636010	0.08808912	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00250000.pt
+450000	2.14731364	0.91361071	0.09518365	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00450000.pt
+400000	2.28383799	1.28999724	0.08399365	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00400000.pt
+300000	2.65460699	1.54306117	0.08818017	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00300000.pt
+150000	2.69907128	1.37762250	0.09485716	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00150000.pt
+500000	3.49531532	1.58059428	0.07807713	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00500000.pt
+100000	6.09536377	2.84914128	0.14183596	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00100000.pt
+50000	14.05909224	9.59516972	0.15857577	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_motion_latent_v1_matched_time1_ctx10_b8_stage1_600k/step_00050000.pt

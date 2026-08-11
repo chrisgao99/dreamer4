@@ -1,0 +1,13 @@
+step	focus_fde_m	focus_ade_m	latent_mse	checkpoint
+500000	0.55763055	0.44303400	0.09404184	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00500000.pt
+200000	0.75148012	0.61627219	0.09594148	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00200000.pt
+350000	1.04406287	0.86566726	0.08740008	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00350000.pt
+550000	1.16268722	0.83148490	0.09879260	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00550000.pt
+400000	1.48072672	1.14094770	0.11388551	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00400000.pt
+600000	1.53883450	1.14060586	0.08293938	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00600000.pt
+250000	1.83553733	1.28818593	0.08996617	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00250000.pt
+450000	2.00227826	1.15170732	0.09106688	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00450000.pt
+300000	2.19251489	1.25341234	0.08991029	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00300000.pt
+100000	2.54884380	1.59653059	0.11323245	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00100000.pt
+150000	2.78379327	1.81281716	0.10223212	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00150000.pt
+50000	2.87329411	1.54007119	0.09827028	/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00050000.pt

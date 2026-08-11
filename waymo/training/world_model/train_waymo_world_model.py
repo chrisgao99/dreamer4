@@ -489,6 +489,121 @@ def encode_batch_z(tokenizer: torch.nn.Module, batch: Dict[str, Any]) -> torch.T
     return z
 
 
+def tokenizer_time_chunk_ranges(total_steps: int, window: int, stride: int) -> list[tuple[int, int]]:
+    """Build overlapping full-size windows, shifting the last one to end exactly at T."""
+    total_steps = int(total_steps)
+    window = int(window)
+    stride = int(stride)
+    if window <= 0 or total_steps <= window:
+        return [(0, total_steps)]
+    if stride <= 0 or stride > window:
+        raise ValueError(f"tokenizer_chunk_stride must satisfy 1 <= stride <= window; got {stride} vs {window}")
+    starts = list(range(0, total_steps - window + 1, stride))
+    final_start = total_steps - window
+    if starts[-1] != final_start:
+        starts.append(final_start)
+    return [(start, start + window) for start in starts]
+
+
+def tokenizer_center_select_segments(
+    ranges: list[tuple[int, int]],
+    total_steps: int,
+) -> list[tuple[int, int, int, int, int]]:
+    """Assign each timestep to the covering chunk with the nearest center.
+
+    Returns ``(part_index, global_start, global_end, local_start, local_end)``
+    segments. Ties select the later chunk so the shifted final window takes
+    over at the midpoint of its overlap.
+    """
+    owners = []
+    for timestep in range(int(total_steps)):
+        candidates = []
+        for part_index, (start, end) in enumerate(ranges):
+            if start <= timestep < end:
+                center = (start + end - 1) / 2.0
+                candidates.append((abs(timestep - center), -start, part_index))
+        if not candidates:
+            raise ValueError(f"Tokenizer chunks do not cover timestep {timestep}: {ranges}")
+        owners.append(min(candidates)[2])
+
+    segments: list[tuple[int, int, int, int, int]] = []
+    segment_start = 0
+    for timestep in range(1, int(total_steps) + 1):
+        if timestep == int(total_steps) or owners[timestep] != owners[segment_start]:
+            part_index = owners[segment_start]
+            chunk_start, _ = ranges[part_index]
+            segments.append(
+                (
+                    part_index,
+                    segment_start,
+                    timestep,
+                    segment_start - chunk_start,
+                    timestep - chunk_start,
+                )
+            )
+            segment_start = timestep
+    return segments
+
+
+def _stitch_time_parts(parts: list[tuple[int, int, torch.Tensor]], total_steps: int) -> torch.Tensor:
+    kept_until = 0
+    kept = []
+    for start, end, value in parts:
+        if start > kept_until:
+            raise ValueError(f"Tokenizer chunks leave a gap before timestep {start}; covered through {kept_until}")
+        discard = max(0, kept_until - start)
+        if discard < end - start:
+            kept.append(value[:, discard : end - start])
+            kept_until = end
+    if kept_until != int(total_steps):
+        raise ValueError(f"Tokenizer chunks cover through {kept_until}, expected {total_steps}")
+    return torch.cat(kept, dim=1)
+
+
+def _stitch_time_parts_center(parts: list[tuple[int, int, torch.Tensor]], total_steps: int) -> torch.Tensor:
+    ranges = [(start, end) for start, end, _ in parts]
+    kept = [
+        parts[part_index][2][:, local_start:local_end]
+        for part_index, _, _, local_start, local_end in tokenizer_center_select_segments(ranges, total_steps)
+    ]
+    return torch.cat(kept, dim=1)
+
+
+@torch.no_grad()
+def encode_batch_dynamics_inputs_for_world_model(
+    tokenizer: torch.nn.Module,
+    batch: Dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    return_map: bool = False,
+) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
+    window = int(getattr(args, "tokenizer_chunk_window", 32))
+    if window <= 0:
+        return encode_batch_dynamics_inputs(tokenizer, batch, return_map=return_map)
+    total_steps = int(batch["lights"].shape[1])
+    encode_stride = getattr(args, "tokenizer_encode_chunk_stride", None)
+    if encode_stride is None:
+        encode_stride = args.tokenizer_chunk_stride
+    ranges = tokenizer_time_chunk_ranges(total_steps, window, int(encode_stride))
+    z_parts: list[tuple[int, int, torch.Tensor]] = []
+    first_map_tokens = None
+    first_map_mask = None
+    for start, end in ranges:
+        chunk = slice_future_batch(batch, start, end)
+        z_chunk, map_tokens, map_mask = encode_batch_dynamics_inputs(tokenizer, chunk, return_map=return_map)
+        z_parts.append((start, end, z_chunk))
+        if first_map_tokens is None:
+            first_map_tokens, first_map_mask = map_tokens, map_mask
+    stitch_mode = str(getattr(args, "tokenizer_encode_stitch_mode", "keep_first"))
+    if stitch_mode == "keep_first":
+        z = _stitch_time_parts(z_parts, total_steps)
+    elif stitch_mode == "center_select":
+        z = _stitch_time_parts_center(z_parts, total_steps)
+    else:
+        raise ValueError(f"Unknown tokenizer_encode_stitch_mode={stitch_mode!r}")
+    return z, first_map_tokens, first_map_mask
+
+
 def tokenizer_map_memory_dim(tokenizer: torch.nn.Module) -> int:
     if isinstance(tokenizer, FrozenWaymoFocusTokenizer):
         return int(tokenizer.model.d_model)
@@ -523,6 +638,84 @@ def decode_batch_z(tokenizer: torch.nn.Module, z: torch.Tensor, batch: Dict[str,
         light_mask=batch["light_mask"][:, : z.shape[1]],
         **decoder_map_kwargs(tokenizer, batch),
     )
+
+
+def _concat_decoder_outputs(kept: list[Any]) -> Any:
+    if not kept:
+        raise ValueError("No tokenizer decoder outputs to concatenate")
+    first = kept[0]
+    if isinstance(first, FocusTokenizerOutput):
+        return replace(
+            first,
+            representation=torch.cat([part.representation for part in kept], dim=1),
+            agent_continuous=torch.cat([part.agent_continuous for part in kept], dim=1),
+            agent_valid_logits=torch.cat([part.agent_valid_logits for part in kept], dim=1),
+        )
+    return replace(
+        first,
+        agent_continuous=torch.cat([part.agent_continuous for part in kept], dim=1),
+        agent_valid_logits=torch.cat([part.agent_valid_logits for part in kept], dim=1),
+        light_state_logits=torch.cat([part.light_state_logits for part in kept], dim=1),
+        light_valid_logits=torch.cat([part.light_valid_logits for part in kept], dim=1),
+        agent_tokens=torch.cat([part.agent_tokens for part in kept], dim=1),
+        light_tokens=torch.cat([part.light_tokens for part in kept], dim=1),
+        token_mask=torch.cat([part.token_mask for part in kept], dim=1),
+        agent_xy_gmm=(
+            None
+            if any(part.agent_xy_gmm is None for part in kept)
+            else torch.cat([part.agent_xy_gmm for part in kept], dim=1)
+        ),
+    )
+
+
+def _concat_decoder_time_parts(parts: list[tuple[int, int, Any]], total_steps: int) -> Any:
+    kept_until = 0
+    kept = []
+    for start, end, pred in parts:
+        if start > kept_until:
+            raise ValueError(f"Tokenizer decoder chunks leave a gap before timestep {start}; covered through {kept_until}")
+        discard = max(0, kept_until - start)
+        if discard < end - start:
+            kept.append(slice_decoder_output(pred, discard, end - start))
+            kept_until = end
+    if kept_until != int(total_steps):
+        raise ValueError(f"Tokenizer decoder chunks cover through {kept_until}, expected {total_steps}")
+    return _concat_decoder_outputs(kept)
+
+
+def _concat_decoder_time_parts_center(parts: list[tuple[int, int, Any]], total_steps: int) -> Any:
+    ranges = [(start, end) for start, end, _ in parts]
+    kept = [
+        slice_decoder_output(parts[part_index][2], local_start, local_end)
+        for part_index, _, _, local_start, local_end in tokenizer_center_select_segments(ranges, total_steps)
+    ]
+    return _concat_decoder_outputs(kept)
+
+
+def decode_batch_z_for_world_model(
+    tokenizer: torch.nn.Module,
+    z: torch.Tensor,
+    batch: Dict[str, Any],
+    args: argparse.Namespace,
+) -> Any:
+    window = int(getattr(args, "tokenizer_chunk_window", 32))
+    if window <= 0:
+        return decode_batch_z(tokenizer, z, batch)
+    total_steps = int(z.shape[1])
+    decode_stride = getattr(args, "tokenizer_decode_chunk_stride", None)
+    if decode_stride is None:
+        decode_stride = args.tokenizer_chunk_stride
+    ranges = tokenizer_time_chunk_ranges(total_steps, window, int(decode_stride))
+    parts = []
+    for start, end in ranges:
+        chunk_batch = slice_future_batch(batch, start, end)
+        parts.append((start, end, decode_batch_z(tokenizer, z[:, start:end], chunk_batch)))
+    stitch_mode = str(getattr(args, "tokenizer_decode_stitch_mode", "keep_first"))
+    if stitch_mode == "keep_first":
+        return _concat_decoder_time_parts(parts, total_steps)
+    if stitch_mode == "center_select":
+        return _concat_decoder_time_parts_center(parts, total_steps)
+    raise ValueError(f"Unknown tokenizer_decode_stitch_mode={stitch_mode!r}")
 
 
 def _emax_from_kmax(k_max: int) -> int:
@@ -765,7 +958,6 @@ def make_tau_schedule(*, k_max: int, schedule: str, d: Optional[float] = None) -
     return dict(K=k, e=e, scale=scale, tau=tau, tau_idx=tau_idx, dt=1.0 / k, schedule=schedule, d=1.0 / k)
 
 
-@torch.no_grad()
 def sample_one_timestep_packed(
     dyn: Dynamics,
     *,
@@ -799,10 +991,13 @@ def sample_one_timestep_packed(
     z = torch.randn((bsz, 1, n_spatial, d_spatial), device=device, dtype=dtype)
     step_idxs = torch.full((bsz, past_t + 1), emax, device=device, dtype=torch.long)
     step_idxs[:, -1] = e
-    signal_idxs = torch.full((bsz, past_t + 1), k_max - 1, device=device, dtype=torch.long)
+    past_signal_idxs = torch.full((bsz, past_t + 1), k_max - 1, device=device, dtype=torch.long)
 
     for i in range(k):
         tau_i = float(tau[i])
+        # Embedding backward saves the index tensor, so each differentiable
+        # solver substep needs its own immutable copy.
+        signal_idxs = past_signal_idxs.clone()
         signal_idxs[:, -1] = int(tau_idx[i])
         packed_seq = torch.cat([past_packed, z], dim=1)
         x1_hat_full, _ = dyn(
@@ -822,7 +1017,6 @@ def sample_one_timestep_packed(
     return z[:, 0]
 
 
-@torch.no_grad()
 def sample_autoregressive_packed_sequence(
     dyn: Dynamics,
     *,
@@ -859,6 +1053,64 @@ def sample_autoregressive_packed_sequence(
         )
         outs.append(z_next)
     return torch.stack(outs, dim=1)
+
+
+def rollout_loss(
+    dynamics: torch.nn.Module,
+    *,
+    z1: torch.Tensor,
+    actions: Optional[torch.Tensor],
+    act_mask: Optional[torch.Tensor],
+    map_tokens: Optional[torch.Tensor],
+    map_mask: Optional[torch.Tensor],
+    ctx_length: int,
+    horizon: int,
+    k_max: int,
+    schedule: str,
+    schedule_d: Optional[float],
+    max_rollout_window: int,
+) -> tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
+    """Free-running latent rollout loss using the exact evaluation sampler.
+
+    Only the context frames come from ``z1``. Every future frame is sampled
+    autoregressively and is fed back as history for subsequent predictions.
+    """
+    total = int(z1.shape[1])
+    ctx_length = int(ctx_length)
+    horizon = int(horizon)
+    if ctx_length < 1:
+        raise ValueError(f"rollout ctx_length must be >= 1, got {ctx_length}")
+    if horizon < 1:
+        raise ValueError(f"rollout horizon must be >= 1, got {horizon}")
+    required = ctx_length + horizon
+    if total < required:
+        raise ValueError(
+            f"rollout objective needs at least ctx+horizon={required} frames, got {total}; "
+            "set --seq_len to at least --eval_ctx + --eval_horizon"
+        )
+
+    sched = make_tau_schedule(k_max=k_max, schedule=schedule, d=schedule_d)
+    pred = sample_autoregressive_packed_sequence(
+        dynamics,
+        z_gt_packed=z1[:, :required],
+        actions=None if actions is None else actions[:, :required],
+        act_mask=None if act_mask is None else act_mask[:, :required],
+        map_tokens=map_tokens,
+        map_mask=map_mask,
+        ctx_length=ctx_length,
+        horizon=horizon,
+        k_max=k_max,
+        sched=sched,
+        max_rollout_window=max_rollout_window,
+    )
+    diff_sq = (pred[:, ctx_length:].float() - z1[:, ctx_length:required].float()).pow(2)
+    per_timestep = diff_sq.mean(dim=(2, 3))
+    loss = per_timestep.mean()
+    return loss, {
+        "loss_total": loss.detach(),
+        "rollout_latent_mse": loss.detach(),
+        "rollout_latent_mse_last": per_timestep[:, -1].mean().detach(),
+    }, pred
 
 
 def slice_decoder_output(pred: Any, start: int, end: int) -> Any:
@@ -995,9 +1247,10 @@ def evaluate(
     for batch in loader:
         batch = slice_time_window(move_batch(batch, device), args.eval_seq_len, random_start=False)
         actions, act_mask, action_slots = build_ego_action_features(batch, args)
-        z_gt, map_tokens, map_mask = encode_batch_dynamics_inputs(
+        z_gt, map_tokens, map_mask = encode_batch_dynamics_inputs_for_world_model(
             tokenizer,
             batch,
+            args,
             return_map=args.dynamics_attend_map,
         )
         z_gt_packed = pack_bottleneck_to_spatial(z_gt, n_spatial=args.n_spatial, k=args.packing_factor)
@@ -1021,7 +1274,7 @@ def evaluate(
         z_decode = z_pred
         if z_pred.shape[1] < z_gt.shape[1]:
             z_decode = torch.cat([z_pred, z_gt[:, z_pred.shape[1] :]], dim=1)
-        decoded = decode_batch_z(tokenizer, z_decode, batch)
+        decoded = decode_batch_z_for_world_model(tokenizer, z_decode, batch, args)
 
         score_start = min(int(args.eval_ctx), int(z_pred.shape[1]) - 1)
         score_end = int(z_pred.shape[1])
@@ -1080,6 +1333,13 @@ def load_ckpt(path: Path, *, dyn: torch.nn.Module, opt: torch.optim.Optimizer, s
     if scaler is not None and ckpt.get("scaler") is not None:
         scaler.load_state_dict(ckpt["scaler"])
     return int(ckpt.get("step", 0)), int(ckpt.get("epoch", 0))
+
+
+def load_dynamics_weights(path: Path, *, dyn: torch.nn.Module) -> None:
+    """Initialize dynamics weights without restoring optimizer or step state."""
+    ckpt = torch.load(path, map_location="cpu")
+    state_key = "model" if ckpt.get("format") == "waymo_motion_latent_world_model_v1" else "dynamics"
+    unwrap_model(dyn).load_state_dict(ckpt[state_key], strict=True)
 
 
 def train(args: argparse.Namespace) -> None:
@@ -1180,6 +1440,11 @@ def train(args: argparse.Namespace) -> None:
         ).to(device)
     frozen_action_mlp_params = 0 if args.use_ego_actions else freeze_unused_action_mlp(dyn)
 
+    if args.init_ckpt is not None and args.resume is not None:
+        raise ValueError("--init_ckpt and --resume are mutually exclusive")
+    if args.init_ckpt is not None:
+        load_dynamics_weights(Path(args.init_ckpt), dyn=dyn)
+
     if args.compile:
         dyn = torch.compile(dyn)
     if ddp:
@@ -1229,7 +1494,11 @@ def train(args: argparse.Namespace) -> None:
             f"seq_len={args.seq_len} max_rollout_window={args.max_rollout_window} "
             f"eval_ctx={args.eval_ctx} eval_horizon={args.eval_horizon}"
         )
-        print(f"train_objective={args.train_objective} tf_context={args.tf_context}")
+        print(
+            f"train_objective={args.train_objective} tf_context={args.tf_context} "
+            f"init_ckpt={args.init_ckpt} tokenizer_chunk_window={args.tokenizer_chunk_window} "
+            f"tokenizer_chunk_stride={args.tokenizer_chunk_stride}"
+        )
         print(
             f"ego_actions={args.use_ego_actions} source={args.ego_action_source} "
             f"normalization={args.ego_action_normalization} clamp={args.ego_action_clamp} "
@@ -1263,9 +1532,10 @@ def train(args: argparse.Namespace) -> None:
                 agent_weight = build_agent_loss_weight_multiplier(batch, args, action_slots=action_slots)
 
                 with torch.no_grad():
-                    z, map_tokens, map_mask = encode_batch_dynamics_inputs(
+                    z, map_tokens, map_mask = encode_batch_dynamics_inputs_for_world_model(
                         tokenizer,
                         batch,
+                        args,
                         return_map=args.dynamics_attend_map,
                     )
                     z_packed = pack_bottleneck_to_spatial(z, n_spatial=args.n_spatial, k=args.packing_factor)
@@ -1302,11 +1572,38 @@ def train(args: argparse.Namespace) -> None:
                         )
                         decoded_batch = slice_future_batch(batch, int(args.tf_context), int(z_packed.shape[1]))
                         decoded_agent_weight = build_agent_loss_weight_multiplier(decoded_batch, args, action_slots=action_slots)
+                    elif args.train_objective == "rollout":
+                        if args.train_decoded_loss_weight > 0.0:
+                            raise ValueError(
+                                "train_decoded_loss_weight is not yet supported for train_objective=rollout"
+                            )
+                        loss, metrics, z_hat_packed = rollout_loss(
+                            dyn,
+                            z1=z_packed,
+                            actions=actions,
+                            act_mask=act_mask,
+                            map_tokens=map_tokens,
+                            map_mask=map_mask,
+                            ctx_length=args.eval_ctx,
+                            horizon=args.eval_horizon,
+                            k_max=args.k_max,
+                            schedule=args.eval_schedule,
+                            schedule_d=args.eval_d,
+                            max_rollout_window=args.max_rollout_window,
+                        )
+                        decoded_batch = slice_future_batch(
+                            batch,
+                            int(args.eval_ctx),
+                            int(args.eval_ctx + args.eval_horizon),
+                        )
+                        decoded_agent_weight = build_agent_loss_weight_multiplier(
+                            decoded_batch, args, action_slots=action_slots
+                        )
                     else:
                         raise ValueError(f"Unknown train_objective={args.train_objective!r}")
                     if args.train_decoded_loss_weight > 0.0:
                         z_hat = unpack_spatial_to_bottleneck(z_hat_packed, k=args.packing_factor)
-                        decoded_train = decode_batch_z(tokenizer, z_hat, decoded_batch)
+                        decoded_train = decode_batch_z_for_world_model(tokenizer, z_hat, decoded_batch, args)
                         decoded_loss, decoded_metrics = tokenizer_reconstruction_loss(
                             tokenizer,
                             decoded_train,
@@ -1373,11 +1670,53 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--tokenizer_ckpt", type=str, required=True)
     p.add_argument("--ckpt_dir", type=str, default="/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/waymo_world_model")
     p.add_argument("--resume", type=str, default=None)
+    p.add_argument(
+        "--init_ckpt",
+        type=str,
+        default=None,
+        help="Initialize dynamics weights only; optimizer, epoch, and global step start fresh.",
+    )
     p.add_argument("--device", type=str, default=None)
     p.add_argument("--seed", type=int, default=0)
 
     p.add_argument("--seq_len", type=int, default=100, help="Training time window. 100 keeps a full 91-step Waymo scene.")
     p.add_argument("--random_time_window_start", action="store_true")
+    p.add_argument(
+        "--tokenizer_chunk_window",
+        type=int,
+        default=32,
+        help="Encode and decode sequences as overlapping windows (default: 32 timesteps; set <=0 to disable).",
+    )
+    p.add_argument(
+        "--tokenizer_chunk_stride",
+        type=int,
+        default=30,
+        help="Stride for tokenizer chunks; the final full-size chunk is shifted to end exactly at the sequence end.",
+    )
+    p.add_argument(
+        "--tokenizer_encode_chunk_stride",
+        type=int,
+        default=None,
+        help="Optional encoder-only chunk stride; defaults to tokenizer_chunk_stride.",
+    )
+    p.add_argument(
+        "--tokenizer_decode_chunk_stride",
+        type=int,
+        default=None,
+        help="Optional decoder-only chunk stride; defaults to tokenizer_chunk_stride.",
+    )
+    p.add_argument(
+        "--tokenizer_encode_stitch_mode",
+        choices=("keep_first", "center_select"),
+        default="keep_first",
+        help="How overlapping tokenizer encoder outputs are stitched.",
+    )
+    p.add_argument(
+        "--tokenizer_decode_stitch_mode",
+        choices=("keep_first", "center_select"),
+        default="keep_first",
+        help="How overlapping tokenizer decoder outputs are stitched.",
+    )
     p.add_argument("--val_fraction", type=float, default=0.1)
     p.add_argument("--batch_size", type=int, default=8)
     p.add_argument("--eval_batch_size", type=int, default=4)
@@ -1400,7 +1739,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--k_max", type=int, default=64)
     p.add_argument("--bootstrap_start", type=int, default=0)
     p.add_argument("--self_fraction", type=float, default=0.857142857)
-    p.add_argument("--train_objective", choices=["shortcut", "tf_onestep"], default="shortcut")
+    p.add_argument("--train_objective", choices=["shortcut", "tf_onestep", "rollout"], default="shortcut")
     p.add_argument("--tf_context", type=int, default=10)
 
     p.add_argument("--lr", type=float, default=1e-4)

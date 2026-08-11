@@ -1,0 +1,21 @@
+{
+  "dataset_dir": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2",
+  "output_dir": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2/visual_audit_36_representative",
+  "num_samples": 36,
+  "category_counts": {
+    "following": 6,
+    "merge_cut_in": 6,
+    "crossing": 8,
+    "oncoming": 4,
+    "vru": 6,
+    "ooi_fallback": 6
+  },
+  "candidate_pool_counts": {
+    "following": 24967,
+    "merge_cut_in": 24258,
+    "crossing": 3873,
+    "oncoming": 2479,
+    "vru": 12848,
+    "ooi_fallback": 1387
+  }
+}

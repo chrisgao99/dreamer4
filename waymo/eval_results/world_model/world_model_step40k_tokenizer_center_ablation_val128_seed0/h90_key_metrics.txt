@@ -1,0 +1,48 @@
+agent_xy_mae_m
+  baseline=5.7070894
+  decoder_center=5.702002 improvement=+0.089% win_rate=0.414 delta_ci=[-0.026685139256128875, 0.01651040101290664]
+  encoder_decoder_center=5.702002 improvement=+0.089% win_rate=0.414 delta_ci=[-0.026685139256128875, 0.01651040101290664]
+agent_fde_mae_m
+  baseline=9.8989265
+  decoder_center=9.9623884 improvement=-0.641% win_rate=0.477 delta_ci=[-0.021221281617088708, 0.14814516681353607]
+  encoder_decoder_center=9.9623884 improvement=-0.641% win_rate=0.477 delta_ci=[-0.021221281617088708, 0.14814516681353607]
+focus_agent_xy_mae_m
+  baseline=0.77884621
+  decoder_center=0.77245013 improvement=+0.821% win_rate=0.656 delta_ci=[-0.01012831771557825, -0.0026638567559639894]
+  encoder_decoder_center=0.77245013 improvement=+0.821% win_rate=0.656 delta_ci=[-0.01012831771557825, -0.0026638567559639894]
+focus_agent_fde_m
+  baseline=1.5306864
+  decoder_center=1.5307163 improvement=-0.002% win_rate=0.000 delta_ci=[-2.869203686714172e-05, 8.846711367368698e-05]
+  encoder_decoder_center=1.5307163 improvement=-0.002% win_rate=0.000 delta_ci=[-2.869203686714172e-05, 8.846711367368698e-05]
+agent_delta_xy_mae_m
+  baseline=0.19165345
+  decoder_center=0.19121916 improvement=+0.227% win_rate=0.812 delta_ci=[-0.003298319345920645, 0.002429744280523919]
+  encoder_decoder_center=0.19121916 improvement=+0.227% win_rate=0.812 delta_ci=[-0.003298319345920645, 0.002429744280523919]
+agent_kinematic_xy_mae_m
+  baseline=0.1110837
+  decoder_center=0.11170715 improvement=-0.561% win_rate=0.750 delta_ci=[-0.002137839026425502, 0.0033847419143677713]
+  encoder_decoder_center=0.11170715 improvement=-0.561% win_rate=0.750 delta_ci=[-0.002137839026425502, 0.0033847419143677713]
+agent_speed_yaw_kinematic_mae_m
+  baseline=0.11600267
+  decoder_center=0.11619778 improvement=-0.168% win_rate=0.781 delta_ci=[-0.0024927911431617744, 0.0028830194346695847]
+  encoder_decoder_center=0.11619778 improvement=-0.168% win_rate=0.781 delta_ci=[-0.0024927911431617744, 0.0028830194346695847]
+agent_speed_mae_mps
+  baseline=0.9979492
+  decoder_center=0.99517929 improvement=+0.278% win_rate=0.695 delta_ci=[-0.004067586512171451, -0.0014722252861999238]
+  encoder_decoder_center=0.99517929 improvement=+0.278% win_rate=0.695 delta_ci=[-0.004067586512171451, -0.0014722252861999238]
+agent_vxvy_mae_mps
+  baseline=1.2873426
+  decoder_center=1.2821469 improvement=+0.404% win_rate=0.828 delta_ci=[-0.009596774057626666, -0.0007946248574629998]
+  encoder_decoder_center=1.2821469 improvement=+0.404% win_rate=0.828 delta_ci=[-0.009596774057626666, -0.0007946248574629998]
+agent_yaw_mae_deg
+  baseline=13.063366
+  decoder_center=13.06199 improvement=+0.011% win_rate=0.422 delta_ci=[-0.04127705194082091, 0.038526231460533834]
+  encoder_decoder_center=13.06199 improvement=+0.011% win_rate=0.422 delta_ci=[-0.04127705194082091, 0.038526231460533834]
+agent_valid_acc
+  baseline=0.83353198
+  decoder_center=0.83376376 improvement=+0.028% win_rate=0.352 delta_ci=[-8.019288005301476e-05, 0.0005437577602452946]
+  encoder_decoder_center=0.83376376 improvement=+0.028% win_rate=0.352 delta_ci=[-8.019288005301476e-05, 0.0005437577602452946]
+latent_mse_future
+  baseline=0.08053481
+  decoder_center=0.08053481 improvement=+0.000% win_rate=0.000 delta_ci=[0.0, 0.0]
+  encoder_decoder_center=0.080486741 improvement=+0.060% win_rate=0.594 delta_ci=[-7.454393797874086e-05, -2.1593493704277948e-05]

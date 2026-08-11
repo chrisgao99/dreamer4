@@ -1,0 +1,226 @@
+{
+  "config": {
+    "dt": 0.1,
+    "event_search_start": 10,
+    "history_steps": 20,
+    "max_pet_steps": 30,
+    "max_spatial_distance_m": 6.0,
+    "post_first_steps": 40,
+    "relevance_distance_scale_m": 3.0,
+    "relevance_pet_scale_s": 1.5
+  },
+  "data_root": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k",
+  "elapsed_seconds": 426.2752401828766,
+  "feature_names": [
+    "first_x_m",
+    "first_y_m",
+    "first_vx_mps",
+    "first_vy_mps",
+    "first_heading_sin",
+    "first_heading_cos",
+    "second_x_m",
+    "second_y_m",
+    "second_vx_mps",
+    "second_vy_mps",
+    "second_heading_sin",
+    "second_heading_cos"
+  ],
+  "normalization": {
+    "clipping": false,
+    "fit_split": "train",
+    "iqr": [
+      14.98626708984375,
+      2.9697775840759277,
+      9.762829780578613,
+      1.0,
+      1.0,
+      1.0,
+      15.603498458862305,
+      3.3246009349823,
+      10.36598014831543,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "median": [
+      2.776827812194824,
+      -0.06583249568939209,
+      5.823863983154297,
+      0.0,
+      0.0,
+      0.0,
+      -2.5590035915374756,
+      0.10443297028541565,
+      5.3412628173828125,
+      -1.1303500286885537e-05,
+      0.0,
+      0.0
+    ],
+    "method": "global per-channel median/IQR over all samples and timesteps; position/velocity scales have 1-unit floors and heading sin/cos remain native",
+    "per_sample": false
+  },
+  "similarity": {
+    "candidate_retrieval": "low-frequency DCT descriptor followed by exact full-sequence reranking",
+    "different_scenario_only": true,
+    "distance": "RMS Euclidean over the complete normalized 60x12 sequence",
+    "dtw": false,
+    "soft_kernel": "exp(-distance^2 / (local_scale_i * local_scale_j))"
+  },
+  "split_summaries": {
+    "train": {
+      "candidate_focus_pairs": 1059067,
+      "duplicate_pairs": 17664,
+      "elapsed_seconds": 329.7547070980072,
+      "failed_focus_files": 0,
+      "failures_preview": [],
+      "focus_files": 44998,
+      "neighbor_distance_quantiles": {
+        "0.0": 0.0,
+        "0.1": 0.07333896458148956,
+        "0.25": 0.10312370210886002,
+        "0.5": 0.153449185192585,
+        "0.75": 0.23645470663905144,
+        "0.9": 0.34723580777645124,
+        "1.0": 3.4692089557647705
+      },
+      "neighbours": {
+        "dct_coefficients_per_channel": 3,
+        "elapsed_seconds": 30.97410750389099,
+        "local_scale_fallback": 0.16364827752113342,
+        "local_scale_k": 20,
+        "num_neighbours": 32,
+        "num_samples": 103802,
+        "retrieval_candidates": 256,
+        "retrieval_dimension": 36,
+        "samples_with_neighbours": 103802,
+        "stored_edges": 3321664
+      },
+      "outputs": {
+        "samples_csv": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_soft_pairs_50k_v1/train_samples.csv",
+        "samples_npz": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_soft_pairs_50k_v1/train_samples.npz",
+        "soft_neighbors_npz": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_soft_pairs_50k_v1/train_soft_neighbors.npz"
+      },
+      "pet_steps_quantiles": {
+        "0.0": 0.0,
+        "0.1": 6.0,
+        "0.25": 15.0,
+        "0.5": 25.0,
+        "0.75": 30.0,
+        "0.9": 30.0,
+        "1.0": 30.0
+      },
+      "relevance_score_quantiles": {
+        "0.0": 0.018316110596060753,
+        "0.1": 0.03991565853357315,
+        "0.25": 0.07504858262836933,
+        "0.5": 0.15086647123098373,
+        "0.75": 0.3514225110411644,
+        "0.9": 0.5244553983211517,
+        "1.0": 0.9916378855705261
+      },
+      "retained_before_dedup": 121466,
+      "retained_pair_samples": 103802,
+      "soft_similarity_quantiles": {
+        "0.0": 1.1228303975485687e-07,
+        "0.1": 0.21274051815271378,
+        "0.25": 0.27914945781230927,
+        "0.5": 0.3518282175064087,
+        "0.75": 0.42991670221090317,
+        "0.9": 0.5218673348426819,
+        "1.0": 1.0
+      },
+      "spatial_distance_quantiles_m": {
+        "0.0": 9.1552734375e-05,
+        "0.1": 0.2118336409330368,
+        "0.25": 1.2350144386291504,
+        "0.5": 3.297098994255066,
+        "0.75": 4.128803014755249,
+        "0.9": 5.232283496856692,
+        "1.0": 5.9999613761901855
+      },
+      "split": "train",
+      "unique_scenarios": 21863
+    },
+    "val": {
+      "candidate_focus_pairs": 117318,
+      "duplicate_pairs": 1964,
+      "elapsed_seconds": 36.645262002944946,
+      "failed_focus_files": 0,
+      "failures_preview": [],
+      "focus_files": 5002,
+      "neighbor_distance_quantiles": {
+        "0.0": 6.728576096293182e-08,
+        "0.1": 0.10461667701601982,
+        "0.25": 0.14598841220140457,
+        "0.5": 0.2124537155032158,
+        "0.75": 0.33036649972200394,
+        "0.9": 0.4975962400436401,
+        "1.0": 3.285027027130127
+      },
+      "neighbours": {
+        "dct_coefficients_per_channel": 3,
+        "elapsed_seconds": 2.3260409832000732,
+        "local_scale_fallback": 0.22685590386390686,
+        "local_scale_k": 20,
+        "num_neighbours": 32,
+        "num_samples": 11775,
+        "retrieval_candidates": 256,
+        "retrieval_dimension": 36,
+        "samples_with_neighbours": 11775,
+        "stored_edges": 376800
+      },
+      "outputs": {
+        "samples_csv": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_soft_pairs_50k_v1/val_samples.csv",
+        "samples_npz": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_soft_pairs_50k_v1/val_samples.npz",
+        "soft_neighbors_npz": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_soft_pairs_50k_v1/val_soft_neighbors.npz"
+      },
+      "pet_steps_quantiles": {
+        "0.0": 0.0,
+        "0.1": 6.0,
+        "0.25": 15.0,
+        "0.5": 25.0,
+        "0.75": 30.0,
+        "0.9": 30.0,
+        "1.0": 30.0
+      },
+      "relevance_score_quantiles": {
+        "0.0": 0.018319057300686836,
+        "0.1": 0.039825291186571125,
+        "0.25": 0.07674399763345718,
+        "0.5": 0.15428495407104492,
+        "0.75": 0.35927802324295044,
+        "0.9": 0.526001489162445,
+        "1.0": 0.9812505841255188
+      },
+      "retained_before_dedup": 13739,
+      "retained_pair_samples": 11775,
+      "soft_similarity_quantiles": {
+        "0.0": 0.0004627338203135878,
+        "0.1": 0.19032936692237853,
+        "0.25": 0.26443008333444595,
+        "0.5": 0.350973516702652,
+        "0.75": 0.44697096943855286,
+        "0.9": 0.5594017684459691,
+        "1.0": 1.0
+      },
+      "spatial_distance_quantiles_m": {
+        "0.0": 0.0029357573948800564,
+        "0.1": 0.197377547621727,
+        "0.25": 1.148763656616211,
+        "0.5": 3.3056962490081787,
+        "0.75": 4.107470750808716,
+        "0.9": 5.216029930114746,
+        "1.0": 5.999720096588135
+      },
+      "split": "val",
+      "unique_scenarios": 2436
+    }
+  },
+  "splits": [
+    "train",
+    "val"
+  ],
+  "total_focus_files": 50000,
+  "total_retained_pair_samples": 115577,
+  "version": "shared_time_axis_soft_pairs_v1"
+}

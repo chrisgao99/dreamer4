@@ -1,0 +1,578 @@
+{
+  "decoder_chunk_seams": {
+    "future_index_21": {
+      "mean_position_step_across_seam_m": 1.4253530502319336,
+      "mean_position_step_before_seam_m": 0.38351187109947205,
+      "mean_spatial_std_at_seam_m": 2.3385963439941406,
+      "mean_spatial_std_before_m": 0.7095236778259277,
+      "original_frame_index_zero_based": 32,
+      "position_step_jump_ratio": 3.71658130462991,
+      "prediction_time_s": 2.2,
+      "spatial_std_jump_m": 1.629072666168213,
+      "spatial_std_jump_ratio": 3.2960088818457787
+    },
+    "future_index_51": {
+      "mean_position_step_across_seam_m": 1.6384307146072388,
+      "mean_position_step_before_seam_m": 0.38128674030303955,
+      "mean_spatial_std_at_seam_m": 5.522593975067139,
+      "mean_spatial_std_before_m": 4.147240161895752,
+      "original_frame_index_zero_based": 62,
+      "position_step_jump_ratio": 4.297109082012778,
+      "prediction_time_s": 5.2,
+      "spatial_std_jump_m": 1.3753538131713867,
+      "spatial_std_jump_ratio": 1.3316310991121132
+    }
+  },
+  "diversity_scope": "all nonfocus current-valid selected agents; predicted future is not validity-masked",
+  "focus_max_oracle_position_error_m": 0.0,
+  "focus_slot": 0,
+  "focus_track_id": 278,
+  "future_steps": 80,
+  "horizons": {
+    "1s": {
+      "max_agent_spatial_std_m": 0.540884256362915,
+      "mean_pairwise_distance_m": 0.24416320025920868,
+      "mean_spatial_std_m": 0.21947187185287476,
+      "p90_agent_spatial_std_m": 0.3685180723667144
+    },
+    "3s": {
+      "max_agent_spatial_std_m": 9.691751480102539,
+      "mean_pairwise_distance_m": 1.9766855239868164,
+      "mean_spatial_std_m": 2.56046986579895,
+      "p90_agent_spatial_std_m": 6.661987161636351
+    },
+    "5s": {
+      "max_agent_spatial_std_m": 9.740655899047852,
+      "mean_pairwise_distance_m": 3.6822633743286133,
+      "mean_spatial_std_m": 4.049910545349121,
+      "p90_agent_spatial_std_m": 8.275534534454344
+    },
+    "8s": {
+      "max_agent_spatial_std_m": 27.645977020263672,
+      "mean_pairwise_distance_m": 8.471521377563477,
+      "mean_spatial_std_m": 8.694697380065918,
+      "p90_agent_spatial_std_m": 18.438529777526856
+    }
+  },
+  "max_endpoint_pairwise_distance_m": 138.09825134277344,
+  "mean_endpoint_pairwise_distance_m": 8.471521377563477,
+  "mean_endpoint_spatial_std_m": 8.694697380065918,
+  "mean_endpoint_yaw_circular_std_rad": 0.2867755889892578,
+  "mean_spatial_std_over_time_agents_m": 3.6427245140075684,
+  "mean_trajectory_pairwise_distance_m": 3.324798345565796,
+  "mean_yaw_circular_std_rad": 0.15546774864196777,
+  "median_trajectory_pairwise_distance_m": 0.9747279286384583,
+  "num_current_valid_agents": 25,
+  "num_exact_unique_nonfocus_joint_trajectories": 32,
+  "num_nonfocus_current_valid_agents": 24,
+  "num_rollouts": 32,
+  "p90_endpoint_pairwise_distance_m": 21.88522243499757,
+  "p90_trajectory_pairwise_distance_m": 7.59942989349365,
+  "pairwise_mean_trajectory_distance_by_rollout_pair_m": {
+    "different_microbatch_mean": 3.3317489624023438,
+    "max": 6.358190059661865,
+    "mean": 3.3247978687286377,
+    "min": 1.1479642391204834,
+    "rollout_batch_size": 8,
+    "same_microbatch_mean": 3.3009650707244873
+  },
+  "partner_track_id": 285,
+  "per_agent": [
+    {
+      "agent_id": 256,
+      "endpoint_covariance_eigenvalues_m2": [
+        45.42960534942351,
+        378.6276637243378
+      ],
+      "endpoint_spatial_std_m": 20.592649459838867,
+      "endpoint_yaw_circular_std_rad": 0.09592975676059723,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 86.43061828613281,
+      "mean_endpoint_pairwise_distance_m": 20.449378967285156,
+      "mean_trajectory_pairwise_distance_m": 8.597740173339844,
+      "mean_valid_probability": 0.9281171560287476,
+      "mean_yaw_circular_std_rad": 0.15621504187583923,
+      "slot": 17,
+      "valid_probability_std": 0.2582775950431824
+    },
+    {
+      "agent_id": 262,
+      "endpoint_covariance_eigenvalues_m2": [
+        49.25916447534274,
+        715.0408338385446
+      ],
+      "endpoint_spatial_std_m": 27.645977020263672,
+      "endpoint_yaw_circular_std_rad": 0.5029252767562866,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 138.09825134277344,
+      "mean_endpoint_pairwise_distance_m": 25.590051651000977,
+      "mean_trajectory_pairwise_distance_m": 7.016498565673828,
+      "mean_valid_probability": 0.9753734469413757,
+      "mean_yaw_circular_std_rad": 0.19036433100700378,
+      "slot": 19,
+      "valid_probability_std": 0.15492722392082214
+    },
+    {
+      "agent_id": 282,
+      "endpoint_covariance_eigenvalues_m2": [
+        32.923688455701104,
+        282.34787513575003
+      ],
+      "endpoint_spatial_std_m": 17.755887985229492,
+      "endpoint_yaw_circular_std_rad": 0.8406110405921936,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 77.14813995361328,
+      "mean_endpoint_pairwise_distance_m": 18.558246612548828,
+      "mean_trajectory_pairwise_distance_m": 6.742803573608398,
+      "mean_valid_probability": 0.8867145776748657,
+      "mean_yaw_circular_std_rad": 0.3726973533630371,
+      "slot": 6,
+      "valid_probability_std": 0.31693193316459656
+    },
+    {
+      "agent_id": 271,
+      "endpoint_covariance_eigenvalues_m2": [
+        8.967145243080818,
+        220.2333383853903
+      ],
+      "endpoint_spatial_std_m": 15.139368057250977,
+      "endpoint_yaw_circular_std_rad": 0.14416195452213287,
+      "gt_valid_future_steps": 53,
+      "max_endpoint_pairwise_distance_m": 54.412593841552734,
+      "mean_endpoint_pairwise_distance_m": 17.99995994567871,
+      "mean_trajectory_pairwise_distance_m": 5.767909049987793,
+      "mean_valid_probability": 0.9215081930160522,
+      "mean_yaw_circular_std_rad": 0.0397709496319294,
+      "slot": 3,
+      "valid_probability_std": 0.2688302993774414
+    },
+    {
+      "agent_id": 277,
+      "endpoint_covariance_eigenvalues_m2": [
+        57.16361530142212,
+        293.6901119184674
+      ],
+      "endpoint_spatial_std_m": 18.731090545654297,
+      "endpoint_yaw_circular_std_rad": 0.5111212730407715,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 93.94561004638672,
+      "mean_endpoint_pairwise_distance_m": 18.770503997802734,
+      "mean_trajectory_pairwise_distance_m": 5.142600059509277,
+      "mean_valid_probability": 0.9441372752189636,
+      "mean_yaw_circular_std_rad": 0.17232927680015564,
+      "slot": 20,
+      "valid_probability_std": 0.22960272431373596
+    },
+    {
+      "agent_id": 257,
+      "endpoint_covariance_eigenvalues_m2": [
+        5.687066169722066,
+        188.88720141018558
+      ],
+      "endpoint_spatial_std_m": 13.94898796081543,
+      "endpoint_yaw_circular_std_rad": 0.2522314488887787,
+      "gt_valid_future_steps": 71,
+      "max_endpoint_pairwise_distance_m": 52.48590850830078,
+      "mean_endpoint_pairwise_distance_m": 13.873649597167969,
+      "mean_trajectory_pairwise_distance_m": 4.940376281738281,
+      "mean_valid_probability": 0.9988206028938293,
+      "mean_yaw_circular_std_rad": 0.11934735625982285,
+      "slot": 2,
+      "valid_probability_std": 0.034212272614240646
+    },
+    {
+      "agent_id": 267,
+      "endpoint_covariance_eigenvalues_m2": [
+        52.98559856306568,
+        94.7865505333007
+      ],
+      "endpoint_spatial_std_m": 12.156157493591309,
+      "endpoint_yaw_circular_std_rad": 0.35516709089279175,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 54.24831008911133,
+      "mean_endpoint_pairwise_distance_m": 13.083840370178223,
+      "mean_trajectory_pairwise_distance_m": 4.698143005371094,
+      "mean_valid_probability": 0.9581952095031738,
+      "mean_yaw_circular_std_rad": 0.23641471564769745,
+      "slot": 11,
+      "valid_probability_std": 0.20012257993221283
+    },
+    {
+      "agent_id": 255,
+      "endpoint_covariance_eigenvalues_m2": [
+        10.20235045705436,
+        89.25268375753868
+      ],
+      "endpoint_spatial_std_m": 9.9727144241333,
+      "endpoint_yaw_circular_std_rad": 0.29452016949653625,
+      "gt_valid_future_steps": 30,
+      "max_endpoint_pairwise_distance_m": 57.5330924987793,
+      "mean_endpoint_pairwise_distance_m": 8.115788459777832,
+      "mean_trajectory_pairwise_distance_m": 4.368004322052002,
+      "mean_valid_probability": 0.9514750242233276,
+      "mean_yaw_circular_std_rad": 0.21674689650535583,
+      "slot": 21,
+      "valid_probability_std": 0.21470633149147034
+    },
+    {
+      "agent_id": 265,
+      "endpoint_covariance_eigenvalues_m2": [
+        11.40549409570697,
+        30.843337842256368
+      ],
+      "endpoint_spatial_std_m": 6.499910354614258,
+      "endpoint_yaw_circular_std_rad": 0.8505967259407043,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 24.842132568359375,
+      "mean_endpoint_pairwise_distance_m": 7.2480244636535645,
+      "mean_trajectory_pairwise_distance_m": 4.348057270050049,
+      "mean_valid_probability": 0.872650146484375,
+      "mean_yaw_circular_std_rad": 0.4778514504432678,
+      "slot": 14,
+      "valid_probability_std": 0.33335503935813904
+    },
+    {
+      "agent_id": 269,
+      "endpoint_covariance_eigenvalues_m2": [
+        13.92416444654632,
+        160.17789164088305
+      ],
+      "endpoint_spatial_std_m": 13.19477367401123,
+      "endpoint_yaw_circular_std_rad": 0.501024603843689,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 73.4770736694336,
+      "mean_endpoint_pairwise_distance_m": 7.208648681640625,
+      "mean_trajectory_pairwise_distance_m": 4.091598987579346,
+      "mean_valid_probability": 0.9675677418708801,
+      "mean_yaw_circular_std_rad": 0.3223969638347626,
+      "slot": 13,
+      "valid_probability_std": 0.17711548507213593
+    },
+    {
+      "agent_id": 272,
+      "endpoint_covariance_eigenvalues_m2": [
+        3.1593342869786607,
+        48.292512587600456
+      ],
+      "endpoint_spatial_std_m": 7.172994136810303,
+      "endpoint_yaw_circular_std_rad": 0.035568125545978546,
+      "gt_valid_future_steps": 71,
+      "max_endpoint_pairwise_distance_m": 23.694839477539062,
+      "mean_endpoint_pairwise_distance_m": 8.285011291503906,
+      "mean_trajectory_pairwise_distance_m": 3.734640121459961,
+      "mean_valid_probability": 0.9699055552482605,
+      "mean_yaw_circular_std_rad": 0.04129139333963394,
+      "slot": 18,
+      "valid_probability_std": 0.17079821228981018
+    },
+    {
+      "agent_id": 263,
+      "endpoint_covariance_eigenvalues_m2": [
+        0.3131923263119134,
+        122.74560317500504
+      ],
+      "endpoint_spatial_std_m": 11.093186378479004,
+      "endpoint_yaw_circular_std_rad": 0.2085154950618744,
+      "gt_valid_future_steps": 7,
+      "max_endpoint_pairwise_distance_m": 67.29888153076172,
+      "mean_endpoint_pairwise_distance_m": 5.5809326171875,
+      "mean_trajectory_pairwise_distance_m": 3.255310535430908,
+      "mean_valid_probability": 0.957012951374054,
+      "mean_yaw_circular_std_rad": 0.15663732588291168,
+      "slot": 24,
+      "valid_probability_std": 0.20278148353099823
+    },
+    {
+      "agent_id": 260,
+      "endpoint_covariance_eigenvalues_m2": [
+        7.003046518157502,
+        37.52188210450847
+      ],
+      "endpoint_spatial_std_m": 6.67270040512085,
+      "endpoint_yaw_circular_std_rad": 0.3337743282318115,
+      "gt_valid_future_steps": 79,
+      "max_endpoint_pairwise_distance_m": 33.08907699584961,
+      "mean_endpoint_pairwise_distance_m": 7.12440824508667,
+      "mean_trajectory_pairwise_distance_m": 2.691424608230591,
+      "mean_valid_probability": 0.998755931854248,
+      "mean_yaw_circular_std_rad": 0.15166744589805603,
+      "slot": 15,
+      "valid_probability_std": 0.03436633199453354
+    },
+    {
+      "agent_id": 253,
+      "endpoint_covariance_eigenvalues_m2": [
+        23.90849980702089,
+        33.87518041252591
+      ],
+      "endpoint_spatial_std_m": 7.601557731628418,
+      "endpoint_yaw_circular_std_rad": 0.39838293194770813,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 38.4828987121582,
+      "mean_endpoint_pairwise_distance_m": 8.105962753295898,
+      "mean_trajectory_pairwise_distance_m": 2.640566825866699,
+      "mean_valid_probability": 0.9628579020500183,
+      "mean_yaw_circular_std_rad": 0.23586693406105042,
+      "slot": 12,
+      "valid_probability_std": 0.1890212595462799
+    },
+    {
+      "agent_id": 280,
+      "endpoint_covariance_eigenvalues_m2": [
+        1.061734304435267,
+        11.273636579356346
+      ],
+      "endpoint_spatial_std_m": 3.5121748447418213,
+      "endpoint_yaw_circular_std_rad": 0.10518138110637665,
+      "gt_valid_future_steps": 59,
+      "max_endpoint_pairwise_distance_m": 14.654129028320312,
+      "mean_endpoint_pairwise_distance_m": 3.9987709522247314,
+      "mean_trajectory_pairwise_distance_m": 2.4587438106536865,
+      "mean_valid_probability": 0.9980392456054688,
+      "mean_yaw_circular_std_rad": 0.08142196387052536,
+      "slot": 5,
+      "valid_probability_std": 0.044150471687316895
+    },
+    {
+      "agent_id": 270,
+      "endpoint_covariance_eigenvalues_m2": [
+        0.8667833526204594,
+        13.181358425587476
+      ],
+      "endpoint_spatial_std_m": 3.7480850219726562,
+      "endpoint_yaw_circular_std_rad": 0.03896293416619301,
+      "gt_valid_future_steps": 21,
+      "max_endpoint_pairwise_distance_m": 15.807490348815918,
+      "mean_endpoint_pairwise_distance_m": 4.172304153442383,
+      "mean_trajectory_pairwise_distance_m": 1.9205482006072998,
+      "mean_valid_probability": 0.9820259809494019,
+      "mean_yaw_circular_std_rad": 0.03195241838693619,
+      "slot": 16,
+      "valid_probability_std": 0.13283562660217285
+    },
+    {
+      "agent_id": 264,
+      "endpoint_covariance_eigenvalues_m2": [
+        0.2624295971667667,
+        3.916625998245072
+      ],
+      "endpoint_spatial_std_m": 2.044273853302002,
+      "endpoint_yaw_circular_std_rad": 0.06589129567146301,
+      "gt_valid_future_steps": 58,
+      "max_endpoint_pairwise_distance_m": 11.029243469238281,
+      "mean_endpoint_pairwise_distance_m": 2.3497097492218018,
+      "mean_trajectory_pairwise_distance_m": 1.753982663154602,
+      "mean_valid_probability": 0.997653603553772,
+      "mean_yaw_circular_std_rad": 0.03934348374605179,
+      "slot": 4,
+      "valid_probability_std": 0.04835526645183563
+    },
+    {
+      "agent_id": 285,
+      "endpoint_covariance_eigenvalues_m2": [
+        0.18696008663314878,
+        5.565896088552485
+      ],
+      "endpoint_spatial_std_m": 2.3985111713409424,
+      "endpoint_yaw_circular_std_rad": 0.15194275975227356,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 9.9005126953125,
+      "mean_endpoint_pairwise_distance_m": 2.860175848007202,
+      "mean_trajectory_pairwise_distance_m": 1.6552505493164062,
+      "mean_valid_probability": 0.9999961853027344,
+      "mean_yaw_circular_std_rad": 0.024547599256038666,
+      "slot": 1,
+      "valid_probability_std": 4.562559297482949e-06
+    },
+    {
+      "agent_id": 254,
+      "endpoint_covariance_eigenvalues_m2": [
+        0.768319068524876,
+        13.863154889956137
+      ],
+      "endpoint_spatial_std_m": 3.825110912322998,
+      "endpoint_yaw_circular_std_rad": 0.49063509702682495,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 13.179237365722656,
+      "mean_endpoint_pairwise_distance_m": 4.527817249298096,
+      "mean_trajectory_pairwise_distance_m": 1.2990739345550537,
+      "mean_valid_probability": 0.9929617047309875,
+      "mean_yaw_circular_std_rad": 0.23494859039783478,
+      "slot": 10,
+      "valid_probability_std": 0.08330569416284561
+    },
+    {
+      "agent_id": 284,
+      "endpoint_covariance_eigenvalues_m2": [
+        0.28542133492505406,
+        1.29459340288728
+      ],
+      "endpoint_spatial_std_m": 1.2569862604141235,
+      "endpoint_yaw_circular_std_rad": 0.2551889419555664,
+      "gt_valid_future_steps": 75,
+      "max_endpoint_pairwise_distance_m": 5.8260416984558105,
+      "mean_endpoint_pairwise_distance_m": 1.3678157329559326,
+      "mean_trajectory_pairwise_distance_m": 0.6649338603019714,
+      "mean_valid_probability": 0.9999920725822449,
+      "mean_yaw_circular_std_rad": 0.1749265491962433,
+      "slot": 7,
+      "valid_probability_std": 3.0157534638419747e-06
+    },
+    {
+      "agent_id": 311,
+      "endpoint_covariance_eigenvalues_m2": [
+        0.0977907174594548,
+        0.8648826797549664
+      ],
+      "endpoint_spatial_std_m": 0.9811592102050781,
+      "endpoint_yaw_circular_std_rad": 0.34630489349365234,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 2.998046636581421,
+      "mean_endpoint_pairwise_distance_m": 1.1590638160705566,
+      "mean_trajectory_pairwise_distance_m": 0.5844306945800781,
+      "mean_valid_probability": 0.999978244304657,
+      "mean_yaw_circular_std_rad": 0.1953498125076294,
+      "slot": 9,
+      "valid_probability_std": 6.143828613858204e-06
+    },
+    {
+      "agent_id": 274,
+      "endpoint_covariance_eigenvalues_m2": [
+        0.07970179616085865,
+        1.3374279680574541
+      ],
+      "endpoint_spatial_std_m": 1.1904326677322388,
+      "endpoint_yaw_circular_std_rad": 0.027905330061912537,
+      "gt_valid_future_steps": 70,
+      "max_endpoint_pairwise_distance_m": 6.668333053588867,
+      "mean_endpoint_pairwise_distance_m": 1.0573054552078247,
+      "mean_trajectory_pairwise_distance_m": 0.5379447937011719,
+      "mean_valid_probability": 0.9886517524719238,
+      "mean_yaw_circular_std_rad": 0.017474835738539696,
+      "slot": 23,
+      "valid_probability_std": 0.10582585632801056
+    },
+    {
+      "agent_id": 266,
+      "endpoint_covariance_eigenvalues_m2": [
+        0.17665226591375827,
+        0.455192975828152
+      ],
+      "endpoint_spatial_std_m": 0.7948869466781616,
+      "endpoint_yaw_circular_std_rad": 0.028881864622235298,
+      "gt_valid_future_steps": 5,
+      "max_endpoint_pairwise_distance_m": 2.9173648357391357,
+      "mean_endpoint_pairwise_distance_m": 0.972179651260376,
+      "mean_trajectory_pairwise_distance_m": 0.48372218012809753,
+      "mean_valid_probability": 0.976937472820282,
+      "mean_yaw_circular_std_rad": 0.013981485739350319,
+      "slot": 22,
+      "valid_probability_std": 0.15004009008407593
+    },
+    {
+      "agent_id": 259,
+      "endpoint_covariance_eigenvalues_m2": [
+        0.0826248770705465,
+        0.4696685505617583
+      ],
+      "endpoint_spatial_std_m": 0.7431644797325134,
+      "endpoint_yaw_circular_std_rad": 0.04718979448080063,
+      "gt_valid_future_steps": 80,
+      "max_endpoint_pairwise_distance_m": 2.2087526321411133,
+      "mean_endpoint_pairwise_distance_m": 0.8569656014442444,
+      "mean_trajectory_pairwise_distance_m": 0.4008437991142273,
+      "mean_valid_probability": 0.9999896287918091,
+      "mean_yaw_circular_std_rad": 0.02768203243613243,
+      "slot": 8,
+      "valid_probability_std": 3.3765920761652524e-06
+    }
+  ],
+  "protocol": "oracle_focus_local_32slot_32rollouts",
+  "rollout_mean_distance_to_ensemble_mean_m": [
+    1.7886775732040405,
+    1.9787267446517944,
+    2.497317314147949,
+    2.663619041442871,
+    1.4720807075500488,
+    1.4973304271697998,
+    3.3760077953338623,
+    2.8782167434692383,
+    2.511274576187134,
+    1.5919716358184814,
+    2.530921459197998,
+    1.5800682306289673,
+    1.9111472368240356,
+    2.742673397064209,
+    3.3377556800842285,
+    1.8754428625106812,
+    1.8574429750442505,
+    1.470916509628296,
+    2.5272254943847656,
+    2.7103817462921143,
+    3.633066415786743,
+    1.8688801527023315,
+    1.4635869264602661,
+    2.7115471363067627,
+    3.058985710144043,
+    2.5096018314361572,
+    3.447194814682007,
+    1.5632189512252808,
+    3.9523189067840576,
+    2.8329317569732666,
+    1.8776307106018066,
+    1.4580862522125244
+  ],
+  "rollout_nonfocus_ade_to_gt_m": {
+    "max": 9.548991203308105,
+    "mean": 7.612160742282867,
+    "min": 6.99678897857666,
+    "per_rollout": [
+      7.665211200714111,
+      7.592541217803955,
+      8.327954292297363,
+      7.2553887367248535,
+      7.120947360992432,
+      7.488608360290527,
+      7.48405122756958,
+      7.1608686447143555,
+      6.99678897857666,
+      7.292773246765137,
+      7.98879861831665,
+      7.077126979827881,
+      7.219056129455566,
+      7.877658367156982,
+      7.329051494598389,
+      7.2501630783081055,
+      7.120556354522705,
+      7.3158111572265625,
+      8.159832954406738,
+      8.16699504852295,
+      9.548991203308105,
+      7.4153313636779785,
+      7.226670742034912,
+      8.574431419372559,
+      7.540565013885498,
+      8.067194938659668,
+      7.550883769989014,
+      7.247750759124756,
+      7.564383506774902,
+      8.402266502380371,
+      7.331683158874512,
+      7.2288079261779785
+    ],
+    "std": 0.5439242093167607
+  },
+  "rollout_npz": "/p/yufeng/tri30/dreamer4/waymo/eval_results/wosac/wosac_oracle_focus_step40k_sample03_77046993fcd9f0bc_randomness32/stage1_step500k_randomness32/rollouts/00000_77046993fcd9f0bc_focus_278.npz",
+  "scenario_id": "77046993fcd9f0bc",
+  "source_npz": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k/val/77046993fcd9f0bc_focus_278_src3.npz",
+  "top_diverse_agent_ids": [
+    256,
+    262,
+    282,
+    271,
+    277,
+    257,
+    267,
+    255
+  ]
+}

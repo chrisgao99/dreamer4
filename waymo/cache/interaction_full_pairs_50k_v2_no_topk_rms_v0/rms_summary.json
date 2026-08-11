@@ -1,0 +1,272 @@
+{
+  "alignment": {
+    "anchor": "primary_step_first (first-arrival agent)",
+    "anchor_output_index": 19,
+    "fractional_steps": "linear interpolation; heading sin/cos renormalized",
+    "time_offsets": [
+      -19.0,
+      -18.0,
+      -17.0,
+      -16.0,
+      -15.0,
+      -14.0,
+      -13.0,
+      -12.0,
+      -11.0,
+      -10.0,
+      -9.0,
+      -8.0,
+      -7.0,
+      -6.0,
+      -5.0,
+      -4.0,
+      -3.0,
+      -2.0,
+      -1.0,
+      0.0,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0,
+      7.0,
+      8.0,
+      9.0,
+      10.0,
+      11.0,
+      12.0,
+      13.0,
+      14.0,
+      15.0,
+      16.0,
+      17.0,
+      18.0,
+      19.0,
+      20.0,
+      21.0,
+      22.0,
+      23.0,
+      24.0,
+      25.0,
+      26.0,
+      27.0,
+      28.0,
+      29.0,
+      30.0,
+      31.0,
+      32.0,
+      33.0,
+      34.0,
+      35.0,
+      36.0,
+      37.0,
+      38.0,
+      39.0,
+      40.0
+    ]
+  },
+  "config": {
+    "dct_coefficients": 3,
+    "future_steps": 40,
+    "history_steps": 19,
+    "mask_descriptor_weight": 0.25,
+    "min_pair_overlap": 0.7,
+    "min_valid_fraction": 0.8,
+    "num_neighbours": 32,
+    "query_chunk_size": 2048,
+    "retrieval_buffer": 64,
+    "retrieval_candidates": 1024
+  },
+  "dataset_dir": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk",
+  "distance": {
+    "coarse_retrieval": "low-frequency DCT descriptor plus mask DCT",
+    "different_scenario_only": true,
+    "exact_reranking": true,
+    "metric": "RMS Euclidean over common valid normalized T x 2 x 6 states",
+    "strata": [
+      "ordered_first_agent_type",
+      "ordered_second_agent_type",
+      "fallback_vs_contact"
+    ]
+  },
+  "elapsed_seconds": 286.9258191585541,
+  "normalization": {
+    "fit_split": "train",
+    "heading_median": 0.0,
+    "heading_scale": 1.0,
+    "iqr": [
+      [
+        18.343536376953125,
+        1.3866549730300903,
+        8.005226135253906,
+        1.0,
+        1.0,
+        1.0
+      ],
+      [
+        20.617765426635742,
+        2.8002805709838867,
+        9.270594596862793,
+        1.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "median": [
+      [
+        6.519420623779297,
+        0.005133134312927723,
+        6.999481678009033,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        -6.439896583557129,
+        0.015667542815208435,
+        4.804262161254883,
+        0.0,
+        0.0,
+        0.0
+      ]
+    ],
+    "method": "per-role/channel median and IQR over valid aligned states only",
+    "position_and_velocity_iqr_floor": 1.0
+  },
+  "source_dataset_config": {
+    "contact_buffer_m": 1.0,
+    "dt": 0.1,
+    "non_ooi_top_k_per_focus": 0,
+    "pet_soft_scale_s": 3.0
+  },
+  "source_dataset_version": "full_91_physical_contact_intervals_v2",
+  "splits": {
+    "train": {
+      "coarse_retrieval_validation": {
+        "anchors_checked": 96,
+        "anchors_requested": 96,
+        "coarse_candidates": 1024,
+        "elapsed_seconds": 16.91789436340332,
+        "exact_top_k": 32,
+        "fraction_at_least_0.95": 0.4791666666666667,
+        "mean_recall": 0.8645833134651184,
+        "min_recall": 0.03125,
+        "true_neighbour_count_min": 32
+      },
+      "descriptor_dimension": 42,
+      "eligible_samples": 74892,
+      "neighbors": {
+        "distance_quantiles": {
+          "0.0": 0.0,
+          "0.1": 0.09326637014746667,
+          "0.25": 0.13260174170136452,
+          "0.5": 0.2066061571240425,
+          "0.75": 0.33939531445503235,
+          "0.9": 0.5082798600196838,
+          "0.99": 1.0088854038715362,
+          "1.0": 4.864628314971924
+        },
+        "elapsed_seconds": 224.96441674232483,
+        "eligible_samples": 74892,
+        "samples_with_neighbours": 74892,
+        "stored_edges": 2395870,
+        "stratum_sizes": {
+          "110": 63961,
+          "111": 394,
+          "120": 2958,
+          "121": 4,
+          "130": 1278,
+          "131": 12,
+          "210": 2671,
+          "211": 7,
+          "220": 1556,
+          "230": 78,
+          "310": 1672,
+          "311": 4,
+          "320": 52,
+          "330": 245
+        }
+      },
+      "outputs": {
+        "features_npz": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk_rms_v0/train_rms_features.npz",
+        "neighbors_npz": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk_rms_v0/train_rms_neighbors.npz",
+        "top_neighbors_csv": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk_rms_v0/train_rms_top3.csv"
+      },
+      "samples": 117540,
+      "valid_fraction_quantiles": {
+        "0.0": 0.01666666753590107,
+        "0.1": 0.6166666746139526,
+        "0.25": 0.7166666388511658,
+        "0.5": 0.8999999761581421,
+        "0.75": 1.0,
+        "0.9": 1.0,
+        "0.99": 1.0,
+        "1.0": 1.0
+      }
+    },
+    "val": {
+      "coarse_retrieval_validation": {
+        "anchors_checked": 96,
+        "anchors_requested": 96,
+        "coarse_candidates": 1024,
+        "elapsed_seconds": 2.0077576637268066,
+        "exact_top_k": 32,
+        "fraction_at_least_0.95": 0.9479166666666666,
+        "mean_recall": 0.9915364384651184,
+        "min_recall": 0.625,
+        "true_neighbour_count_min": 32
+      },
+      "descriptor_dimension": 42,
+      "eligible_samples": 8413,
+      "neighbors": {
+        "distance_quantiles": {
+          "0.0": 5.928387025733173e-08,
+          "0.1": 0.12727635055780412,
+          "0.25": 0.18025991320610046,
+          "0.5": 0.2899741530418396,
+          "0.75": 0.4913780093193054,
+          "0.9": 0.7422785937786103,
+          "0.99": 1.7403830289840698,
+          "1.0": 8.797992706298828
+        },
+        "elapsed_seconds": 22.77156400680542,
+        "eligible_samples": 8413,
+        "samples_with_neighbours": 8411,
+        "stored_edges": 268404,
+        "stratum_sizes": {
+          "110": 7281,
+          "111": 47,
+          "120": 297,
+          "121": 2,
+          "130": 118,
+          "131": 1,
+          "210": 321,
+          "211": 1,
+          "220": 164,
+          "230": 6,
+          "310": 147,
+          "320": 10,
+          "330": 18
+        }
+      },
+      "outputs": {
+        "features_npz": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk_rms_v0/val_rms_features.npz",
+        "neighbors_npz": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk_rms_v0/val_rms_neighbors.npz",
+        "top_neighbors_csv": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk_rms_v0/val_rms_top3.csv"
+      },
+      "samples": 13261,
+      "valid_fraction_quantiles": {
+        "0.0": 0.01666666753590107,
+        "0.1": 0.6166666746139526,
+        "0.25": 0.7166666388511658,
+        "0.5": 0.8999999761581421,
+        "0.75": 1.0,
+        "0.9": 1.0,
+        "0.99": 1.0,
+        "1.0": 1.0
+      }
+    }
+  },
+  "version": "full_pair_event_aligned_masked_rms_v0"
+}

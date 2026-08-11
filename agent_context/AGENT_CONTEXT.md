@@ -1,6 +1,6 @@
 # Agent Context
 
-Last updated: 2026-07-07
+Last updated: 2026-07-20
 
 ## Source
 
@@ -12,6 +12,58 @@ Last updated: 2026-07-07
 Yufeng is working on learning interaction-aware representations of driving scenarios, primarily from Waymo motion data. The goal is to build representations that capture multi-agent driving dynamics well enough to support downstream planning, policy learning, and analysis of special traffic interactions.
 
 The current implementation priority is **Dreamer 4**. This is the first major direction to execute, ahead of alternative pathways.
+
+## Latest Update: Matched Interaction Contrastive Learning, 2026-07-20
+
+The current interactive-probe result is that the tested tokenizer latent `Z`
+does not show stable incremental interaction information beyond the strong raw
+kinematics baseline under the existing probe. This conclusion is limited to the
+current probe/readout; it is not proof that `Z` contains no interaction
+information.
+
+The next representation-improvement experiment is direct **matched supervised
+contrastive tokenizer fine-tuning**:
+
+```text
+learned focus/candidate agent slot queries
+  -> read pair token only from Z
+  -> matched supervised contrastive loss
+```
+
+Raw pair history does not enter the learned pair readout. It is used only to
+find different-scene positives and hard negatives. Matching uses two seconds of
+time-aligned causal history in a fixed query-time focus frame, with queries one,
+two, or three seconds before a geometry-defined interaction event. Version 1
+does not use DTW.
+
+The implemented 5k screening cache contains:
+
+```text
+19,941 event-aligned pair samples
+13,242 high-confidence response samples
+10,189 trainable anchors with both positive and hard negative
+25,584 positive edges
+32,776 hard-negative edges
+52,968 ordinary-negative edges
+```
+
+Code and cache:
+
+```text
+waymo/interaction_contrastive_learning
+waymo/cache/interaction_contrastive_learning_5k
+```
+
+Full decisions, algorithms, counts, caveats, and the next training plan:
+
+```text
+agent_context/MATCHED_INTERACTION_CONTRASTIVE_PLAN_AND_5K_DATA_2026_07_20.md
+```
+
+This dated note supersedes older generic statements that contrastive learning
+should only be considered after completing all world-model work. The current
+experiment is a targeted tokenizer-representation refinement motivated by the
+probe result; Dreamer 4 remains the overall project architecture.
 
 ## Current Thesis
 

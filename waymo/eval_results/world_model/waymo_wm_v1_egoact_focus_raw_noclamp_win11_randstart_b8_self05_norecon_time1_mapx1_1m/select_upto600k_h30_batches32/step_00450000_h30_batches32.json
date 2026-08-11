@@ -1,0 +1,50 @@
+{
+  "agent_distance_source": "focus",
+  "agent_far_weight": 0.25,
+  "checkpoint_format": "legacy",
+  "ckpt_epoch": 80,
+  "ckpt_step": 450000,
+  "ego_action_clamp": false,
+  "ego_action_normalization": "raw",
+  "ego_action_source": "focus",
+  "eval_batch_size": 4,
+  "eval_ckpt": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_v1_egoact_focus_raw_noclamp_win11_randstart_b8_self05_norecon_time1_mapx1_1m/step_00450000.pt",
+  "eval_ctx": 1,
+  "eval_max_batches": 32,
+  "eval_seq_len": 31,
+  "horizons": [
+    30
+  ],
+  "metrics": {
+    "h30": {
+      "agent_delta_xy_mae_m": 0.22179589862935245,
+      "agent_fde_mae_m": 7.410222701728344,
+      "agent_kinematic_xy_mae_m": 0.14833173481747508,
+      "agent_speed_mae_mps": 0.9704557526856661,
+      "agent_speed_yaw_kinematic_mae_m": 0.15209656348451972,
+      "agent_valid_acc": 0.8576496429741383,
+      "agent_vxvy_mae_mps": 1.1558049395680428,
+      "agent_xy_mae_m": 5.038949076086283,
+      "agent_yaw_mae_deg": 17.436828926205635,
+      "focus_agent_fde_m": 2.0022782646119595,
+      "focus_agent_xy_mae_m": 1.151707321871072,
+      "latent_mse_future": 0.09106687625171617,
+      "light_state_acc": 0.6986423311755061,
+      "light_valid_acc": 0.9825846515595913,
+      "loss_agent_delta_xy": 0.039944607618963346,
+      "loss_agent_fde_xy": 3.864979565143585,
+      "loss_agent_kinematic_xy": 0.02424730791244656,
+      "loss_agent_speed_yaw_kinematic": 0.024865216502803378,
+      "loss_agent_valid": 2.1693318281322718,
+      "loss_agent_vel": 0.6040680329315364,
+      "loss_agent_xy": 2.4903847575187683,
+      "loss_agent_yaw": 0.04824442131211981,
+      "loss_light_state": 3.308789665633272,
+      "loss_light_valid": 0.15055154719425445,
+      "loss_total": 4.919857367873192
+    }
+  },
+  "rollout_mode": "legacy_flow",
+  "use_ego_actions": true,
+  "val_size": 5002
+}

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Waymo World Model Drive</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0c111a;
+      --panel: #151d29;
+      --line: #2c394b;
+      --text: #e8edf5;
+      --muted: #94a2b6;
+      --focus: #4ee88c;
+      --button: #202b3a;
+      --button-active: #35465e;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    main { width: min(1040px, 96vw); margin: 20px auto 36px; }
+    header { display: flex; justify-content: space-between; gap: 18px; align-items: end; margin-bottom: 12px; }
+    h1 { margin: 0; font-size: clamp(20px, 3vw, 31px); letter-spacing: -0.03em; }
+    .subtitle { color: var(--muted); font-size: 13px; margin-top: 5px; }
+    #connection { font: 12px ui-monospace, monospace; color: #ffb04a; }
+    .game { display: grid; grid-template-columns: minmax(0, 720px) minmax(230px, 1fr); gap: 14px; }
+    .viewport, .side { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+    #frame { display: block; width: 100%; aspect-ratio: 1; background: #11161f; }
+    .side { padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+    .readout { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .metric { background: #101722; border-radius: 9px; padding: 9px; }
+    .metric .label { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: .08em; }
+    .metric .value { margin-top: 4px; font: 17px ui-monospace, monospace; }
+    .controls { display: grid; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 50px); gap: 7px; justify-content: center; }
+    button { border: 1px solid var(--line); background: var(--button); color: var(--text); border-radius: 9px; cursor: pointer; font: inherit; user-select: none; touch-action: none; }
+    button:hover, button.held { background: var(--button-active); border-color: #61738c; }
+    .arrow { font-size: 22px; }
+    #up { grid-column: 2; }
+    #left { grid-column: 1; grid-row: 2; }
+    #down { grid-column: 2; grid-row: 2; }
+    #right { grid-column: 3; grid-row: 2; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .actions button { padding: 9px 7px; font-size: 12px; }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: auto; }
+    kbd { display: inline-block; min-width: 21px; padding: 1px 5px; text-align: center; color: var(--text); background: #0c121b; border: 1px solid #405068; border-bottom-width: 2px; border-radius: 5px; font: 11px ui-monospace, monospace; }
+    #status { min-height: 38px; color: var(--focus); font: 12px/1.45 ui-monospace, monospace; }
+    @media (max-width: 820px) {
+      .game { grid-template-columns: 1fr; }
+      .side { display: grid; grid-template-columns: 1fr 1fr; }
+      .hint, #status { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Waymo World Model Drive</h1>
+      <div class="subtitle">You command the green focus agent. The world model drives everything else.</div>
+    </div>
+    <div id="connection">connecting…</div>
+  </header>
+  <div class="game">
+    <div class="viewport"><img id="frame" alt="World model scene"></div>
+    <aside class="side">
+      <div class="readout">
+        <div class="metric"><div class="label">Speed</div><div id="speed" class="value">—</div></div>
+        <div class="metric"><div class="label">Heading</div><div id="heading" class="value">—</div></div>
+        <div class="metric"><div class="label">Step</div><div id="step" class="value">—</div></div>
+        <div class="metric"><div class="label">Model</div><div id="latency" class="value">—</div></div>
+      </div>
+      <div class="controls" aria-label="Driving controls">
+        <button id="up" class="arrow" aria-label="Speed up">↑</button>
+        <button id="left" class="arrow" aria-label="Turn left">←</button>
+        <button id="down" class="arrow" aria-label="Slow down">↓</button>
+        <button id="right" class="arrow" aria-label="Turn right">→</button>
+      </div>
+      <div class="actions">
+        <button id="pause">Play / Pause</button>
+        <button id="single">Single step</button>
+        <button id="reset">Reset scene</button>
+        <button id="newScene">New scene</button>
+      </div>
+      <div id="status">Waiting for the model…</div>
+      <div class="hint">
+        Hold <kbd>↑</kbd>/<kbd>↓</kbd> to change speed and <kbd>←</kbd>/<kbd>→</kbd> to change heading.<br>
+        <kbd>Space</kbd> play/pause · <kbd>.</kbd> one step · <kbd>R</kbd> reset · <kbd>N</kbd> new scene.
+      </div>
+    </aside>
+  </div>
+</main>
+<script>
+(() => {
+  const connection = document.getElementById("connection");
+  const status = document.getElementById("status");
+  const frame = document.getElementById("frame");
+  const fields = {
+    speed: document.getElementById("speed"),
+    heading: document.getElementById("heading"),
+    step: document.getElementById("step"),
+    latency: document.getElementById("latency")
+  };
+  let socket;
+  let imageUrl = null;
+  const down = new Set();
+  const controlKeys = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+
+  function send(payload) {
+    if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));
+  }
+  function releaseAll() {
+    for (const key of down) send({type: "keyup", key});
+    down.clear();
+    document.querySelectorAll(".held").forEach(el => el.classList.remove("held"));
+  }
+  function press(key, element) {
+    if (down.has(key)) return;
+    down.add(key);
+    if (element) element.classList.add("held");
+    send({type: "keydown", key});
+  }
+  function release(key, element) {
+    down.delete(key);
+    if (element) element.classList.remove("held");
+    send({type: "keyup", key});
+  }
+
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  socket = new WebSocket(`${proto}://${location.host}/ws`);
+  socket.binaryType = "arraybuffer";
+  socket.onopen = () => { connection.textContent = "connected · paused"; connection.style.color = "#4ee88c"; };
+  socket.onclose = () => { connection.textContent = "disconnected"; connection.style.color = "#ff6f78"; releaseAll(); };
+  socket.onerror = () => { connection.textContent = "connection error"; };
+  socket.onmessage = event => {
+    if (typeof event.data === "string") {
+      const message = JSON.parse(event.data);
+      if (message.type !== "status") return;
+      connection.textContent = message.paused ? "connected · paused" : "connected · playing";
+      fields.speed.textContent = `${message.speed.toFixed(1)} m/s`;
+      fields.heading.textContent = `${message.heading_deg >= 0 ? "+" : ""}${message.heading_deg.toFixed(0)}°`;
+      fields.step.textContent = `${message.step} / ${message.max_steps}`;
+      fields.latency.textContent = `${message.inference_ms.toFixed(0)} ms`;
+      status.textContent = message.text;
+      return;
+    }
+    const blob = new Blob([event.data], {type: "image/jpeg"});
+    const url = URL.createObjectURL(blob);
+    frame.onload = () => { if (imageUrl) URL.revokeObjectURL(imageUrl); imageUrl = url; };
+    frame.src = url;
+  };
+
+  window.addEventListener("keydown", event => {
+    const key = event.key === " " ? "Space" : event.key;
+    if (![...controlKeys, "Space", ".", ">", "r", "R", "n", "N"].includes(key)) return;
+    event.preventDefault();
+    if (controlKeys.has(key)) press(key, document.getElementById(key.replace("Arrow", "").toLowerCase()));
+    else if (!event.repeat) send({type: "keydown", key});
+  }, {passive: false});
+  window.addEventListener("keyup", event => {
+    const key = event.key === " " ? "Space" : event.key;
+    if (!controlKeys.has(key)) return;
+    event.preventDefault();
+    release(key, document.getElementById(key.replace("Arrow", "").toLowerCase()));
+  }, {passive: false});
+  window.addEventListener("blur", releaseAll);
+
+  for (const [id, key] of [["up", "ArrowUp"], ["down", "ArrowDown"], ["left", "ArrowLeft"], ["right", "ArrowRight"]]) {
+    const element = document.getElementById(id);
+    element.addEventListener("pointerdown", event => { event.preventDefault(); element.setPointerCapture(event.pointerId); press(key, element); });
+    element.addEventListener("pointerup", () => release(key, element));
+    element.addEventListener("pointercancel", () => release(key, element));
+  }
+  document.getElementById("pause").onclick = () => send({type: "toggle_pause"});
+  document.getElementById("single").onclick = () => send({type: "step"});
+  document.getElementById("reset").onclick = () => send({type: "reset"});
+  document.getElementById("newScene").onclick = () => send({type: "new_scene"});
+})();
+</script>
+</body>
+</html>

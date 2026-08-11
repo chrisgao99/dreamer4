@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader, Subset
 
 WAYMO_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = WAYMO_ROOT.parent
-for path in (REPO_ROOT, WAYMO_ROOT / "training", WAYMO_ROOT / "core"):
+for path in (REPO_ROOT, WAYMO_ROOT / "training", WAYMO_ROOT / "training" / "tokenizer", WAYMO_ROOT / "core"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -101,8 +101,46 @@ def _concat_decoder_outputs(parts: List[VectorDecoderOutput]) -> VectorDecoderOu
     )
 
 
+def _slice_decoder_time(pred: VectorDecoderOutput, start: int, end: int) -> VectorDecoderOutput:
+    return VectorDecoderOutput(
+        agent_continuous=pred.agent_continuous[:, start:end],
+        agent_valid_logits=pred.agent_valid_logits[:, start:end],
+        light_state_logits=pred.light_state_logits[:, start:end],
+        light_valid_logits=pred.light_valid_logits[:, start:end],
+        agent_tokens=pred.agent_tokens[:, start:end],
+        light_tokens=pred.light_tokens[:, start:end],
+        token_mask=pred.token_mask[:, start:end],
+        agent_xy_gmm=None if pred.agent_xy_gmm is None else pred.agent_xy_gmm[:, start:end],
+    )
+
+
+def _parse_chunk_ranges(value: str) -> List[tuple[int, int]]:
+    ranges: List[tuple[int, int]] = []
+    for item in value.replace(",", " ").split():
+        try:
+            start_text, end_text = item.split(":", 1)
+            start, end = int(start_text), int(end_text)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(
+                f"Invalid chunk range {item!r}; expected START:END, e.g. 0:31"
+            ) from exc
+        if start < 0 or end <= start:
+            raise argparse.ArgumentTypeError(f"Invalid chunk range {item!r}: require 0 <= START < END")
+        ranges.append((start, end))
+    if not ranges:
+        raise argparse.ArgumentTypeError("At least one chunk range is required")
+    return ranges
+
+
 @torch.no_grad()
-def _decode(model: torch.nn.Module, batch: Dict[str, torch.Tensor], *, mode: str, chunk_window: int) -> VectorDecoderOutput:
+def _decode(
+    model: torch.nn.Module,
+    batch: Dict[str, torch.Tensor],
+    *,
+    mode: str,
+    chunk_window: int,
+    chunk_ranges: Optional[List[tuple[int, int]]] = None,
+) -> VectorDecoderOutput:
     if mode == "full":
         return model(
             agents=batch["agents"],
@@ -122,8 +160,36 @@ def _decode(model: torch.nn.Module, batch: Dict[str, torch.Tensor], *, mode: str
             lights=windowed["lights"],
             light_mask=windowed["light_mask"],
         ).decoder
+    if mode == "overlap_chunked":
+        if not chunk_ranges:
+            raise ValueError("overlap_chunked mode requires chunk_ranges")
+        input_steps = _batch_time_length(batch)
+        parts = []
+        kept_until = 0
+        for start, end in chunk_ranges:
+            end = min(end, input_steps)
+            if start >= input_steps:
+                continue
+            if start > kept_until:
+                raise ValueError(f"Chunk ranges leave a gap before timestep {start}; covered through {kept_until}")
+            chunk = _slice_batch_time(batch, start, end)
+            pred = model(
+                agents=chunk["agents"],
+                agent_mask=chunk["agent_mask"],
+                map_polylines=chunk["map_polylines"],
+                map_mask=chunk["map_mask"],
+                lights=chunk["lights"],
+                light_mask=chunk["light_mask"],
+            ).decoder
+            discard = max(0, kept_until - start)
+            if discard < end - start:
+                parts.append(_slice_decoder_time(pred, discard, end - start))
+                kept_until = end
+        if kept_until != input_steps:
+            raise ValueError(f"Chunk ranges cover through {kept_until}, but input has {input_steps} timesteps")
+        return _concat_decoder_outputs(parts)
     if mode != "chunked":
-        raise ValueError(f"Unknown mode {mode!r}; expected full, chunked, or window.")
+        raise ValueError(f"Unknown mode {mode!r}; expected full, chunked, overlap_chunked, or window.")
     if chunk_window <= 0:
         raise ValueError(f"chunk_window must be positive for chunked mode, got {chunk_window}")
 
@@ -362,8 +428,8 @@ def _parse_models(values: Iterable[List[str]] | None) -> List[tuple[str, str, st
     models = DEFAULT_MODELS if values is None else [tuple(v) for v in values]
     out = []
     for label, checkpoint, mode in models:
-        if mode not in {"full", "chunked", "window"}:
-            raise ValueError(f"Model {label}: mode must be full, chunked, or window, got {mode!r}")
+        if mode not in {"full", "chunked", "overlap_chunked", "window"}:
+            raise ValueError(f"Model {label}: mode must be full, chunked, overlap_chunked, or window, got {mode!r}")
         out.append((label, checkpoint, mode))
     return out
 
@@ -379,6 +445,12 @@ def main() -> None:
         help="Model spec. MODE is full, chunked, or window. Defaults compare the three current checkpoints.",
     )
     p.add_argument("--chunk_window", type=int, default=32)
+    p.add_argument(
+        "--chunk_ranges",
+        type=_parse_chunk_ranges,
+        default=None,
+        help="Explicit overlapping half-open ranges for overlap_chunked mode, e.g. '0:31 30:61 60:91'.",
+    )
     p.add_argument("--batch_size", type=int, default=32)
     p.add_argument("--num_workers", type=int, default=8)
     p.add_argument("--max_samples", type=int, default=0, help="Optional smoke-test limit before evaluating the full val set.")
@@ -394,6 +466,13 @@ def main() -> None:
         default=str(WAYMO_ROOT / "evaluation/reports/val_reconstruction_compare/summary.json"),
     )
     p.add_argument("--progress_every", type=int, default=50)
+    p.add_argument(
+        "--report_horizons",
+        type=int,
+        nargs="*",
+        default=None,
+        help="Also report physical reconstruction metrics on these prefixes after the same model forward pass.",
+    )
     p.add_argument(
         "--stratify_focus_motion",
         action="store_true",
@@ -443,6 +522,8 @@ def main() -> None:
             chunk_window = int(args.chunk_window)
 
         accum = MetricAccumulator()
+        report_horizons = sorted({int(h) for h in (args.report_horizons or []) if int(h) > 0})
+        horizon_accums = {h: MetricAccumulator() for h in report_horizons}
         motion_accums = {
             "straight": MetricAccumulator(),
             "curve": MetricAccumulator(),
@@ -455,7 +536,13 @@ def main() -> None:
         started = time.time()
         for batch_idx, batch in enumerate(loader, start=1):
             batch = _move_batch(batch, device)
-            pred = _decode(model, batch, mode=mode, chunk_window=chunk_window)
+            pred = _decode(
+                model,
+                batch,
+                mode=mode,
+                chunk_window=chunk_window,
+                chunk_ranges=args.chunk_ranges,
+            )
             eval_batch = batch if mode != "window" else _slice_time_window(batch, chunk_window)
             accum.update_physical(
                 pred,
@@ -464,6 +551,17 @@ def main() -> None:
                 agent_xy_loss=agent_xy_loss,
                 agent_xy_parameterization=agent_xy_parameterization,
             )
+            input_steps = _batch_time_length(eval_batch)
+            for horizon, horizon_accum in horizon_accums.items():
+                prefix_steps = min(horizon, input_steps)
+                prefix_batch = _slice_batch_time(eval_batch, 0, prefix_steps)
+                horizon_accum.update_physical(
+                    pred,
+                    prefix_batch,
+                    chunk_window=0,
+                    agent_xy_loss=agent_xy_loss,
+                    agent_xy_parameterization=agent_xy_parameterization,
+                )
             if args.stratify_focus_motion:
                 heading_change = _focus_heading_change_deg(eval_batch)
                 straight_mask = heading_change <= float(args.straight_heading_deg)
@@ -513,10 +611,14 @@ def main() -> None:
             "encoder_variant": getattr(ckpt_args, "encoder_variant", ""),
             "time_window": int(getattr(ckpt_args, "time_window", 0)),
             "eval_chunk_window": int(chunk_window),
+            "eval_chunk_ranges": "" if args.chunk_ranges is None else " ".join(f"{s}:{e}" for s, e in args.chunk_ranges),
             "num_samples": len(dataset),
         }
         for key, value in metrics.items():
             row[key] = value
+        for horizon, horizon_accum in horizon_accums.items():
+            for key, value in horizon_accum.to_dict().items():
+                row[f"h{horizon}_{key}"] = value
         if args.stratify_focus_motion:
             row["straight_heading_deg"] = float(args.straight_heading_deg)
             row["curve_heading_deg"] = float(args.curve_heading_deg)

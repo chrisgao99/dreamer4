@@ -173,7 +173,7 @@ Added:
 Launch script support:
 
 ```text
-waymo/training/launch_ooi50k_lat16_d256_ep200_2a100_staticmap_v2_chunk32_trajloss_randstart_tmux.sh
+waymo/training/tokenizer/launch_ooi50k_lat16_d256_ep200_2a100_staticmap_v2_chunk32_trajloss_randstart_tmux.sh
 ```
 
 Added:
@@ -187,7 +187,7 @@ Added:
 Submit file:
 
 ```text
-waymo/training/submit_ooi50k_lat64_b64_interaction_aux_finetune.slurm
+waymo/training/tokenizer/submit_ooi50k_lat64_b64_interaction_aux_finetune.slurm
 ```
 
 Base checkpoint:
@@ -205,7 +205,7 @@ waymo/checkpoints/ooi50k_lat64_b64_d256_interaction_aux_finetune_from_best
 Submit command:
 
 ```bash
-sbatch /scratch/baz7dy/tri30/dreamer4/waymo/training/submit_ooi50k_lat64_b64_interaction_aux_finetune.slurm
+sbatch /scratch/baz7dy/tri30/dreamer4/waymo/training/tokenizer/submit_ooi50k_lat64_b64_interaction_aux_finetune.slurm
 ```
 
 The job requests up to three days:

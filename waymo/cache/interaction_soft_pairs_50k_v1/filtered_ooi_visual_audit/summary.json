@@ -1,0 +1,21 @@
+{
+  "two_ooi_scenes": 24985,
+  "retained_ooi_pairs": 19628,
+  "rejected_ooi_pairs": 5357,
+  "rejection_reason_counts": {
+    "pet_over_30_only": 2821,
+    "distance_over_6_even_without_pet_limit": 2180,
+    "no_full_60_step_shared_window": 356
+  },
+  "selection": "10th, 50th, and 90th reason-specific metric quantiles",
+  "config": {
+    "dt": 0.1,
+    "event_search_start": 10,
+    "history_steps": 20,
+    "post_first_steps": 40,
+    "max_pet_steps": 30,
+    "max_spatial_distance_m": 6.0,
+    "relevance_distance_scale_m": 3.0,
+    "relevance_pet_scale_s": 1.5
+  }
+}
