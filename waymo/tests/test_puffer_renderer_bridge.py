@@ -100,6 +100,10 @@ class ScenarioManifestTest(unittest.TestCase):
             self.assertEqual(resolved.puffer_map_dir, view_b)
             self.assertEqual(resolved.puffer_bin_path, bin_b)
             self.assertEqual(resolved.focus_track_id, 22)
+            self.assertEqual(
+                manifest.mapped_npz_paths,
+                frozenset({str(npz_a.resolve()), str(npz_b.resolve())}),
+            )
             with self.assertRaisesRegex(ValueError, "scenario mismatch"):
                 manifest.resolve(
                     scenario_id="wrong-scene", npz_path=npz_b, focus_track_id=22
@@ -140,11 +144,33 @@ class PufferFrameStateTest(unittest.TestCase):
         self.assertEqual(request["x"], [1.0, 0.0])
         self.assertTrue(request["preserve_scene_z"])
 
+    def test_long_interactive_step_is_preserved_as_diagnostic_metadata(self):
+        frame = PufferFrameState(
+            step=160,
+            agent_ids=np.asarray([10]),
+            agent_types=np.asarray([1]),
+            xy=np.asarray([[1.0, 2.0]]),
+            yaw=np.asarray([0.5]),
+            velocity_xy=np.asarray([[3.0, 4.0]]),
+            valid=np.asarray([True]),
+            source_time_index=160,
+        )
+        scene = PufferSceneReference(
+            scenario_id="abc",
+            npz_path=Path("abc.npz"),
+            focus_track_id=10,
+            puffer_map_dir=Path("view"),
+        )
+        request = frame.as_request(scene)
+        self.assertEqual(request["step"], 160)
+        self.assertEqual(request["source_time_index"], 160)
+
 
 class PufferRendererClientTest(unittest.TestCase):
     def test_length_prefixed_scene_ack_and_jpeg_response(self):
         worker_source = r'''
 import json
+import os
 import struct
 import sys
 
@@ -156,7 +182,8 @@ while True:
     (size,) = header.unpack(raw_size)
     request = json.loads(sys.stdin.buffer.read(size))
     if request["type"] == "load_scene":
-        response = b'{"ok":true}'
+        response = (b'{"ok":true}' if os.environ.get("PUFFER_TEST_DISPLAY") == "yes"
+                    else b'{"ok":false,"error":"missing environment"}')
     elif request["type"] == "render_frame":
         response = b"\xff\xd8\xff\xd9"
     elif request["type"] == "close":
@@ -192,6 +219,7 @@ while True:
                 width=320,
                 height=180,
                 timeout_s=2.0,
+                environment={"PUFFER_TEST_DISPLAY": "yes"},
             )
             try:
                 self.assertEqual(client.render(scene, frame), b"\xff\xd8\xff\xd9")

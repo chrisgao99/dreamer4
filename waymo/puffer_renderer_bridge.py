@@ -289,6 +289,12 @@ class ScenarioManifest:
             scenario_pb_path=assets.scenario_pb_path,
         )
 
+    @property
+    def mapped_npz_paths(self) -> frozenset[str]:
+        """Canonical NPZ paths with an explicit converted render asset."""
+
+        return frozenset(self._by_npz_path)
+
 
 @dataclass(frozen=True)
 class PufferFrameState:
@@ -367,6 +373,7 @@ class PufferRendererClient:
         jpeg_quality: int = 90,
         timeout_s: float = 15.0,
         max_response_bytes: int = _DEFAULT_MAX_RESPONSE_BYTES,
+        environment: dict[str, str] | None = None,
     ) -> None:
         argv = shlex.split(command) if isinstance(command, str) else list(command)
         if not argv:
@@ -378,6 +385,11 @@ class PufferRendererClient:
         self.jpeg_quality = int(jpeg_quality)
         self.timeout_s = float(timeout_s)
         self.max_response_bytes = int(max_response_bytes)
+        self.environment = (
+            None
+            if environment is None
+            else {str(key): str(value) for key, value in environment.items()}
+        )
         if self.width <= 0 or self.height <= 0:
             raise ValueError("Puffer render dimensions must be positive")
         if not 1 <= self.jpeg_quality <= 100:
@@ -396,6 +408,10 @@ class PufferRendererClient:
         process = self._process
         if process is not None and process.poll() is None:
             return process
+        process_environment = None
+        if self.environment is not None:
+            process_environment = os.environ.copy()
+            process_environment.update(self.environment)
         self._process = subprocess.Popen(
             self.command,
             stdin=subprocess.PIPE,
@@ -403,6 +419,7 @@ class PufferRendererClient:
             # Inherit stderr so diagnostics are visible and cannot fill a pipe.
             stderr=None,
             bufsize=0,
+            env=process_environment,
         )
         self._loaded_scene_key = None
         return self._process

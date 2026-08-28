@@ -12,6 +12,7 @@ V0 design:
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import random
@@ -25,7 +26,8 @@ import numpy as np
 import torch
 import torch.distributed as dist
 from torch.amp import GradScaler, autocast
-from torch.utils.data import DataLoader, DistributedSampler, random_split
+from torch.utils.data import DataLoader, DistributedSampler, Subset, random_split
+from torch.utils.checkpoint import checkpoint as activation_checkpoint
 
 WAYMO_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = WAYMO_ROOT.parent
@@ -55,6 +57,14 @@ except ModuleNotFoundError:
     from waymo.core.waymo_vector_dataset import WaymoVectorDataset
 
 from model import Dynamics, FocusFiLMDynamics, pack_bottleneck_to_spatial, unpack_spatial_to_bottleneck
+from waymo.training.world_model.rollout_physical_losses import (
+    decoded_motion_ground_truth_loss,
+    decoded_rollout_physical_losses,
+)
+from waymo.training.world_model.multisample_validation import (
+    multisample_selection_score,
+    multisample_trajectory_metrics,
+)
 
 
 def seed_everything(seed: int) -> None:
@@ -272,6 +282,23 @@ def metric_order(metrics: Dict[str, Any]) -> list[str]:
         "tf_onestep_mse",
         "flow_mse",
         "bootstrap_mse",
+        "checkpoint_selection_score",
+        "checkpoint_selection_eligible",
+        "checkpoint_diversity_ratio_to_reference",
+        "multisample_nonfocus_minade_m",
+        "multisample_nonfocus_ade_winner_fde_m",
+        "multisample_nonfocus_mean_ade_m",
+        "multisample_nonfocus_mean_fde_m",
+        "multisample_nonfocus_worst_ade_m",
+        "multisample_nonfocus_oracle_ade_gain_m",
+        "multisample_nonfocus_pairwise_trajectory_distance_m",
+        "multisample_nonfocus_pairwise_endpoint_distance_m",
+        "multisample_nonfocus_8s_endpoint_mean_spatial_std_m",
+        "loss_motion_gt",
+        "motion_gt_xy_mae_m",
+        "motion_gt_speed_mae_mps",
+        "motion_gt_vxvy_mae_mps",
+        "motion_gt_yaw_mae_deg",
         "loss_emp",
         "loss_self",
         "sigma_mean",
@@ -718,6 +745,67 @@ def decode_batch_z_for_world_model(
     raise ValueError(f"Unknown tokenizer_decode_stitch_mode={stitch_mode!r}")
 
 
+def repeat_batch_candidates(batch: Dict[str, Any], num_candidates: int) -> Dict[str, Any]:
+    """Repeat tensor batch rows so candidate rollouts can be decoded together."""
+    repeats = int(num_candidates)
+    if repeats < 1:
+        raise ValueError(f"num_candidates must be >= 1, got {num_candidates}")
+    bsz = int(batch["agent_mask"].shape[0])
+    out: Dict[str, Any] = {}
+    for key, value in batch.items():
+        if torch.is_tensor(value) and value.dim() > 0 and int(value.shape[0]) == bsz:
+            out[key] = value.repeat_interleave(repeats, dim=0)
+        else:
+            out[key] = value
+    return out
+
+
+def decode_agent_continuous_for_world_model(
+    tokenizer: torch.nn.Module,
+    z: torch.Tensor,
+    batch: Dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    checkpoint_decoder: bool,
+) -> torch.Tensor:
+    """Decode only physical agent state, optionally checkpointing each chunk."""
+    window = int(getattr(args, "tokenizer_chunk_window", 32))
+    total_steps = int(z.shape[1])
+    if window <= 0:
+        ranges = [(0, total_steps)]
+    else:
+        decode_stride = getattr(args, "tokenizer_decode_chunk_stride", None)
+        if decode_stride is None:
+            decode_stride = args.tokenizer_chunk_stride
+        ranges = tokenizer_time_chunk_ranges(total_steps, window, int(decode_stride))
+
+    parts: list[tuple[int, int, torch.Tensor]] = []
+    for start, end in ranges:
+        chunk_batch = slice_future_batch(batch, start, end)
+
+        def decode_continuous(
+            z_chunk: torch.Tensor,
+            *,
+            _tokenizer: torch.nn.Module = tokenizer,
+            _chunk_batch: Dict[str, Any] = chunk_batch,
+        ) -> torch.Tensor:
+            return decode_batch_z(_tokenizer, z_chunk, _chunk_batch).agent_continuous
+
+        z_chunk = z[:, start:end]
+        if checkpoint_decoder and torch.is_grad_enabled():
+            continuous = activation_checkpoint(decode_continuous, z_chunk, use_reentrant=False)
+        else:
+            continuous = decode_continuous(z_chunk)
+        parts.append((start, end, continuous))
+
+    stitch_mode = str(getattr(args, "tokenizer_decode_stitch_mode", "keep_first"))
+    if stitch_mode == "keep_first":
+        return _stitch_time_parts(parts, total_steps)
+    if stitch_mode == "center_select":
+        return _stitch_time_parts_center(parts, total_steps)
+    raise ValueError(f"Unknown tokenizer_decode_stitch_mode={stitch_mode!r}")
+
+
 def _emax_from_kmax(k_max: int) -> int:
     emax = int(round(math.log2(k_max)))
     assert (1 << emax) == k_max, "k_max must be a power of two"
@@ -969,6 +1057,7 @@ def sample_one_timestep_packed(
     k_max: int,
     sched: Dict[str, Any],
     max_rollout_window: int,
+    checkpoint_dynamics: bool = False,
 ) -> torch.Tensor:
     if max_rollout_window > 0:
         past_keep = max(1, int(max_rollout_window) - 1)
@@ -1000,16 +1089,31 @@ def sample_one_timestep_packed(
         signal_idxs = past_signal_idxs.clone()
         signal_idxs[:, -1] = int(tau_idx[i])
         packed_seq = torch.cat([past_packed, z], dim=1)
-        x1_hat_full, _ = dyn(
-            actions_seq,
-            step_idxs,
-            signal_idxs,
-            packed_seq,
-            act_mask=act_mask_seq,
-            agent_tokens=None,
-            map_tokens=map_tokens,
-            map_mask=map_mask,
-        )
+        def dynamics_prediction(
+            packed_input: torch.Tensor,
+            *,
+            _actions_seq: Optional[torch.Tensor] = actions_seq,
+            _step_idxs: torch.Tensor = step_idxs,
+            _signal_idxs: torch.Tensor = signal_idxs,
+            _act_mask_seq: Optional[torch.Tensor] = act_mask_seq,
+            _map_tokens: Optional[torch.Tensor] = map_tokens,
+            _map_mask: Optional[torch.Tensor] = map_mask,
+        ) -> torch.Tensor:
+            return dyn(
+                _actions_seq,
+                _step_idxs,
+                _signal_idxs,
+                packed_input,
+                act_mask=_act_mask_seq,
+                agent_tokens=None,
+                map_tokens=_map_tokens,
+                map_mask=_map_mask,
+            )[0]
+
+        if checkpoint_dynamics and torch.is_grad_enabled():
+            x1_hat_full = activation_checkpoint(dynamics_prediction, packed_seq, use_reentrant=False)
+        else:
+            x1_hat_full = dynamics_prediction(packed_seq)
         x1_hat = x1_hat_full[:, -1:, :, :]
         denom = max(1e-4, 1.0 - tau_i)
         b = (x1_hat.float() - z.float()) / denom
@@ -1030,6 +1134,7 @@ def sample_autoregressive_packed_sequence(
     k_max: int,
     sched: Dict[str, Any],
     max_rollout_window: int,
+    checkpoint_dynamics: bool = False,
 ) -> torch.Tensor:
     total = int(z_gt_packed.shape[1])
     ctx_length = max(1, min(int(ctx_length), total - 1))
@@ -1050,6 +1155,7 @@ def sample_autoregressive_packed_sequence(
             k_max=k_max,
             sched=sched,
             max_rollout_window=max_rollout_window,
+            checkpoint_dynamics=checkpoint_dynamics,
         )
         outs.append(z_next)
     return torch.stack(outs, dim=1)
@@ -1111,6 +1217,221 @@ def rollout_loss(
         "rollout_latent_mse": loss.detach(),
         "rollout_latent_mse_last": per_timestep[:, -1].mean().detach(),
     }, pred
+
+
+def rollout_motion_ground_truth_loss(
+    dynamics: torch.nn.Module,
+    tokenizer: torch.nn.Module,
+    batch: Dict[str, Any],
+    *,
+    z1: torch.Tensor,
+    actions: Optional[torch.Tensor],
+    act_mask: Optional[torch.Tensor],
+    map_tokens: Optional[torch.Tensor],
+    map_mask: Optional[torch.Tensor],
+    args: argparse.Namespace,
+) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    """Single free-running rollout supervised only in decoded motion space."""
+    ctx_length = int(args.eval_ctx)
+    horizon = int(args.eval_horizon)
+    required = ctx_length + horizon
+    if int(z1.shape[1]) < required:
+        raise ValueError(
+            f"rollout_motion needs ctx+horizon={required} frames, got {int(z1.shape[1])}"
+        )
+
+    sched = make_tau_schedule(k_max=args.k_max, schedule=args.eval_schedule, d=args.eval_d)
+    pred_packed = sample_autoregressive_packed_sequence(
+        dynamics,
+        z_gt_packed=z1[:, :required],
+        actions=None if actions is None else actions[:, :required],
+        act_mask=None if act_mask is None else act_mask[:, :required],
+        map_tokens=map_tokens,
+        map_mask=map_mask,
+        ctx_length=ctx_length,
+        horizon=horizon,
+        k_max=args.k_max,
+        sched=sched,
+        max_rollout_window=args.max_rollout_window,
+        checkpoint_dynamics=bool(args.motion_checkpoint_dynamics),
+    )
+    decoded_batch = slice_future_batch(batch, 0, required)
+    z_pred = unpack_spatial_to_bottleneck(pred_packed, k=args.packing_factor)
+    continuous = decode_agent_continuous_for_world_model(
+        tokenizer,
+        z_pred,
+        decoded_batch,
+        args,
+        checkpoint_decoder=bool(args.motion_checkpoint_decoder),
+    )
+    agents_btkf = agents_to_btkf(decoded_batch["agents"], decoded_batch["agent_mask"])
+    agent_weight = build_agent_loss_weight_multiplier(decoded_batch, args)
+    motion_loss, motion_metrics = decoded_motion_ground_truth_loss(
+        continuous,
+        agents_btkf,
+        future_start=ctx_length,
+        agent_loss_weight_multiplier=agent_weight,
+        xy_weight=args.agent_xy_weight,
+        velocity_weight=args.agent_vel_weight,
+        yaw_weight=args.agent_yaw_weight,
+        focus_agent_weight=args.focus_agent_weight,
+    )
+    loss = float(args.motion_gt_loss_weight) * motion_loss
+
+    # These latent errors are detached diagnostics, not optimization terms.
+    diff_sq = (
+        pred_packed[:, ctx_length:].float() - z1[:, ctx_length:required].float()
+    ).pow(2)
+    metrics: Dict[str, torch.Tensor] = {
+        "loss_total": loss.detach(),
+        "rollout_latent_mse": diff_sq.mean().detach(),
+        "rollout_latent_mse_last": diff_sq[:, -1].mean().detach(),
+        **motion_metrics,
+    }
+    return loss, metrics
+
+
+def rollout_mon_physical_loss(
+    dynamics: torch.nn.Module,
+    tokenizer: torch.nn.Module,
+    batch: Dict[str, Any],
+    *,
+    z1: torch.Tensor,
+    actions: Optional[torch.Tensor],
+    act_mask: Optional[torch.Tensor],
+    map_tokens: Optional[torch.Tensor],
+    map_mask: Optional[torch.Tensor],
+    args: argparse.Namespace,
+    step: int,
+) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    """Joint Minimum-over-N rollout loss plus all-candidate physical losses."""
+    ctx_length = int(args.eval_ctx)
+    horizon = int(args.eval_horizon)
+    required = ctx_length + horizon
+    if int(z1.shape[1]) < required:
+        raise ValueError(
+            f"rollout_mon needs ctx+horizon={required} frames, got {int(z1.shape[1])}"
+        )
+    num_candidates = int(args.mon_num_samples)
+    if num_candidates < 2:
+        raise ValueError(f"rollout_mon requires mon_num_samples >= 2, got {num_candidates}")
+
+    def repeat_candidates(value: Optional[torch.Tensor]) -> Optional[torch.Tensor]:
+        return None if value is None else value.repeat_interleave(num_candidates, dim=0)
+
+    z_candidates = z1[:, :required].repeat_interleave(num_candidates, dim=0)
+    sched = make_tau_schedule(k_max=args.k_max, schedule=args.eval_schedule, d=args.eval_d)
+    pred_flat = sample_autoregressive_packed_sequence(
+        dynamics,
+        z_gt_packed=z_candidates,
+        actions=repeat_candidates(None if actions is None else actions[:, :required]),
+        act_mask=repeat_candidates(None if act_mask is None else act_mask[:, :required]),
+        map_tokens=repeat_candidates(map_tokens),
+        map_mask=repeat_candidates(map_mask),
+        ctx_length=ctx_length,
+        horizon=horizon,
+        k_max=args.k_max,
+        sched=sched,
+        max_rollout_window=args.max_rollout_window,
+        checkpoint_dynamics=bool(args.mon_checkpoint_dynamics),
+    )
+
+    bsz = int(z1.shape[0])
+    pred = pred_flat.reshape(bsz, num_candidates, required, *pred_flat.shape[2:])
+    target = z1[:, None, ctx_length:required].float()
+    diff_sq = (pred[:, :, ctx_length:].float() - target).pow(2)
+    candidate_mse = diff_sq.mean(dim=(2, 3, 4))
+    winner_index = candidate_mse.detach().argmin(dim=1)
+    mon_loss = candidate_mse.gather(dim=1, index=winner_index[:, None]).mean()
+    last_candidate_mse = diff_sq[:, :, -1].mean(dim=(2, 3))
+    winner_last_mse = last_candidate_mse.gather(dim=1, index=winner_index[:, None]).mean()
+
+    # Decode all candidates together. Frozen decoder weights still permit
+    # gradients from physical-space losses to reach world-model latents.
+    z_pred_flat = unpack_spatial_to_bottleneck(pred_flat, k=args.packing_factor)
+    candidate_batch = repeat_batch_candidates(slice_future_batch(batch, 0, required), num_candidates)
+    continuous_flat = decode_agent_continuous_for_world_model(
+        tokenizer,
+        z_pred_flat,
+        candidate_batch,
+        args,
+        checkpoint_decoder=bool(args.mon_checkpoint_decoder),
+    )
+    continuous = continuous_flat.reshape(
+        bsz,
+        num_candidates,
+        required,
+        *continuous_flat.shape[2:],
+    )
+    agents_btkf = agents_to_btkf(batch["agents"], batch["agent_mask"])[:, :required]
+    winner_gather = winner_index.view(bsz, 1, 1, 1, 1).expand(
+        -1,
+        1,
+        required,
+        int(continuous.shape[3]),
+        int(continuous.shape[4]),
+    )
+    winner_continuous = continuous.gather(dim=1, index=winner_gather).squeeze(1)
+    agent_weight = build_agent_loss_weight_multiplier(
+        slice_future_batch(batch, 0, required),
+        args,
+    )
+    motion_loss, motion_metrics = decoded_motion_ground_truth_loss(
+        winner_continuous,
+        agents_btkf,
+        future_start=ctx_length,
+        agent_loss_weight_multiplier=agent_weight,
+        xy_weight=args.agent_xy_weight,
+        velocity_weight=args.agent_vel_weight,
+        yaw_weight=args.agent_yaw_weight,
+        focus_agent_weight=args.focus_agent_weight,
+    )
+    physical_losses, physical_metrics = decoded_rollout_physical_losses(
+        continuous,
+        agents_btkf,
+        batch["map_polylines"],
+        batch["map_mask"],
+        future_start=ctx_length,
+        vehicle_length_m=args.physical_vehicle_length_m,
+        vehicle_width_m=args.physical_vehicle_width_m,
+        collision_warning_clearance_m=args.collision_warning_clearance_m,
+        collision_temperature_m=args.collision_temperature_m,
+        offroad_boundary_margin_m=args.offroad_boundary_margin_m,
+        offroad_temperature_m=args.offroad_temperature_m,
+        road_edge_query_chunk_size=args.road_edge_query_chunk_size,
+        kinematic_dt=args.kinematic_dt,
+    )
+
+    if int(args.physical_warmup_steps) <= 0:
+        physical_scale = 1.0
+    else:
+        physical_scale = min(1.0, float(step + 1) / float(args.physical_warmup_steps))
+    physical_total = (
+        float(args.collision_loss_weight) * physical_losses["collision"]
+        + float(args.offroad_loss_weight) * physical_losses["offroad"]
+        + float(args.agent_kinematic_xy_weight) * physical_losses["kinematic_xy"]
+        + float(args.agent_speed_yaw_kinematic_weight) * physical_losses["speed_yaw_kinematic"]
+    )
+    loss = (
+        float(args.mon_loss_weight) * mon_loss
+        + float(args.motion_gt_loss_weight) * motion_loss
+        + physical_scale * physical_total
+    )
+    metrics: Dict[str, torch.Tensor] = {
+        "loss_total": loss.detach(),
+        "loss_mon": mon_loss.detach(),
+        "mon_candidate_latent_mse_mean": candidate_mse.mean().detach(),
+        "mon_candidate_latent_mse_std": candidate_mse.std(dim=1, unbiased=False).mean().detach(),
+        "mon_mean_minus_winner_mse": (candidate_mse.mean(dim=1) - candidate_mse.min(dim=1).values).mean().detach(),
+        "mon_winner_index_mean": winner_index.float().mean().detach(),
+        "rollout_latent_mse": mon_loss.detach(),
+        "rollout_latent_mse_last": winner_last_mse.detach(),
+        "loss_physical_total": physical_total.detach(),
+        "physical_warmup_scale": torch.tensor(physical_scale, device=loss.device),
+        **motion_metrics,
+        **physical_metrics,
+    }
+    return loss, metrics
 
 
 def slice_decoder_output(pred: Any, start: int, end: int) -> Any:
@@ -1243,60 +1564,134 @@ def evaluate(
     sched = make_tau_schedule(k_max=args.k_max, schedule=args.eval_schedule, d=args.eval_d)
     totals: Dict[str, float] = {}
     count = 0
+    num_rollouts = max(1, int(getattr(args, "eval_num_rollouts", 1)))
 
-    for batch in loader:
-        batch = slice_time_window(move_batch(batch, device), args.eval_seq_len, random_start=False)
-        actions, act_mask, action_slots = build_ego_action_features(batch, args)
-        z_gt, map_tokens, map_mask = encode_batch_dynamics_inputs_for_world_model(
-            tokenizer,
-            batch,
-            args,
-            return_map=args.dynamics_attend_map,
-        )
-        z_gt_packed = pack_bottleneck_to_spatial(z_gt, n_spatial=args.n_spatial, k=args.packing_factor)
-        z_pred_packed = sample_autoregressive_packed_sequence(
-            unwrap_model(dyn),
-            z_gt_packed=z_gt_packed,
-            actions=actions,
-            act_mask=act_mask,
-            map_tokens=map_tokens,
-            map_mask=map_mask,
-            ctx_length=args.eval_ctx,
-            horizon=args.eval_horizon,
-            k_max=args.k_max,
-            sched=sched,
-            max_rollout_window=args.max_rollout_window,
-        )
-        z_pred = unpack_spatial_to_bottleneck(z_pred_packed, k=args.packing_factor)
-        # Decode at the original sequence length when evaluating very short horizons.
-        # The decoder is causal in time, so scored rollout frames cannot attend to
-        # appended future GT latents, but this avoids short-sequence SDPA edge cases.
-        z_decode = z_pred
-        if z_pred.shape[1] < z_gt.shape[1]:
-            z_decode = torch.cat([z_pred, z_gt[:, z_pred.shape[1] :]], dim=1)
-        decoded = decode_batch_z_for_world_model(tokenizer, z_decode, batch, args)
+    # Every checkpoint sees the same scenes and the same N noise streams.
+    # Restoring RNG states also prevents validation from changing later training.
+    python_rng_state = random.getstate()
+    numpy_rng_state = np.random.get_state()
+    torch_rng_state = torch.random.get_rng_state()
+    cuda_rng_states = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+    eval_seed = int(getattr(args, "eval_multisample_seed", args.seed)) + get_dist_info()[0]
+    seed_everything(eval_seed)
 
-        score_start = min(int(args.eval_ctx), int(z_pred.shape[1]) - 1)
-        score_end = int(z_pred.shape[1])
-        decoded_future = slice_decoder_output(decoded, score_start, score_end)
-        batch_future = slice_future_batch(batch, score_start, score_end)
-        future_weight = build_agent_loss_weight_multiplier(batch_future, args, action_slots=action_slots)
-        metrics = reconstruction_metrics(
-            tokenizer,
-            decoded_future,
-            batch_future,
-            args,
-            agent_loss_weight_multiplier=future_weight,
-        )
-        metrics["latent_mse_future"] = (
-            z_pred_packed[:, score_start:score_end].float() - z_gt_packed[:, score_start:score_end].float()
-        ).pow(2).mean()
-        values = tensor_metrics(metrics)
-        for key, value in values.items():
-            totals[key] = totals.get(key, 0.0) + value
-        count += 1
-        if args.eval_max_batches > 0 and count >= args.eval_max_batches:
-            break
+    try:
+        for batch in loader:
+            batch = slice_time_window(move_batch(batch, device), args.eval_seq_len, random_start=False)
+            actions, act_mask, action_slots = build_ego_action_features(batch, args)
+            z_gt, map_tokens, map_mask = encode_batch_dynamics_inputs_for_world_model(
+                tokenizer,
+                batch,
+                args,
+                return_map=args.dynamics_attend_map,
+            )
+            z_gt_packed = pack_bottleneck_to_spatial(
+                z_gt,
+                n_spatial=args.n_spatial,
+                k=args.packing_factor,
+            )
+
+            def repeat_rollouts(value: Optional[torch.Tensor]) -> Optional[torch.Tensor]:
+                return None if value is None else value.repeat_interleave(num_rollouts, dim=0)
+
+            rollout_batch = batch if num_rollouts == 1 else repeat_batch_candidates(batch, num_rollouts)
+            rollout_z_gt_packed = repeat_rollouts(z_gt_packed)
+            rollout_z_gt = repeat_rollouts(z_gt)
+            z_pred_packed = sample_autoregressive_packed_sequence(
+                unwrap_model(dyn),
+                z_gt_packed=rollout_z_gt_packed,
+                actions=repeat_rollouts(actions),
+                act_mask=repeat_rollouts(act_mask),
+                map_tokens=repeat_rollouts(map_tokens),
+                map_mask=repeat_rollouts(map_mask),
+                ctx_length=args.eval_ctx,
+                horizon=args.eval_horizon,
+                k_max=args.k_max,
+                sched=sched,
+                max_rollout_window=args.max_rollout_window,
+            )
+            z_pred = unpack_spatial_to_bottleneck(z_pred_packed, k=args.packing_factor)
+            # Decode at the original sequence length when evaluating short horizons.
+            # Appended future GT is causally invisible to the scored rollout frames.
+            z_decode = z_pred
+            if z_pred.shape[1] < rollout_z_gt.shape[1]:
+                z_decode = torch.cat([z_pred, rollout_z_gt[:, z_pred.shape[1] :]], dim=1)
+            decoded = decode_batch_z_for_world_model(tokenizer, z_decode, rollout_batch, args)
+
+            score_start = min(int(args.eval_ctx), int(z_pred.shape[1]) - 1)
+            score_end = int(z_pred.shape[1])
+            decoded_future = slice_decoder_output(decoded, score_start, score_end)
+            batch_future = slice_future_batch(rollout_batch, score_start, score_end)
+            rollout_action_slots = repeat_rollouts(action_slots)
+            future_weight = build_agent_loss_weight_multiplier(
+                batch_future,
+                args,
+                action_slots=rollout_action_slots,
+            )
+            metrics = reconstruction_metrics(
+                tokenizer,
+                decoded_future,
+                batch_future,
+                args,
+                agent_loss_weight_multiplier=future_weight,
+            )
+            metrics["latent_mse_future"] = (
+                z_pred_packed[:, score_start:score_end].float()
+                - rollout_z_gt_packed[:, score_start:score_end].float()
+            ).pow(2).mean()
+
+            if num_rollouts > 1:
+                bsz = int(batch["agent_mask"].shape[0])
+                continuous = decoded.agent_continuous[:, :score_end].reshape(
+                    bsz,
+                    num_rollouts,
+                    score_end,
+                    *decoded.agent_continuous.shape[2:],
+                )
+                agents_btkf = agents_to_btkf(batch["agents"], batch["agent_mask"])[:, :score_end]
+                base_agent_weight = build_agent_loss_weight_multiplier(
+                    slice_future_batch(batch, 0, score_end),
+                    args,
+                    action_slots=action_slots,
+                )
+                metrics.update(
+                    multisample_trajectory_metrics(
+                        continuous,
+                        agents_btkf,
+                        future_start=score_start,
+                        agent_weight_multiplier=base_agent_weight,
+                    )
+                )
+                if bool(getattr(args, "eval_multisample_physical", True)):
+                    _, physical_metrics = decoded_rollout_physical_losses(
+                        continuous,
+                        agents_btkf,
+                        batch["map_polylines"],
+                        batch["map_mask"],
+                        future_start=score_start,
+                        vehicle_length_m=args.physical_vehicle_length_m,
+                        vehicle_width_m=args.physical_vehicle_width_m,
+                        collision_warning_clearance_m=args.collision_warning_clearance_m,
+                        collision_temperature_m=args.collision_temperature_m,
+                        offroad_boundary_margin_m=args.offroad_boundary_margin_m,
+                        offroad_temperature_m=args.offroad_temperature_m,
+                        road_edge_query_chunk_size=args.road_edge_query_chunk_size,
+                        kinematic_dt=args.kinematic_dt,
+                    )
+                    metrics.update(physical_metrics)
+
+            values = tensor_metrics(metrics)
+            for key, value in values.items():
+                totals[key] = totals.get(key, 0.0) + value
+            count += 1
+            if args.eval_max_batches > 0 and count >= args.eval_max_batches:
+                break
+    finally:
+        random.setstate(python_rng_state)
+        np.random.set_state(numpy_rng_state)
+        torch.random.set_rng_state(torch_rng_state)
+        if cuda_rng_states is not None:
+            torch.cuda.set_rng_state_all(cuda_rng_states)
 
     names = metric_order(totals)
     packed = torch.tensor([float(count)] + [totals.get(name, 0.0) for name in names], device=device, dtype=torch.float64)
@@ -1373,6 +1768,12 @@ def train(args: argparse.Namespace) -> None:
 
     val_loader = None
     if val_ds is not None:
+        if int(args.eval_subset_size) > 0 and len(val_ds) > int(args.eval_subset_size):
+            subset_generator = torch.Generator().manual_seed(int(args.eval_subset_seed))
+            subset_indices = torch.randperm(len(val_ds), generator=subset_generator)[
+                : int(args.eval_subset_size)
+            ].tolist()
+            val_ds = Subset(val_ds, subset_indices)
         val_sampler = DistributedSampler(val_ds, num_replicas=world_size, rank=rank, shuffle=False) if ddp else None
         val_loader = DataLoader(
             val_ds,
@@ -1505,13 +1906,268 @@ def train(args: argparse.Namespace) -> None:
             f"agent_far_weight={args.agent_far_weight} near_radius_m={args.agent_near_radius_m} "
             f"train_decoded_loss_weight={args.train_decoded_loss_weight}"
         )
+        if args.train_objective in {"rollout_motion", "rollout_mon"}:
+            print(
+                f"decoded_motion_gt weight={args.motion_gt_loss_weight} "
+                f"xy={args.agent_xy_weight} velocity={args.agent_vel_weight} "
+                f"yaw={args.agent_yaw_weight} full_future=True "
+                f"checkpoint_dynamics={args.motion_checkpoint_dynamics} "
+                f"checkpoint_decoder={args.motion_checkpoint_decoder}"
+            )
+        if args.train_objective == "rollout_mon":
+            print(
+                f"rollout_mon N={args.mon_num_samples} mon_weight={args.mon_loss_weight} "
+                f"shortcut_weight={args.rollout_shortcut_weight} "
+                f"fixed_vehicle_m={args.physical_vehicle_length_m}x{args.physical_vehicle_width_m} "
+                f"collision_weight={args.collision_loss_weight} "
+                f"collision_warning_m={args.collision_warning_clearance_m} "
+                f"offroad_weight={args.offroad_loss_weight} "
+                f"offroad_margin_m={args.offroad_boundary_margin_m} "
+                f"physical_warmup_steps={args.physical_warmup_steps} "
+                f"checkpoint_dynamics={args.mon_checkpoint_dynamics} "
+                f"checkpoint_decoder={args.mon_checkpoint_decoder}"
+            )
         print(
             f"parameters dynamics={dyn_params:,} frozen_action_mlp={frozen_action_mlp_params:,} "
             f"frozen_tokenizer={tok_params:,}"
         )
 
+    ckpt_dir = Path(args.ckpt_dir)
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    multisample_reference: Optional[Dict[str, float]] = None
+    best_multisample_score = math.inf
+    best_multisample_step = -1
+    best_multisample_checkpoint_path: Optional[str] = None
+    best_multisample_metadata = ckpt_dir / "best_multisample.json"
+    best_finetuned_score = math.inf
+    best_finetuned_step = -1
+    best_finetuned_eligible = False
+    best_finetuned_checkpoint_path: Optional[str] = None
+    best_finetuned_metadata = ckpt_dir / "best_multisample_finetuned.json"
+    multisample_history = ckpt_dir / "multisample_validation.jsonl"
+
+    if int(args.eval_num_rollouts) > 1:
+        if val_loader is None:
+            raise ValueError("--eval_num_rollouts > 1 requires a validation dataset")
+        if not bool(args.eval_multisample_physical):
+            raise ValueError("Balanced checkpoint selection requires --eval_multisample_physical")
+
+        reference_path = (
+            Path(args.eval_multisample_reference_json)
+            if args.eval_multisample_reference_json is not None
+            else ckpt_dir / "multisample_reference.json"
+        )
+        reference_from_current = False
+        if reference_path.is_file():
+            reference_payload = json.loads(reference_path.read_text())
+            multisample_reference = {
+                str(key): float(value)
+                for key, value in reference_payload["metrics"].items()
+            }
+        else:
+            current_state = None
+            if args.eval_multisample_reference_ckpt is not None:
+                current_state = {
+                    name: value.detach().cpu().clone()
+                    for name, value in unwrap_model(dyn).state_dict().items()
+                }
+                load_dynamics_weights(Path(args.eval_multisample_reference_ckpt), dyn=dyn)
+            else:
+                reference_from_current = True
+            multisample_reference = evaluate(
+                dyn,
+                tokenizer,
+                val_loader,
+                device,
+                args,
+                ddp=ddp,
+            )
+            if current_state is not None:
+                unwrap_model(dyn).load_state_dict(current_state, strict=True)
+            if is_rank0():
+                reference_path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_reference = reference_path.with_suffix(reference_path.suffix + ".tmp")
+                tmp_reference.write_text(
+                    json.dumps(
+                        {
+                            "reference_ckpt": args.eval_multisample_reference_ckpt or args.init_ckpt,
+                            "eval_num_rollouts": int(args.eval_num_rollouts),
+                            "eval_multisample_seed": int(args.eval_multisample_seed),
+                            "eval_subset_size": int(args.eval_subset_size),
+                            "eval_subset_seed": int(args.eval_subset_seed),
+                            "eval_max_batches": int(args.eval_max_batches),
+                            "metrics": multisample_reference,
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
+                tmp_reference.replace(reference_path)
+
+        if best_multisample_metadata.is_file():
+            previous_best = json.loads(best_multisample_metadata.read_text())
+            if bool(previous_best.get("eligible", False)):
+                best_multisample_score = float(previous_best["score"])
+                best_multisample_step = int(previous_best["step"])
+                best_multisample_checkpoint_path = str(previous_best["checkpoint"])
+        else:
+            reference_checkpoint = args.eval_multisample_reference_ckpt or args.init_ckpt
+            if reference_checkpoint is not None:
+                reference_record = {
+                    "step": -1,
+                    "epoch": -1,
+                    "label": "stage1_reference",
+                    "score": 1.0,
+                    "eligible": True,
+                    "is_new_best": True,
+                    "checkpoint": str(reference_checkpoint),
+                    "reference_json": str(reference_path),
+                    "metrics": {
+                        **multisample_reference,
+                        **multisample_selection_score(
+                            multisample_reference,
+                            multisample_reference,
+                            diversity_floor_ratio=args.eval_diversity_floor_ratio,
+                        ),
+                    },
+                }
+                best_multisample_score = 1.0
+                best_multisample_step = -1
+                best_multisample_checkpoint_path = str(reference_checkpoint)
+                if is_rank0():
+                    tmp_best = best_multisample_metadata.with_suffix(".tmp")
+                    tmp_best.write_text(json.dumps(reference_record, indent=2, sort_keys=True) + "\n")
+                    tmp_best.replace(best_multisample_metadata)
+
+        if best_finetuned_metadata.is_file():
+            previous_finetuned_best = json.loads(best_finetuned_metadata.read_text())
+            best_finetuned_score = float(previous_finetuned_best["score"])
+            best_finetuned_step = int(previous_finetuned_best["step"])
+            best_finetuned_eligible = bool(previous_finetuned_best.get("eligible", False))
+            best_finetuned_checkpoint_path = str(previous_finetuned_best["checkpoint"])
+
+        def consider_multisample_checkpoint(
+            val_metrics: Dict[str, float],
+            *,
+            candidate_step: int,
+            candidate_epoch: int,
+            label: str,
+        ) -> Dict[str, float]:
+            nonlocal best_multisample_score, best_multisample_step, best_multisample_checkpoint_path
+            nonlocal best_finetuned_score, best_finetuned_step, best_finetuned_eligible
+            nonlocal best_finetuned_checkpoint_path
+            assert multisample_reference is not None
+            selection = multisample_selection_score(
+                val_metrics,
+                multisample_reference,
+                diversity_floor_ratio=args.eval_diversity_floor_ratio,
+            )
+            selected_metrics = {**val_metrics, **selection}
+            eligible = bool(selection["checkpoint_selection_eligible"] > 0.5)
+            score = float(selection["checkpoint_selection_score"])
+            is_new_best = eligible and score < best_multisample_score
+            is_new_finetuned_best = math.isfinite(score) and (
+                best_finetuned_checkpoint_path is None
+                or (eligible and not best_finetuned_eligible)
+                or (eligible == best_finetuned_eligible and score < best_finetuned_score)
+            )
+            if is_rank0():
+                record = {
+                    "step": int(candidate_step),
+                    "epoch": int(candidate_epoch),
+                    "label": str(label),
+                    "score": score,
+                    "eligible": eligible,
+                    "is_new_best": bool(is_new_best),
+                    "is_new_finetuned_best": bool(is_new_finetuned_best),
+                    "checkpoint": str(ckpt_dir / "best_multisample.pt") if is_new_best else None,
+                    "finetuned_checkpoint": (
+                        str(ckpt_dir / "best_multisample_finetuned.pt")
+                        if is_new_finetuned_best
+                        else None
+                    ),
+                    "reference_json": str(reference_path),
+                    "metrics": selected_metrics,
+                }
+                with multisample_history.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(record, sort_keys=True) + "\n")
+                if is_new_best:
+                    best_multisample_score = score
+                    best_multisample_step = int(candidate_step)
+                    best_multisample_checkpoint_path = str(ckpt_dir / "best_multisample.pt")
+                    save_ckpt(
+                        ckpt_dir / "best_multisample.pt",
+                        dyn=dyn,
+                        opt=opt,
+                        scaler=scaler,
+                        args=args,
+                        step=candidate_step,
+                        epoch=candidate_epoch,
+                    )
+                    tmp_best = best_multisample_metadata.with_suffix(".tmp")
+                    record["checkpoint"] = best_multisample_checkpoint_path
+                    tmp_best.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
+                    tmp_best.replace(best_multisample_metadata)
+                if is_new_finetuned_best:
+                    best_finetuned_score = score
+                    best_finetuned_step = int(candidate_step)
+                    best_finetuned_eligible = eligible
+                    best_finetuned_checkpoint_path = str(
+                        ckpt_dir / "best_multisample_finetuned.pt"
+                    )
+                    save_ckpt(
+                        ckpt_dir / "best_multisample_finetuned.pt",
+                        dyn=dyn,
+                        opt=opt,
+                        scaler=scaler,
+                        args=args,
+                        step=candidate_step,
+                        epoch=candidate_epoch,
+                    )
+                    finetuned_record = {
+                        **record,
+                        "checkpoint": best_finetuned_checkpoint_path,
+                    }
+                    tmp_finetuned = best_finetuned_metadata.with_suffix(".tmp")
+                    tmp_finetuned.write_text(
+                        json.dumps(finetuned_record, indent=2, sort_keys=True) + "\n"
+                    )
+                    tmp_finetuned.replace(best_finetuned_metadata)
+                print(
+                    f"multisample-selection step={candidate_step} score={score:.4f} "
+                    f"eligible={eligible} diversity_ratio="
+                    f"{selection['checkpoint_diversity_ratio_to_reference']:.3f} "
+                    f"new_best={is_new_best} best_step={best_multisample_step} "
+                    f"new_finetuned_best={is_new_finetuned_best} "
+                    f"best_finetuned_step={best_finetuned_step}",
+                    flush=True,
+                )
+            return selected_metrics
+
+        initial_metrics = (
+            multisample_reference
+            if reference_from_current
+            else evaluate(dyn, tokenizer, val_loader, device, args, ddp=ddp)
+        )
+        initial_metrics = consider_multisample_checkpoint(
+            dict(initial_metrics),
+            candidate_step=step,
+            candidate_epoch=start_epoch,
+            label="training_initialization",
+        )
+        if is_rank0():
+            print(f"eval-initial {format_metrics(initial_metrics)}", flush=True)
+            print(
+                f"multisample_validation N={args.eval_num_rollouts} seed={args.eval_multisample_seed} "
+                f"reference={reference_path} diversity_floor_ratio={args.eval_diversity_floor_ratio}",
+                flush=True,
+            )
+    else:
+        consider_multisample_checkpoint = None
+
     t0 = time.time()
-    latest = Path(args.ckpt_dir) / "latest.pt"
+    latest = ckpt_dir / "latest.pt"
     stop = False
     last_epoch = start_epoch
     grad_accum = max(1, int(args.grad_accum))
@@ -1599,6 +2255,84 @@ def train(args: argparse.Namespace) -> None:
                         decoded_agent_weight = build_agent_loss_weight_multiplier(
                             decoded_batch, args, action_slots=action_slots
                         )
+                    elif args.train_objective == "rollout_motion":
+                        if args.train_decoded_loss_weight > 0.0:
+                            raise ValueError(
+                                "rollout_motion owns its decoded motion loss; "
+                                "set train_decoded_loss_weight=0"
+                            )
+                        loss, metrics = rollout_motion_ground_truth_loss(
+                            dyn,
+                            tokenizer,
+                            batch,
+                            z1=z_packed,
+                            actions=actions,
+                            act_mask=act_mask,
+                            map_tokens=map_tokens,
+                            map_mask=map_mask,
+                            args=args,
+                        )
+                        z_hat_packed = None
+                        decoded_batch = slice_future_batch(
+                            batch,
+                            int(args.eval_ctx),
+                            int(args.eval_ctx + args.eval_horizon),
+                        )
+                        decoded_agent_weight = None
+                    elif args.train_objective == "rollout_mon":
+                        if args.train_decoded_loss_weight > 0.0:
+                            raise ValueError(
+                                "rollout_mon owns its decoded physical losses; "
+                                "set train_decoded_loss_weight=0"
+                            )
+                        loss, metrics = rollout_mon_physical_loss(
+                            dyn,
+                            tokenizer,
+                            batch,
+                            z1=z_packed,
+                            actions=actions,
+                            act_mask=act_mask,
+                            map_tokens=map_tokens,
+                            map_mask=map_mask,
+                            args=args,
+                            step=step,
+                        )
+                        z_hat_packed = None
+                        decoded_batch = slice_future_batch(
+                            batch,
+                            int(args.eval_ctx),
+                            int(args.eval_ctx + args.eval_horizon),
+                        )
+                        decoded_agent_weight = None
+
+                        # A weak random 11-frame Stage-1 shortcut batch helps
+                        # retain the initialization's native denoising task.
+                        if float(args.rollout_shortcut_weight) > 0.0:
+                            shortcut_window = min(int(args.max_rollout_window), int(z_packed.shape[1]))
+                            max_start = int(z_packed.shape[1]) - shortcut_window
+                            shortcut_start = (
+                                int(torch.randint(0, max_start + 1, (1,), device=device).item())
+                                if max_start > 0
+                                else 0
+                            )
+                            shortcut_end = shortcut_start + shortcut_window
+                            shortcut_loss, shortcut_metrics, _ = dynamics_pretrain_loss(
+                                dyn,
+                                z1=z_packed[:, shortcut_start:shortcut_end],
+                                actions=None if actions is None else actions[:, shortcut_start:shortcut_end],
+                                act_mask=None if act_mask is None else act_mask[:, shortcut_start:shortcut_end],
+                                k_max=args.k_max,
+                                b_self=b_self,
+                                step=step,
+                                bootstrap_start=args.bootstrap_start,
+                                map_tokens=map_tokens,
+                                map_mask=map_mask,
+                                return_pred=False,
+                            )
+                            loss = loss + float(args.rollout_shortcut_weight) * shortcut_loss
+                            metrics["loss_shortcut_retention"] = shortcut_loss.detach()
+                            metrics["shortcut_flow_mse"] = shortcut_metrics["flow_mse"].detach()
+                            metrics["loss_total"] = loss.detach()
                     else:
                         raise ValueError(f"Unknown train_objective={args.train_objective!r}")
                     if args.train_decoded_loss_weight > 0.0:
@@ -1639,6 +2373,13 @@ def train(args: argparse.Namespace) -> None:
 
                     if val_loader is not None and args.eval_every > 0 and step % args.eval_every == 0:
                         val_metrics = evaluate(dyn, tokenizer, val_loader, device, args, ddp=ddp)
+                        if consider_multisample_checkpoint is not None:
+                            val_metrics = consider_multisample_checkpoint(
+                                val_metrics,
+                                candidate_step=step,
+                                candidate_epoch=epoch,
+                                label="periodic_validation",
+                            )
                         if is_rank0():
                             print(f"eval step={step} {format_metrics(val_metrics)}")
                         if is_rank0() and wandb_run is not None:
@@ -1658,6 +2399,19 @@ def train(args: argparse.Namespace) -> None:
 
     if is_rank0():
         save_ckpt(Path(args.ckpt_dir) / f"final_step_{step:08d}.pt", dyn=dyn, opt=opt, scaler=scaler, args=args, step=step, epoch=last_epoch)
+        if int(args.eval_num_rollouts) > 1:
+            print(
+                f"recommended_checkpoint={best_multisample_checkpoint_path} "
+                f"best_step={best_multisample_step} best_score={best_multisample_score:.4f}",
+                flush=True,
+            )
+            print(
+                f"recommended_finetuned_checkpoint={best_finetuned_checkpoint_path} "
+                f"best_finetuned_step={best_finetuned_step} "
+                f"best_finetuned_score={best_finetuned_score:.4f} "
+                f"best_finetuned_eligible={best_finetuned_eligible}",
+                flush=True,
+            )
     if is_rank0() and wandb_run is not None:
         wandb_run.finish()
     cleanup_distributed(ddp, device)
@@ -1720,6 +2474,13 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--val_fraction", type=float, default=0.1)
     p.add_argument("--batch_size", type=int, default=8)
     p.add_argument("--eval_batch_size", type=int, default=4)
+    p.add_argument(
+        "--eval_subset_size",
+        type=int,
+        default=0,
+        help="Fixed randomly selected validation subset size; 0 uses the full validation dataset.",
+    )
+    p.add_argument("--eval_subset_seed", type=int, default=20260813)
     p.add_argument("--num_workers", type=int, default=4)
 
     p.add_argument("--d_model_dyn", type=int, default=512)
@@ -1739,7 +2500,11 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--k_max", type=int, default=64)
     p.add_argument("--bootstrap_start", type=int, default=0)
     p.add_argument("--self_fraction", type=float, default=0.857142857)
-    p.add_argument("--train_objective", choices=["shortcut", "tf_onestep", "rollout"], default="shortcut")
+    p.add_argument(
+        "--train_objective",
+        choices=["shortcut", "tf_onestep", "rollout", "rollout_motion", "rollout_mon"],
+        default="shortcut",
+    )
     p.add_argument("--tf_context", type=int, default=10)
 
     p.add_argument("--lr", type=float, default=1e-4)
@@ -1757,6 +2522,37 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--max_rollout_window", type=int, default=100)
     p.add_argument("--eval_schedule", choices=["finest", "shortcut"], default="shortcut")
     p.add_argument("--eval_d", type=float, default=0.25)
+    p.add_argument(
+        "--eval_num_rollouts",
+        type=int,
+        default=1,
+        help="Number of fixed-noise joint candidates per validation scene; use 8 for stochastic models.",
+    )
+    p.add_argument("--eval_multisample_seed", type=int, default=20260813)
+    p.add_argument(
+        "--eval_multisample_physical",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Measure all-candidate collision/offroad/kinematic proxies during multi-rollout validation.",
+    )
+    p.add_argument(
+        "--eval_multisample_reference_json",
+        type=str,
+        default=None,
+        help="Shared Stage-1 multi-rollout metrics used to normalize checkpoint selection.",
+    )
+    p.add_argument(
+        "--eval_multisample_reference_ckpt",
+        type=str,
+        default=None,
+        help="Optional Stage-1 checkpoint used to create the reference JSON when it is absent.",
+    )
+    p.add_argument(
+        "--eval_diversity_floor_ratio",
+        type=float,
+        default=0.5,
+        help="Minimum retained fraction of Stage-1 pairwise trajectory diversity for eligibility.",
+    )
 
     p.add_argument("--agent_xy_weight", type=float, default=1.0)
     p.add_argument("--agent_xy_loss", choices=["smooth_l1", "gmm"], default="smooth_l1")
@@ -1783,6 +2579,30 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--agent_near_radius_m", type=float, default=50.0)
     p.add_argument("--agent_distance_source", choices=["sdc", "focus"], default="focus")
     p.add_argument("--train_decoded_loss_weight", type=float, default=0.0)
+    p.add_argument("--motion_gt_loss_weight", type=float, default=0.0)
+    p.add_argument("--motion_checkpoint_dynamics", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--motion_checkpoint_decoder", action=argparse.BooleanOptionalAction, default=True)
+
+    p.add_argument("--mon_num_samples", type=int, default=8)
+    p.add_argument("--mon_loss_weight", type=float, default=1.0)
+    p.add_argument("--mon_checkpoint_dynamics", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--mon_checkpoint_decoder", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument(
+        "--rollout_shortcut_weight",
+        type=float,
+        default=0.0,
+        help="Weight of a random max_rollout_window Stage-1 shortcut retention batch.",
+    )
+    p.add_argument("--physical_vehicle_length_m", type=float, default=4.8)
+    p.add_argument("--physical_vehicle_width_m", type=float, default=2.0)
+    p.add_argument("--collision_loss_weight", type=float, default=0.1)
+    p.add_argument("--collision_warning_clearance_m", type=float, default=1.0)
+    p.add_argument("--collision_temperature_m", type=float, default=0.2)
+    p.add_argument("--offroad_loss_weight", type=float, default=0.1)
+    p.add_argument("--offroad_boundary_margin_m", type=float, default=0.3)
+    p.add_argument("--offroad_temperature_m", type=float, default=0.2)
+    p.add_argument("--road_edge_query_chunk_size", type=int, default=1024)
+    p.add_argument("--physical_warmup_steps", type=int, default=500)
 
     p.add_argument("--log_every", type=int, default=100)
     p.add_argument("--save_every", type=int, default=5000)

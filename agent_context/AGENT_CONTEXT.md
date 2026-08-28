@@ -1,6 +1,30 @@
 # Agent Context
 
-Last updated: 2026-07-20
+Last updated: 2026-08-12
+
+## Latest Update: WOSAC Improvement and Anti-Collapse Fine-Tuning, 2026-08-12
+
+The current confirmed world-model behavior is that Stage 1 retains strong
+noise-dependent stochasticity, while long-horizon rollout fine-tuning lowers
+ADE but collapses different noise samples toward nearly identical futures.
+The current 1000-view internal WOSAC-style evaluation also identifies high
+collision and offroad rates as the main physical-realism failures.
+
+The agreed first training study keeps the architecture fixed and compares:
+
+```text
+Control: current rollout fine-tuning
+A: joint Minimum-over-N (N=4)
+B: MoN + all-sample collision/offroad/kinematic losses
+C: B + Stage 1 diversity retention
+```
+
+Full evidence, loss definitions, controlled experiment matrix, evaluation
+criteria, and implementation order:
+
+```text
+agent_context/WOSAC_IMPROVEMENT_PLAN_2026_08_12.md
+```
 
 ## Source
 

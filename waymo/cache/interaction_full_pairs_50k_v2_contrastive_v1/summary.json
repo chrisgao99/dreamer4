@@ -1,0 +1,70 @@
+{
+  "config": {
+    "duplicate_rms_threshold": 0.02,
+    "history_steps": 32,
+    "min_negative_rms_delta": 0.05,
+    "min_negative_rms_ratio": 1.25,
+    "min_overlap": 0.8,
+    "num_negatives": 16,
+    "outcome_steps": 20,
+    "query_chunk_size": 256,
+    "relation_margin_m": 2.0
+  },
+  "reason_bits": {
+    "distance_trend_opposite": 16,
+    "future_order_diff": 2,
+    "future_order_opposite": 4,
+    "gap_trend_opposite": 8,
+    "order_swap_diff": 1
+  },
+  "rms_dir": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk_rms_v0",
+  "splits": {
+    "train": {
+      "anchors_with_duplicates_removed": 6917,
+      "causal_eligible": 41008,
+      "duplicate_edges_removed": 7538,
+      "negative_count_quantiles": {
+        "0.0": 0.0,
+        "0.1": 0.0,
+        "0.5": 16.0,
+        "0.9": 16.0,
+        "1.0": 16.0
+      },
+      "output": "waymo/cache/interaction_full_pairs_50k_v2_contrastive_v1/train_contrastive_training.npz",
+      "positive_selected_original_rank_quantiles": {
+        "0.0": 1.0,
+        "0.5": 1.0,
+        "0.9": 5.0,
+        "0.99": 19.0,
+        "1.0": 32.0
+      },
+      "rms_eligible": 74892,
+      "samples": 117540,
+      "training_eligible": 35478
+    },
+    "val": {
+      "anchors_with_duplicates_removed": 101,
+      "causal_eligible": 4617,
+      "duplicate_edges_removed": 101,
+      "negative_count_quantiles": {
+        "0.0": 0.0,
+        "0.1": 5.0,
+        "0.5": 16.0,
+        "0.9": 16.0,
+        "1.0": 16.0
+      },
+      "output": "waymo/cache/interaction_full_pairs_50k_v2_contrastive_v1/val_contrastive_training.npz",
+      "positive_selected_original_rank_quantiles": {
+        "0.0": 1.0,
+        "0.5": 1.0,
+        "0.9": 4.0,
+        "0.99": 13.0,
+        "1.0": 32.0
+      },
+      "rms_eligible": 8413,
+      "samples": 13261,
+      "training_eligible": 4298
+    }
+  },
+  "version": "interaction_contrastive_training_v1"
+}

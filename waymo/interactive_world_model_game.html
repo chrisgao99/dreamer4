@@ -26,7 +26,9 @@
     #connection { font: 12px ui-monospace, monospace; color: #ffb04a; }
     .game { display: grid; grid-template-columns: minmax(0, 720px) minmax(230px, 1fr); gap: 14px; }
     .viewport, .side { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+    .viewport { position: relative; }
     #frame { display: block; width: 100%; aspect-ratio: 1; background: #11161f; }
+    #sceneLabel { position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 24px); padding: 7px 10px; border: 1px solid rgba(255, 205, 90, .55); border-radius: 7px; background: rgba(5, 8, 13, .82); color: #ffcd5a; font: 13px/1.25 ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: all; cursor: text; }
     .side { padding: 15px; display: flex; flex-direction: column; gap: 15px; }
     .readout { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .metric { background: #101722; border-radius: 9px; padding: 9px; }
@@ -57,17 +59,20 @@
   <header>
     <div>
       <h1>Waymo World Model Drive</h1>
-      <div class="subtitle">You command the green focus agent. The world model drives everything else.</div>
+      <div id="protocolSubtitle" class="subtitle">Frames 1–11 replay first; then you command the green focus agent during model rollout.</div>
     </div>
     <div id="connection">connecting…</div>
   </header>
   <div class="game">
-    <div class="viewport"><img id="frame" alt="World model scene"></div>
+    <div class="viewport">
+      <img id="frame" alt="World model scene">
+      <div id="sceneLabel" title="The exact scene identifier will appear here">scene loading…</div>
+    </div>
     <aside class="side">
       <div class="readout">
         <div class="metric"><div class="label">Speed</div><div id="speed" class="value">—</div></div>
         <div class="metric"><div class="label">Heading</div><div id="heading" class="value">—</div></div>
-        <div class="metric"><div class="label">Step</div><div id="step" class="value">—</div></div>
+        <div class="metric"><div class="label">Progress</div><div id="step" class="value">—</div></div>
         <div class="metric"><div class="label">Model</div><div id="latency" class="value">—</div></div>
       </div>
       <div class="controls" aria-label="Driving controls">
@@ -84,6 +89,7 @@
       </div>
       <div id="status">Waiting for the model…</div>
       <div class="hint">
+        Recorded context frames ignore driving input. The first prediction uses frames 2–11.<br>
         Hold <kbd>↑</kbd>/<kbd>↓</kbd> to change speed and <kbd>←</kbd>/<kbd>→</kbd> to change heading.<br>
         <kbd>Space</kbd> play/pause · <kbd>.</kbd> one step · <kbd>R</kbd> reset · <kbd>N</kbd> new scene.
       </div>
@@ -95,6 +101,8 @@
   const connection = document.getElementById("connection");
   const status = document.getElementById("status");
   const frame = document.getElementById("frame");
+  const sceneLabel = document.getElementById("sceneLabel");
+  const protocolSubtitle = document.getElementById("protocolSubtitle");
   const fields = {
     speed: document.getElementById("speed"),
     heading: document.getElementById("heading"),
@@ -136,11 +144,17 @@
     if (typeof event.data === "string") {
       const message = JSON.parse(event.data);
       if (message.type !== "status") return;
-      connection.textContent = message.paused ? "connected · paused" : "connected · playing";
+      const phase = message.phase === "context_replay" ? "context replay" : "rollout";
+      connection.textContent = message.paused ? `connected · paused · ${phase}` : `connected · ${phase}`;
       fields.speed.textContent = `${message.speed.toFixed(1)} m/s`;
       fields.heading.textContent = `${message.heading_deg >= 0 ? "+" : ""}${message.heading_deg.toFixed(0)}°`;
-      fields.step.textContent = `${message.step} / ${message.max_steps}`;
+      fields.step.textContent = message.phase === "context_replay"
+        ? `Context ${message.replay_step}/${message.replay_steps}`
+        : `Rollout ${message.step}/${message.max_steps}`;
       fields.latency.textContent = `${message.inference_ms.toFixed(0)} ms`;
+      protocolSubtitle.textContent = `Frames 1–11 replay first; then you command the green focus agent for ${message.max_steps} predicted frames.`;
+      sceneLabel.textContent = message.scene_label;
+      sceneLabel.title = `NPZ: ${message.scene_file}`;
       status.textContent = message.text;
       return;
     }

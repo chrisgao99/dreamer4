@@ -1,0 +1,9 @@
+{
+  "completed_views": 1000,
+  "new_views_this_invocation": 9,
+  "per_view_metrics": "/p/yufeng/tri30/dreamer4/waymo/eval_results/wosac/wosac_mon8_motion_phys_h90_step27000_val1000_k4_rb8/per_view_wosac_metrics.jsonl",
+  "remaining_views": 0,
+  "scoring_device": "gpu",
+  "status": "completed",
+  "total_views": 1000
+}

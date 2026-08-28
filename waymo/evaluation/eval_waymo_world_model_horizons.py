@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 import torch
 import torch.distributed as dist
-from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.data import DataLoader, DistributedSampler, Subset
 
 WAYMO_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = WAYMO_ROOT.parent
@@ -320,6 +320,13 @@ def main(args: argparse.Namespace) -> None:
             _, eval_ds = wm.make_splits(dataset, args.val_fraction, args.seed)
             if eval_ds is None:
                 raise ValueError("No validation split available. Pass --val_data_dir for full val evaluation.")
+
+        if int(args.eval_subset_size) > 0 and len(eval_ds) > int(args.eval_subset_size):
+            subset_generator = torch.Generator().manual_seed(int(args.eval_subset_seed))
+            subset_indices = torch.randperm(len(eval_ds), generator=subset_generator)[
+                : int(args.eval_subset_size)
+            ].tolist()
+            eval_ds = Subset(eval_ds, subset_indices)
 
         eval_sampler = DistributedSampler(eval_ds, num_replicas=world_size, rank=rank, shuffle=False) if ddp else None
         eval_loader = DataLoader(

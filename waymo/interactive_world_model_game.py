@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Interactive browser game for an action-conditioned Waymo world model.
 
+The default episode first replays recorded Waymo frames 1 through 11.  The
+checkpoint's 11-token rollout window then retains recorded frames 2 through 11
+as the ten-token past and appends one query token to predict frame 12.  The 2D
+renderer generates 80 interactive frames by default; both PufferDrive 3D
+frontends generate 150.
+
 The human controls the focus agent (slot 0).  Each simulation tick converts
 the held arrow keys into the raw action representation used during training:
 
@@ -54,12 +60,24 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
 
-DEFAULT_WORLD_MODEL_CKPT = (
+WORLD_MODEL_CHECKPOINT_DIR = (
     REPO_ROOT
     / "waymo/checkpoints/waymo_wm_original_stmlayer_3_stage"
-    / "waymo_wm_time1_mapx1_h30step10k_exact_ctx1_h90_d1_chunk32s30_b1_50k"
-    / "step_00040000.pt"
+    / "waymo_wm_stage1best_mon8_fullmotion_physproxy_h30best30k_ctx1_h90_d1_chunk32s30_30k"
 )
+WORLD_MODEL_CHECKPOINT_PROFILES = {
+    # User-facing names intentionally describe the two rollout variants, not
+    # the checkpoint's internal step metadata (the finetuned h30 file records
+    # step=0).
+    "h30": WORLD_MODEL_CHECKPOINT_DIR / "best_multisample_finetuned.pt",
+    "h90": WORLD_MODEL_CHECKPOINT_DIR / "step_00027000.pt",
+}
+DEFAULT_CHECKPOINT_PROFILE = "h90"
+DEFAULT_CONTEXT_FRAMES = 11
+DEFAULT_2D_ROLLOUT_STEPS = 80
+DEFAULT_3D_ROLLOUT_STEPS = 150
+# Backward-compatible name for callers that mean the original 2D default.
+DEFAULT_ROLLOUT_STEPS = DEFAULT_2D_ROLLOUT_STEPS
 DEFAULT_HTML = WAYMO_ROOT / "interactive_world_model_game.html"
 DEFAULT_PUFFER_SCENARIO_CACHE = (
     WAYMO_ROOT / "cache/wosac_internal_val_scenarios/scenarios"
@@ -82,9 +100,25 @@ def wrap_angle(angle: float) -> float:
 class ControlConfig:
     dt: float = 0.1
     acceleration_mps2: float = 5.0
+    braking_mps2: float = 8.0
     yaw_rate_deg_s: float = 45.0
     min_speed_mps: float = 0.0
     max_speed_mps: float = 30.0
+
+
+@dataclass(frozen=True)
+class AnalogControl:
+    """Normalised local controller input.
+
+    Positive steering turns left (counter-clockwise); throttle and brake are
+    independently normalised to ``[0, 1]``.  Keeping this representation
+    device-independent lets wheel-specific axis conventions stay in the local
+    frontend.
+    """
+
+    steering: float = 0.0
+    throttle: float = 0.0
+    brake: float = 0.0
 
 
 @dataclass
@@ -97,6 +131,58 @@ class FocusState:
     @property
     def velocity(self) -> tuple[float, float]:
         return self.speed * math.cos(self.yaw), self.speed * math.sin(self.yaw)
+
+
+def context_frame_bounds(
+    start_frame: int,
+    total_steps: int,
+    context_frames: int,
+) -> tuple[int, int]:
+    """Return the recorded half-open interval used for the initial replay."""
+
+    start = int(start_frame)
+    total = int(total_steps)
+    count = int(context_frames)
+    if start < 0:
+        raise ValueError(f"start-frame must be non-negative, got {start}")
+    if count < 2:
+        raise ValueError(f"context-frames must be at least 2, got {count}")
+    end = start + count
+    if end > total:
+        raise ValueError(
+            f"Recorded context [{start}, {end}) exceeds the available {total} frames"
+        )
+    return start, end
+
+
+def prediction_context_bounds(
+    context_start: int,
+    context_frames: int,
+    max_rollout_window: int,
+) -> tuple[int, int]:
+    """Return recorded frames retained for the first prediction.
+
+    ``max_rollout_window`` includes the noisy prediction token, so a window of
+    11 retains ten past frames.  With the default replay interval ``[0, 11)``,
+    this returns ``[1, 11)``: human-readable Waymo frames 2 through 11.
+    """
+
+    start = int(context_start)
+    count = int(context_frames)
+    window = int(max_rollout_window)
+    end = start + count
+    past_keep = count if window <= 0 else min(count, max(1, window - 1))
+    return end - past_keep, end
+
+
+def resolve_rollout_steps(renderer: str, max_steps: int | None) -> int:
+    """Resolve the default horizon without overriding an explicit CLI value."""
+
+    if max_steps is not None:
+        return int(max_steps)
+    if str(renderer) == "puffer":
+        return DEFAULT_3D_ROLLOUT_STEPS
+    return DEFAULT_2D_ROLLOUT_STEPS
 
 
 def initial_focus_action(
@@ -123,6 +209,45 @@ def integrate_focus_control(
     speed = float(
         np.clip(
             state.speed + throttle * config.acceleration_mps2 * config.dt,
+            config.min_speed_mps,
+            config.max_speed_mps,
+        )
+    )
+    delta_yaw = math.radians(config.yaw_rate_deg_s) * config.dt * steering
+    yaw = wrap_angle(state.yaw + delta_yaw)
+    vx, vy = speed * math.cos(yaw), speed * math.sin(yaw)
+    delta_x, delta_y = vx * config.dt, vy * config.dt
+    next_state = FocusState(
+        x=state.x + delta_x,
+        y=state.y + delta_y,
+        speed=speed,
+        yaw=yaw,
+    )
+
+    action = torch.zeros(16, dtype=torch.float32)
+    action[:7] = torch.tensor(
+        [delta_x, delta_y, delta_yaw, speed, vx, vy, 1.0],
+        dtype=torch.float32,
+    )
+    return next_state, action
+
+
+def integrate_focus_analog_control(
+    state: FocusState,
+    control: AnalogControl,
+    config: ControlConfig,
+) -> tuple[FocusState, torch.Tensor]:
+    """Advance the focus state from continuous wheel and pedal inputs."""
+
+    steering = float(np.clip(control.steering, -1.0, 1.0))
+    throttle = float(np.clip(control.throttle, 0.0, 1.0))
+    brake = float(np.clip(control.brake, 0.0, 1.0))
+    acceleration = (
+        throttle * config.acceleration_mps2 - brake * config.braking_mps2
+    )
+    speed = float(
+        np.clip(
+            state.speed + acceleration * config.dt,
             config.min_speed_mps,
             config.max_speed_mps,
         )
@@ -177,6 +302,24 @@ def _scenario_id(item: dict[str, Any], path: str) -> str:
     if isinstance(value, (list, tuple)):
         value = value[0] if value else ""
     return str(value) or Path(path).stem
+
+
+def resolve_world_model_checkpoint(
+    checkpoint_profile: str,
+    world_model_ckpt: str | Path | None,
+) -> tuple[Path, str]:
+    """Resolve a named interactive checkpoint or an explicit path override."""
+
+    if world_model_ckpt:
+        return Path(world_model_ckpt).expanduser().resolve(), "custom"
+    try:
+        path = WORLD_MODEL_CHECKPOINT_PROFILES[str(checkpoint_profile)]
+    except KeyError as error:
+        choices = ", ".join(sorted(WORLD_MODEL_CHECKPOINT_PROFILES))
+        raise ValueError(
+            f"Unknown checkpoint profile {checkpoint_profile!r}; choose one of: {choices}"
+        ) from error
+    return path.expanduser().resolve(), str(checkpoint_profile)
 
 
 def _to_cpu_numpy(value: torch.Tensor) -> np.ndarray:
@@ -253,9 +396,16 @@ class SessionState:
     agent_types: np.ndarray
     ego_origin_xy: np.ndarray
     ego_heading: float
+    context_start_frame: int
     focus: FocusState
     z_history: list[torch.Tensor]
     action_history: list[torch.Tensor]
+    action_mask_history: list[torch.Tensor]
+    context_focus: list[FocusState]
+    context_world: np.ndarray
+    context_valid: np.ndarray
+    context_yaw: np.ndarray
+    context_velocity: np.ndarray
     world_history: list[np.ndarray]
     valid_history: list[np.ndarray]
     yaw_history: list[np.ndarray]
@@ -265,6 +415,7 @@ class SessionState:
     step_once: bool = False
     reset_requested: bool = False
     new_scene_requested: bool = False
+    replay_index: int = 0
     step: int = 0
     cached_jpeg: bytes | None = None
     cached_frame_id: int = -1
@@ -274,8 +425,27 @@ class SessionState:
     puffer_disabled: bool = False
 
 
+def scene_identity(state: SessionState) -> dict[str, Any]:
+    """Return a stable, reportable identifier for the current focus view."""
+
+    focus_track_id = int(state.agent_ids[0])
+    scene_file = Path(state.scene_path).name
+    label = (
+        f"scene #{state.scene_index} | scenario {state.scenario_id} | "
+        f"focus {focus_track_id}"
+    )
+    return {
+        "scene_index": int(state.scene_index),
+        "scenario_id": str(state.scenario_id),
+        "focus_track_id": focus_track_id,
+        "scene_file": scene_file,
+        "scene_label": label,
+    }
+
+
 class WaymoInteractiveServer:
     def __init__(self, args: argparse.Namespace):
+        args.max_steps = resolve_rollout_steps(args.renderer, args.max_steps)
         self.args = args
         self.device = torch.device(args.device)
         if self.device.type == "cuda" and not torch.cuda.is_available():
@@ -289,19 +459,44 @@ class WaymoInteractiveServer:
         self.control = ControlConfig(
             dt=args.sim_dt,
             acceleration_mps2=args.acceleration,
+            braking_mps2=args.braking,
             yaw_rate_deg_s=args.yaw_rate,
             min_speed_mps=args.min_speed,
             max_speed_mps=args.max_speed,
         )
+        self.context_frames = int(args.context_frames)
+        if self.context_frames < 2:
+            raise ValueError(
+                f"context-frames must be at least 2, got {self.context_frames}"
+            )
+        if int(args.max_steps) < 1:
+            raise ValueError(f"max-steps must be positive, got {args.max_steps}")
 
-        checkpoint_path = Path(args.world_model_ckpt).expanduser().resolve()
+        checkpoint_path, checkpoint_profile = resolve_world_model_checkpoint(
+            args.checkpoint_profile,
+            args.world_model_ckpt,
+        )
         if not checkpoint_path.is_file():
-            raise FileNotFoundError(f"World-model checkpoint not found: {checkpoint_path}")
-        print(f"[load] world model: {checkpoint_path}", flush=True)
+            raise FileNotFoundError(
+                f"World-model checkpoint for profile {checkpoint_profile!r} not found: "
+                f"{checkpoint_path}"
+            )
+        self.checkpoint_profile = checkpoint_profile
+        self.checkpoint_path = checkpoint_path
+        print(
+            f"[load] world model profile={checkpoint_profile}: {checkpoint_path}",
+            flush=True,
+        )
         checkpoint = torch.load(checkpoint_path, map_location="cpu", mmap=True)
         self.checkpoint = checkpoint
         self.model_args = _model_args_from_checkpoint(checkpoint)
         self._validate_checkpoint_contract()
+        self.model_rollout_window = int(self.model_args.max_rollout_window)
+        self.model_context_frames = (
+            self.context_frames
+            if self.model_rollout_window <= 0
+            else min(self.context_frames, max(1, self.model_rollout_window - 1))
+        )
 
         tokenizer_path = args.tokenizer_ckpt or _first_path(self.model_args.tokenizer_ckpt)
         if not tokenizer_path:
@@ -365,6 +560,7 @@ class WaymoInteractiveServer:
 
         self.puffer_manifest: ScenarioManifest | None = None
         self.puffer_renderer: PufferRendererClient | None = None
+        self.puffer_scene_indices: tuple[int, ...] = ()
         self._reported_puffer_errors: set[str] = set()
         if args.renderer == "puffer":
             if args.puffer_manifest:
@@ -395,13 +591,56 @@ class WaymoInteractiveServer:
                 view_mode=args.puffer_view_mode,
                 jpeg_quality=args.jpeg_quality,
                 timeout_s=args.puffer_timeout,
+                environment=(
+                    {"PUFFER_USE_INHERITED_DISPLAY": "1"}
+                    if args.puffer_use_inherited_display
+                    else None
+                ),
             )
+            if self.puffer_manifest is not None:
+                mapped_paths = self.puffer_manifest.mapped_npz_paths
+                mapped_scene_indices = tuple(
+                    index
+                    for index, path in enumerate(self.dataset.paths)
+                    if str(Path(path).expanduser().resolve(strict=False)) in mapped_paths
+                )
+                self.puffer_scene_indices = tuple(
+                    index
+                    for index in mapped_scene_indices
+                    if self._has_continuous_puffer_focus_context(index)
+                )
+                skipped = len(mapped_scene_indices) - len(self.puffer_scene_indices)
+                if skipped:
+                    print(
+                        f"[puffer] skipped {skipped} mapped views whose focus agent "
+                        f"is absent during the {self.context_frames}-frame chase-camera replay",
+                        flush=True,
+                    )
+                if mapped_scene_indices and not self.puffer_scene_indices:
+                    raise ValueError(
+                        "No mapped Puffer scene has a continuously valid focus agent "
+                        f"through the {self.context_frames}-frame context replay"
+                    )
+                if (
+                    self.puffer_scene_indices
+                    and self.initial_scene_index not in self.puffer_scene_indices
+                ):
+                    replacement = int(self.puffer_scene_indices[0])
+                    print(
+                        f"[puffer] scene-index {self.initial_scene_index} is not "
+                        f"renderable for this manifest/context; starting at {replacement}",
+                        flush=True,
+                    )
+                    self.initial_scene_index = replacement
 
         self.html = Path(args.html).read_text(encoding="utf-8")
         print(
             f"[ready] checkpoint step={int(self.checkpoint.get('step', -1))} "
+            f"profile={self.checkpoint_profile} "
             f"dataset scenes={len(self.dataset)} device={self.device} "
-            f"dtype={next(self.dynamics.parameters()).dtype} renderer={args.renderer}",
+            f"dtype={next(self.dynamics.parameters()).dtype} renderer={args.renderer} "
+            f"replay={self.context_frames} model_context={self.model_context_frames} "
+            f"rollout={int(args.max_steps)}",
             flush=True,
         )
 
@@ -420,12 +659,54 @@ class WaymoInteractiveServer:
         if problems:
             raise ValueError("Incompatible checkpoint: " + "; ".join(problems))
 
+    def _has_continuous_puffer_focus_context(self, scene_index: int) -> bool:
+        """Whether Puffer's chase camera can follow slot 0 for the full replay."""
+
+        dataset_paths = getattr(self.dataset, "paths", None)
+        if dataset_paths is not None:
+            # Avoid loading each scene's much larger map arrays while filtering
+            # a conversion manifest at startup.
+            with np.load(dataset_paths[int(scene_index)], allow_pickle=False) as data:
+                agents = np.asarray(data["agents"])
+                agent_mask = np.asarray(data["agent_mask"], dtype=bool)
+                total_steps = int(data["lights"].shape[0])
+        else:
+            # Small synthetic datasets used by tests need not expose paths.
+            item = self.dataset[int(scene_index)]
+            agents = np.asarray(item["agents"])
+            agent_mask = np.asarray(item["agent_mask"], dtype=bool)
+            total_steps = int(item["lights"].shape[0])
+        try:
+            start, end = context_frame_bounds(
+                self.args.start_frame,
+                total_steps,
+                self.context_frames,
+            )
+        except ValueError:
+            return False
+        if agents.ndim != 3 or agent_mask.ndim != 1:
+            return False
+        if agents.shape[0] == agent_mask.shape[0]:
+            focus_valid = agents[0, start:end, 5] > 0.5
+        elif agents.shape[1] == agent_mask.shape[0]:
+            focus_valid = agents[start:end, 0, 5] > 0.5
+        else:
+            return False
+        return bool(agent_mask[0]) and bool(focus_valid.all())
+
     def _pick_new_scene_index(self, current: int) -> int:
-        if len(self.dataset) <= 1:
+        candidates: tuple[int, ...] | range
+        if self.args.renderer == "puffer" and self.puffer_scene_indices:
+            candidates = self.puffer_scene_indices
+        else:
+            candidates = range(len(self.dataset))
+        if not candidates:
             return current
+        if len(candidates) == 1:
+            return int(candidates[0])
         candidate = current
         while candidate == current:
-            candidate = self.random.randrange(len(self.dataset))
+            candidate = self.random.choice(candidates)
         return candidate
 
     @torch.inference_mode()
@@ -433,42 +714,80 @@ class WaymoInteractiveServer:
         item = self.dataset[int(scene_index)]
         batch = wm.move_batch(wm._collate([item]), self.device)
         total_steps = int(batch["lights"].shape[1])
-        start_frame = min(max(0, int(self.args.start_frame)), total_steps - 1)
-        context = wm.slice_future_batch(batch, start_frame, start_frame + 1)
-        z0, map_tokens, map_mask = wm.encode_batch_dynamics_inputs_for_world_model(
+        start_frame, context_end = context_frame_bounds(
+            self.args.start_frame,
+            total_steps,
+            self.context_frames,
+        )
+        context = wm.slice_future_batch(batch, start_frame, context_end)
+        z_context, map_tokens, map_mask = wm.encode_batch_dynamics_inputs_for_world_model(
             self.tokenizer,
             context,
             self.model_args,
             return_map=bool(self.model_args.dynamics_attend_map),
         )
-        z0_packed = wm.pack_bottleneck_to_spatial(
-            z0,
+        z_context_packed = wm.pack_bottleneck_to_spatial(
+            z_context,
             n_spatial=int(self.model_args.n_spatial),
             k=int(self.model_args.packing_factor),
-        )[0, 0].detach()
+        )[0].detach()
+        context_actions, context_action_masks, _action_slots = (
+            wm.build_ego_action_features(context, self.model_args)
+        )
+        if context_actions is None or context_action_masks is None:
+            raise RuntimeError("Interactive context requires focus-agent action features")
+        if int(z_context_packed.shape[0]) != self.context_frames:
+            raise ValueError(
+                f"Tokenizer returned {z_context_packed.shape[0]} context frames; "
+                f"expected {self.context_frames}"
+            )
 
         agents = wm.agents_to_btkf(batch["agents"], batch["agent_mask"])[0]
-        initial_agents = _to_cpu_numpy(agents[start_frame])
-        focus_row = initial_agents[0]
-        if focus_row[5] <= 0.5:
-            raise ValueError(f"Focus slot is invalid at start frame {start_frame}")
-        focus = FocusState(
-            x=float(focus_row[0]),
-            y=float(focus_row[1]),
-            speed=max(0.0, float(focus_row[2])),
-            yaw=float(focus_row[6]),
-        )
-        initial_velocity = (float(focus_row[3]), float(focus_row[4]))
-        initial_agents[0, 0:5] = np.asarray(
-            [focus.x, focus.y, focus.speed, *focus.velocity], dtype=np.float32
-        )
-        initial_agents[0, 6] = focus.yaw
-
+        context_agents = _to_cpu_numpy(agents[start_frame:context_end]).copy()
         agent_mask = batch["agent_mask"][0].detach().cpu().numpy().astype(bool)
-        agent_types = np.rint(initial_agents[:, 7]).astype(np.int64)
-        valid = (initial_agents[:, 5] > 0.5) & agent_mask
-        yaw = initial_agents[:, 6].copy()
-        velocity = initial_agents[:, 3:5].copy()
+        context_valid = (context_agents[..., 5] > 0.5) & agent_mask[None, :]
+        valid_focus_frames = np.flatnonzero(context_valid[:, 0])
+        if not context_valid[-1, 0]:
+            raise ValueError(
+                f"Focus slot is invalid at the frame-{context_end} control handoff"
+            )
+        # A focus track can enter the scene during the recorded context.  The
+        # tokenizer/action masks retain its true validity.  For the 2D camera
+        # readout only, borrow the nearest valid pose instead of jumping to a
+        # padded zero row while the actor is absent.  Puffer scenes with such
+        # gaps are excluded above because its chase camera requires a valid
+        # focus actor on every displayed frame.
+        context_focus = []
+        for frame_index in range(self.context_frames):
+            source_index = frame_index
+            if not context_valid[frame_index, 0]:
+                source_index = int(
+                    valid_focus_frames[
+                        np.argmin(np.abs(valid_focus_frames - frame_index))
+                    ]
+                )
+            focus_row = context_agents[source_index, 0]
+            context_focus.append(
+                FocusState(
+                    x=float(focus_row[0]),
+                    y=float(focus_row[1]),
+                    speed=max(0.0, float(focus_row[2])),
+                    yaw=float(focus_row[6]),
+                )
+            )
+        context_world = context_agents[..., 0:2].copy()
+        context_yaw = context_agents[..., 6].copy()
+        context_velocity = context_agents[..., 3:5].copy()
+        focus = context_focus[0]
+
+        agent_types = np.rint(context_agents[-1, :, 7]).astype(np.int64)
+        if not agent_mask[0]:
+            raise ValueError("Focus slot 0 is not selected by agent_mask")
+        if int(context_actions.shape[1]) != self.context_frames:
+            raise ValueError(
+                f"Action builder returned {context_actions.shape[1]} context frames; "
+                f"expected {self.context_frames}"
+            )
         scene_path = str(item.get("path", self.dataset.paths[int(scene_index)]))
         scenario_id = _scenario_id(item, scene_path)
         agent_ids = batch["agent_ids"][0].detach().cpu().numpy()
@@ -495,7 +814,7 @@ class WaymoInteractiveServer:
                 if self.args.puffer_strict:
                     raise
                 renderer_error = str(error)
-        return SessionState(
+        state = SessionState(
             scene_index=int(scene_index),
             scenario_id=scenario_id,
             scene_path=scene_path,
@@ -510,16 +829,33 @@ class WaymoInteractiveServer:
             agent_types=agent_types,
             ego_origin_xy=ego_origin_xy,
             ego_heading=ego_heading,
+            context_start_frame=start_frame,
             focus=focus,
-            z_history=[z0_packed],
-            action_history=[initial_focus_action(focus, initial_velocity).to(self.device)],
-            world_history=[initial_agents[:, 0:2].copy()],
-            valid_history=[valid],
-            yaw_history=[yaw],
-            velocity_history=[velocity],
+            z_history=[value for value in z_context_packed.unbind(dim=0)],
+            action_history=[
+                value.detach() for value in context_actions[0].unbind(dim=0)
+            ],
+            action_mask_history=[
+                value.detach() for value in context_action_masks[0].unbind(dim=0)
+            ],
+            context_focus=context_focus,
+            context_world=context_world,
+            context_valid=context_valid,
+            context_yaw=context_yaw,
+            context_velocity=context_velocity,
+            world_history=[context_world[0].copy()],
+            valid_history=[context_valid[0].copy()],
+            yaw_history=[context_yaw[0].copy()],
+            velocity_history=[context_velocity[0].copy()],
             paused=not self.args.autoplay,
             renderer_error=renderer_error,
         )
+        identity = scene_identity(state)
+        print(
+            f"[scene] {identity['scene_label']} | npz {identity['scene_file']}",
+            flush=True,
+        )
+        return state
 
     def new_session(self) -> SessionState:
         return self._load_scene(self.initial_scene_index)
@@ -530,31 +866,81 @@ class WaymoInteractiveServer:
         state.__dict__.clear()
         state.__dict__.update(replacement.__dict__)
 
-    def _decode_batch(self, state: SessionState, time_steps: int) -> dict[str, Any]:
+    @staticmethod
+    def _replay_pending(state: SessionState) -> bool:
+        return state.replay_index < len(state.context_focus) - 1
+
+    @staticmethod
+    def _display_frame_id(state: SessionState) -> int:
+        """Zero-based timeline offset, including replay and generated frames."""
+
+        return int(state.replay_index) + int(state.step)
+
+    def _advance_replay(self, state: SessionState) -> None:
+        """Display the next recorded context frame without running the model."""
+
+        if not self._replay_pending(state):
+            return
+        state.replay_index += 1
+        index = int(state.replay_index)
+        state.focus = state.context_focus[index]
+        state.world_history.append(state.context_world[index].copy())
+        state.valid_history.append(state.context_valid[index].copy())
+        state.yaw_history.append(state.context_yaw[index].copy())
+        state.velocity_history.append(state.context_velocity[index].copy())
+        state.last_inference_ms = 0.0
+
+    def _decode_batch(
+        self,
+        state: SessionState,
+        timeline_start: int,
+        time_steps: int,
+    ) -> dict[str, Any]:
         # Only masks and static map are consumed by the latent-only decoder.
-        # Repeating the start-frame mask also lets a session continue beyond the
-        # recorded 91 frames, although --max-steps defaults to the trained H90.
+        # Recorded context masks are preserved; generated positions use the
+        # handoff frame's masks so decoding can continue beyond frame 91.
         base = state.base_batch
-        light_mask0 = base["light_mask"][:, self.args.start_frame : self.args.start_frame + 1]
-        lights0 = base["lights"][:, self.args.start_frame : self.args.start_frame + 1]
+        context_start = int(state.context_start_frame)
+        context_end = context_start + len(state.context_focus)
         agents_btkf = wm.agents_to_btkf(base["agents"], base["agent_mask"])
-        agents0 = agents_btkf[:, self.args.start_frame : self.args.start_frame + 1]
+        context_agents = agents_btkf[:, context_start:context_end]
+        context_lights = base["lights"][:, context_start:context_end]
+        context_light_mask = base["light_mask"][:, context_start:context_end]
+        timeline_indices = torch.arange(
+            int(timeline_start),
+            int(timeline_start) + int(time_steps),
+            device=context_lights.device,
+            dtype=torch.long,
+        ).clamp(max=len(state.context_focus) - 1)
         return {
             **base,
-            "agents": agents0.expand(-1, time_steps, -1, -1),
-            "lights": lights0.expand(-1, time_steps, -1, -1),
-            "light_mask": light_mask0.expand(-1, time_steps, -1),
+            "agents": context_agents.index_select(1, timeline_indices),
+            "lights": context_lights.index_select(1, timeline_indices),
+            "light_mask": context_light_mask.index_select(1, timeline_indices),
         }
 
     @torch.inference_mode()
-    def _advance(self, state: SessionState) -> None:
-        next_focus, action = integrate_focus_control(state.focus, set(state.keys_down), self.control)
+    def _advance(
+        self,
+        state: SessionState,
+        analog_control: AnalogControl | None = None,
+    ) -> None:
+        if analog_control is None:
+            next_focus, action = integrate_focus_control(
+                state.focus, set(state.keys_down), self.control
+            )
+        else:
+            next_focus, action = integrate_focus_analog_control(
+                state.focus, analog_control, self.control
+            )
         state.action_history.append(action.to(self.device))
+        action_mask = torch.zeros_like(action, device=self.device)
+        action_mask[:7] = 1.0
+        state.action_mask_history.append(action_mask)
 
         past = torch.stack(state.z_history, dim=0).unsqueeze(0)
         actions = torch.stack(state.action_history, dim=0).unsqueeze(0)
-        act_mask = torch.zeros_like(actions)
-        act_mask[..., :7] = 1.0
+        act_mask = torch.stack(state.action_mask_history, dim=0).unsqueeze(0)
         z_next = wm.sample_one_timestep_packed(
             self.dynamics,
             past_packed=past,
@@ -564,7 +950,7 @@ class WaymoInteractiveServer:
             map_mask=state.map_mask,
             k_max=int(self.model_args.k_max),
             sched=self.schedule,
-            max_rollout_window=int(self.model_args.max_rollout_window),
+            max_rollout_window=self.model_rollout_window,
         )
         state.z_history.append(z_next[0].detach())
         state.focus = next_focus
@@ -574,7 +960,7 @@ class WaymoInteractiveServer:
         decode_start = max(0, len(state.z_history) - decode_window)
         z_packed = torch.stack(state.z_history[decode_start:], dim=0).unsqueeze(0)
         z = wm.unpack_spatial_to_bottleneck(z_packed, k=int(self.model_args.packing_factor))
-        decode_batch = self._decode_batch(state, int(z.shape[1]))
+        decode_batch = self._decode_batch(state, decode_start, int(z.shape[1]))
         decoder_kwargs: dict[str, torch.Tensor] = {}
         if getattr(self.tokenizer.decoder, "attend_map", False):
             if state.map_tokens is None or state.map_mask is None:
@@ -703,8 +1089,20 @@ class WaymoInteractiveServer:
                 draw.text((float(pixel[0] + 14), float(pixel[1] - 18)), "YOU", fill=color, font=font)
 
         draw.rectangle((0, 0, size, 28), fill=(8, 11, 17))
-        title = f"scene {state.scene_index}  |  {state.scenario_id[:48]}"
-        draw.text((10, 9), title, fill=(222, 228, 238), font=font)
+        title = scene_identity(state)["scene_label"]
+        draw.text((10, 9), title, fill=(255, 205, 90), font=font)
+        progress = (
+            f"CONTEXT {state.replay_index + 1}/{len(state.context_focus)}"
+            if state.step == 0
+            else f"ROLLOUT {state.step}/{self.args.max_steps}"
+        )
+        progress_box = draw.textbbox((0, 0), progress, font=font)
+        draw.text(
+            (size - (progress_box[2] - progress_box[0]) - 10, 9),
+            progress,
+            fill=(78, 232, 140),
+            font=font,
+        )
         if state.paused:
             text = "PAUSED"
             box = draw.textbbox((0, 0), text, font=font)
@@ -733,15 +1131,16 @@ class WaymoInteractiveServer:
             origin_xy=state.ego_origin_xy,
             origin_heading=state.ego_heading,
         )
+        display_frame_id = self._display_frame_id(state)
         return PufferFrameState(
-            step=state.step,
+            step=display_frame_id,
             agent_ids=state.agent_ids[selected],
             agent_types=state.agent_types[selected],
             xy=world_xy,
             yaw=world_yaw,
             velocity_xy=world_velocity,
             valid=state.valid_history[-1][selected],
-            source_time_index=int(self.args.start_frame) + state.step,
+            source_time_index=state.context_start_frame + display_frame_id,
         )
 
     def _report_puffer_error(self, message: str) -> None:
@@ -786,22 +1185,45 @@ class WaymoInteractiveServer:
         return jpeg
 
     def _status(self, state: SessionState) -> dict[str, Any]:
+        replay_steps = len(state.context_focus)
+        phase = "context_replay" if state.step == 0 else "rollout"
+        model_context_start, model_context_end = prediction_context_bounds(
+            state.context_start_frame,
+            replay_steps,
+            self.model_rollout_window,
+        )
+        progress_text = (
+            f"context {state.replay_index + 1}/{replay_steps}"
+            if phase == "context_replay"
+            else f"rollout {state.step}/{self.args.max_steps}"
+        )
+        identity = scene_identity(state)
         return {
             "type": "status",
             "paused": state.paused,
+            "phase": phase,
+            "replay_step": state.replay_index + 1,
+            "replay_steps": replay_steps,
             "step": state.step,
             "max_steps": int(self.args.max_steps),
+            "timeline_frame": (
+                state.context_start_frame + self._display_frame_id(state) + 1
+            ),
+            "model_context_start": model_context_start + 1,
+            "model_context_end": model_context_end,
             "speed": state.focus.speed,
             "heading_deg": math.degrees(state.focus.yaw),
             "x": state.focus.x,
             "y": state.focus.y,
-            "scene_index": state.scene_index,
-            "scenario_id": state.scenario_id,
+            **identity,
             "inference_ms": state.last_inference_ms,
             "renderer": state.renderer_name,
+            "checkpoint_profile": self.checkpoint_profile,
             "renderer_error": state.renderer_error,
             "text": (
-                f"step {state.step}/{self.args.max_steps} · "
+                f"{identity['scene_label']} · ckpt {self.checkpoint_profile} · "
+                f"{progress_text} · model context "
+                f"{model_context_start + 1}–{model_context_end} · "
                 f"speed {state.focus.speed:.1f} m/s · "
                 f"heading {math.degrees(state.focus.yaw):+.0f}° · "
                 f"model {state.last_inference_ms:.0f} ms · "
@@ -809,18 +1231,35 @@ class WaymoInteractiveServer:
             ),
         }
 
-    def _tick_sync(self, state: SessionState) -> tuple[bytes | None, dict[str, Any]]:
+    def _tick_sync(
+        self,
+        state: SessionState,
+        analog_control: AnalogControl | None = None,
+    ) -> tuple[bytes | None, dict[str, Any]]:
+        first_frame = state.cached_jpeg is None
+        did_reset = False
         if state.reset_requested or state.new_scene_requested:
             self._reset_session(state, new_scene=state.new_scene_requested)
-        should_advance = (not state.paused or state.step_once) and state.step < int(self.args.max_steps)
+            first_frame = True
+            did_reset = True
+        has_remaining = self._replay_pending(state) or state.step < int(self.args.max_steps)
+        should_advance = (
+            not first_frame
+            and not did_reset
+            and (not state.paused or state.step_once)
+            and has_remaining
+        )
         if should_advance:
-            start = time.perf_counter()
-            self._advance(state)
-            state.last_inference_ms = (time.perf_counter() - start) * 1000.0
+            if self._replay_pending(state):
+                self._advance_replay(state)
+            else:
+                start = time.perf_counter()
+                self._advance(state, analog_control=analog_control)
+                state.last_inference_ms = (time.perf_counter() - start) * 1000.0
             state.step_once = False
-            if state.step >= int(self.args.max_steps):
+            if not self._replay_pending(state) and state.step >= int(self.args.max_steps):
                 state.paused = True
-        frame_id = state.step
+        frame_id = self._display_frame_id(state)
         jpeg = None
         if state.cached_jpeg is None or state.cached_frame_id != frame_id:
             state.cached_jpeg = self._render(state)
@@ -837,8 +1276,13 @@ class WaymoInteractiveServer:
                 "ok": True,
                 "device": str(self.device),
                 "checkpoint_step": int(self.checkpoint.get("step", -1)),
+                "checkpoint_profile": self.checkpoint_profile,
+                "checkpoint_path": str(self.checkpoint_path),
                 "dataset_size": len(self.dataset),
                 "renderer": self.args.renderer,
+                "context_replay_frames": self.context_frames,
+                "model_context_frames": self.model_context_frames,
+                "rollout_steps": int(self.args.max_steps),
                 "puffer_worker_pid": (
                     None if self.puffer_renderer is None else self.puffer_renderer.pid
                 ),
@@ -921,11 +1365,43 @@ class WaymoInteractiveServer:
         return websocket
 
 
+class InteractiveArgumentParser(argparse.ArgumentParser):
+    """Argument parser that applies renderer-specific rollout defaults."""
+
+    def parse_known_args(
+        self,
+        args: Any = None,
+        namespace: argparse.Namespace | None = None,
+    ) -> tuple[argparse.Namespace, list[str]]:
+        parsed, extras = super().parse_known_args(args=args, namespace=namespace)
+        if hasattr(parsed, "renderer") and hasattr(parsed, "max_steps"):
+            parsed.max_steps = resolve_rollout_steps(
+                parsed.renderer,
+                parsed.max_steps,
+            )
+        return parsed, extras
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = InteractiveArgumentParser(
         description="Play an action-conditioned Waymo world model in a browser."
     )
-    parser.add_argument("--world-model-ckpt", default=str(DEFAULT_WORLD_MODEL_CKPT))
+    parser.add_argument(
+        "--checkpoint-profile",
+        "--ckpt-profile",
+        "--ckpt",
+        choices=tuple(WORLD_MODEL_CHECKPOINT_PROFILES),
+        default=DEFAULT_CHECKPOINT_PROFILE,
+        help=(
+            "Named interactive world-model checkpoint. h30 uses "
+            "best_multisample_finetuned.pt; h90 uses step_00027000.pt."
+        ),
+    )
+    parser.add_argument(
+        "--world-model-ckpt",
+        default=None,
+        help="Explicit checkpoint path; when provided, overrides --checkpoint-profile.",
+    )
     parser.add_argument("--tokenizer-ckpt", default=None, help="Defaults to the path saved in the WM checkpoint.")
     parser.add_argument("--data-dir", default=None, help="Defaults to checkpoint val_data_dir.")
     parser.add_argument("--scene-index", type=int, default=0)
@@ -933,7 +1409,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--start-frame",
         type=int,
         default=0,
-        help="Seed frame in the recorded scene. Frame 0 matches this checkpoint's ctx1/H90 training protocol.",
+        help="Zero-based first recorded replay frame. Default 0 replays Waymo frames 1 through 11.",
+    )
+    parser.add_argument(
+        "--context-frames",
+        type=int,
+        default=DEFAULT_CONTEXT_FRAMES,
+        help=(
+            "Number of recorded frames to replay before interaction. With the "
+            "checkpoint's 11-token rollout window, 11 displayed frames retain "
+            "frames 2 through 11 for the first prediction."
+        ),
     )
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--seed", type=int, default=0)
@@ -941,10 +1427,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fps", type=float, default=10.0, help="Real-time model ticks per second.")
     parser.add_argument("--sim-dt", type=float, default=0.1, help="Waymo simulation seconds per model tick.")
     parser.add_argument("--acceleration", type=float, default=5.0, help="Up/down acceleration magnitude in m/s^2.")
+    parser.add_argument(
+        "--braking",
+        type=float,
+        default=8.0,
+        help="Maximum analog brake deceleration in m/s^2.",
+    )
     parser.add_argument("--yaw-rate", type=float, default=45.0, help="Left/right yaw rate in degrees/s.")
     parser.add_argument("--min-speed", type=float, default=0.0)
     parser.add_argument("--max-speed", type=float, default=30.0)
-    parser.add_argument("--max-steps", type=int, default=90)
+    parser.add_argument(
+        "--unroll-steps",
+        "--max-steps",
+        dest="max_steps",
+        type=int,
+        default=None,
+        help=(
+            "Generated interactive steps after context replay. Defaults to 80 "
+            "for --renderer 2d and 150 for --renderer puffer. --max-steps is "
+            "kept as a backward-compatible alias."
+        ),
+    )
     parser.add_argument("--eval-d", type=float, default=1.0, help="Shortcut step size; 1.0 gives one model pass/frame.")
     parser.add_argument("--decode-window", type=int, default=32)
     parser.add_argument("--valid-threshold", type=float, default=0.5)
@@ -984,6 +1487,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--puffer-height", type=int, default=720)
     parser.add_argument("--puffer-view-mode", default="AGENT_PERSP")
     parser.add_argument("--puffer-timeout", type=float, default=15.0)
+    parser.add_argument(
+        "--puffer-use-inherited-display",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Use the current X11 DISPLAY for the hidden Puffer render context. "
+            "Intended for a verified local desktop; headless mode owns Xvfb instead."
+        ),
+    )
     parser.add_argument(
         "--puffer-strict",
         action="store_true",

@@ -1,0 +1,79 @@
+{
+  "ckpt_step": 27000,
+  "contact_sheet": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/motion_gt_h30_h90_scenario_77046993fcd9f0bc_n8_20260824/h90_step27000_ctx11_future80/contact_sheet_8_rollouts.png",
+  "displayed_context_frames_1based": [
+    1,
+    11
+  ],
+  "eval_ckpt": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_original_stmlayer_3_stage/waymo_wm_stage1best_mon8_fullmotion_physproxy_h30best30k_ctx1_h90_d1_chunk32s30_30k/step_00027000.pt",
+  "focus_slot": 0,
+  "focus_track_id": 278,
+  "initial_prediction_context_frames_1based": [
+    2,
+    11
+  ],
+  "max_rollout_window_including_prediction_token": 11,
+  "model_label": "N=8 + Motion GT - H90 step27k",
+  "num_rollouts": 8,
+  "protocol": "ctx11_future80_shortcut_d1_n8_seed20260824",
+  "rollouts": [
+    {
+      "all_agent_ade_m": 5.6572771072387695,
+      "focus_ade_m": 0.75004643201828,
+      "focus_fde_m": 1.0528370141983032,
+      "image": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/motion_gt_h30_h90_scenario_77046993fcd9f0bc_n8_20260824/h90_step27000_ctx11_future80/individual_rollouts/rollout_00.png",
+      "rollout_index": 0
+    },
+    {
+      "all_agent_ade_m": 5.506112575531006,
+      "focus_ade_m": 0.6198838949203491,
+      "focus_fde_m": 0.9063281416893005,
+      "image": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/motion_gt_h30_h90_scenario_77046993fcd9f0bc_n8_20260824/h90_step27000_ctx11_future80/individual_rollouts/rollout_01.png",
+      "rollout_index": 1
+    },
+    {
+      "all_agent_ade_m": 5.680068016052246,
+      "focus_ade_m": 0.6703842282295227,
+      "focus_fde_m": 0.9191058874130249,
+      "image": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/motion_gt_h30_h90_scenario_77046993fcd9f0bc_n8_20260824/h90_step27000_ctx11_future80/individual_rollouts/rollout_02.png",
+      "rollout_index": 2
+    },
+    {
+      "all_agent_ade_m": 5.782280921936035,
+      "focus_ade_m": 0.7152794003486633,
+      "focus_fde_m": 1.0373073816299438,
+      "image": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/motion_gt_h30_h90_scenario_77046993fcd9f0bc_n8_20260824/h90_step27000_ctx11_future80/individual_rollouts/rollout_03.png",
+      "rollout_index": 3
+    },
+    {
+      "all_agent_ade_m": 5.650502681732178,
+      "focus_ade_m": 0.6525651812553406,
+      "focus_fde_m": 0.9047523736953735,
+      "image": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/motion_gt_h30_h90_scenario_77046993fcd9f0bc_n8_20260824/h90_step27000_ctx11_future80/individual_rollouts/rollout_04.png",
+      "rollout_index": 4
+    },
+    {
+      "all_agent_ade_m": 5.700364112854004,
+      "focus_ade_m": 0.6962329745292664,
+      "focus_fde_m": 1.024020791053772,
+      "image": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/motion_gt_h30_h90_scenario_77046993fcd9f0bc_n8_20260824/h90_step27000_ctx11_future80/individual_rollouts/rollout_05.png",
+      "rollout_index": 5
+    },
+    {
+      "all_agent_ade_m": 5.763596534729004,
+      "focus_ade_m": 0.6671164035797119,
+      "focus_fde_m": 0.9446967244148254,
+      "image": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/motion_gt_h30_h90_scenario_77046993fcd9f0bc_n8_20260824/h90_step27000_ctx11_future80/individual_rollouts/rollout_06.png",
+      "rollout_index": 6
+    },
+    {
+      "all_agent_ade_m": 5.9113054275512695,
+      "focus_ade_m": 0.7076305150985718,
+      "focus_fde_m": 0.9746857285499573,
+      "image": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/motion_gt_h30_h90_scenario_77046993fcd9f0bc_n8_20260824/h90_step27000_ctx11_future80/individual_rollouts/rollout_07.png",
+      "rollout_index": 7
+    }
+  ],
+  "scenario_id": "77046993fcd9f0bc",
+  "scenario_npz": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k/val/77046993fcd9f0bc_focus_278_src3.npz"
+}

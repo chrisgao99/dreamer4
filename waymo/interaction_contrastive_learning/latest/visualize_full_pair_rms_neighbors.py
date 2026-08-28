@@ -114,7 +114,34 @@ def _sample_anchors(distances: np.ndarray, count: int) -> np.ndarray:
     return order[np.round(positions * (len(order) - 1)).astype(np.int64)]
 
 
-def build_audit(rms_dir: Path, output_dir: Path, split: str, count: int, rank: int) -> None:
+def _load_anchor_manifest(path: Path) -> np.ndarray:
+    """Load anchors in the exact audit order recorded by an earlier run."""
+    with path.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        raise ValueError(f"Anchor manifest is empty: {path}")
+    required = {"audit_order", "anchor_index"}
+    missing = required.difference(rows[0])
+    if missing:
+        raise ValueError(f"Anchor manifest {path} is missing columns: {sorted(missing)}")
+    try:
+        rows.sort(key=lambda row: int(row["audit_order"]))
+        anchors = np.asarray([int(row["anchor_index"]) for row in rows], dtype=np.int64)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Anchor manifest {path} contains invalid audit_order/anchor_index values") from exc
+    if len(np.unique(anchors)) != len(anchors):
+        raise ValueError(f"Anchor manifest contains duplicate anchor_index values: {path}")
+    return anchors
+
+
+def build_audit(
+    rms_dir: Path,
+    output_dir: Path,
+    split: str,
+    count: int,
+    rank: int,
+    anchor_manifest: Path | None = None,
+) -> None:
     with np.load(rms_dir / f"{split}_rms_features.npz", allow_pickle=False) as features:
         arrays = {key: np.asarray(features[key]) for key in features.files}
     with np.load(rms_dir / f"{split}_rms_neighbors.npz", allow_pickle=False) as neighbours:
@@ -127,7 +154,23 @@ def build_audit(rms_dir: Path, output_dir: Path, split: str, count: int, rank: i
         raise ValueError(f"rank must be in [1, {indices.shape[1]}]")
     usable_distance = distances[:, rank_index].copy()
     usable_distance[indices[:, rank_index] < 0] = np.inf
-    anchors = _sample_anchors(usable_distance, count)
+    if anchor_manifest is None:
+        anchors = _sample_anchors(usable_distance, count)
+        selection_description = "sampled across the RMS distribution"
+    else:
+        anchors = _load_anchor_manifest(anchor_manifest)
+        out_of_range = anchors[(anchors < 0) | (anchors >= len(indices))]
+        if len(out_of_range):
+            raise ValueError(
+                f"Anchor manifest contains indices outside [0, {len(indices) - 1}]: "
+                f"{out_of_range.tolist()}"
+            )
+        missing_rank = anchors[indices[anchors, rank_index] < 0]
+        if len(missing_rank):
+            raise ValueError(
+                f"Requested rank {rank} is unavailable for manifest anchors: {missing_rank.tolist()}"
+            )
+        selection_description = f"anchor order loaded from {anchor_manifest}"
 
     median = arrays["normalization_median"].astype(np.float32)
     iqr = arrays["normalization_iqr"].astype(np.float32)
@@ -208,7 +251,7 @@ def build_audit(rms_dir: Path, output_dir: Path, split: str, count: int, rank: i
         "article{background:#222832;border:1px solid #394250;border-radius:12px;padding:12px}svg{width:100%;height:auto}"
         ".metric{font-size:16px;font-weight:650;margin-bottom:8px}.scene{font:11px ui-monospace;color:#aeb7c4;margin-top:7px}"
         "</style></head><body><h1>Event-aligned exact RMS matches</h1>"
-        f"<p>{html.escape(split)} split · top-{rank} · sampled across the RMS distribution. "
+        f"<p>{html.escape(split)} split · top-{rank} · {html.escape(selection_description)}. "
         "Circle=start, square=end, star=aligned event, white dots=1 s ticks. Both panels share the same scale.</p>"
         f"<div class='grid'>{''.join(cards)}</div></body></html>",
         encoding="utf-8",
@@ -223,8 +266,21 @@ def main() -> None:
     parser.add_argument("--split", default="train")
     parser.add_argument("--num_samples", type=int, default=24)
     parser.add_argument("--rank", type=int, default=1)
+    parser.add_argument(
+        "--anchor_manifest",
+        type=Path,
+        default=None,
+        help="Reuse anchor_index values in audit_order from an earlier manifest.csv; disables resampling.",
+    )
     args = parser.parse_args()
-    build_audit(Path(args.rms_dir), Path(args.output_dir), args.split, args.num_samples, args.rank)
+    build_audit(
+        Path(args.rms_dir),
+        Path(args.output_dir),
+        args.split,
+        args.num_samples,
+        args.rank,
+        args.anchor_manifest,
+    )
 
 
 if __name__ == "__main__":
