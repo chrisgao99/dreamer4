@@ -308,6 +308,7 @@ class PufferFrameState:
     velocity_xy: np.ndarray
     valid: np.ndarray
     source_time_index: int | None = None
+    z: np.ndarray | None = None
 
     def as_request(self, scenario: PufferSceneReference) -> dict[str, Any]:
         ids = np.asarray(self.agent_ids, dtype=np.int64)
@@ -316,6 +317,7 @@ class PufferFrameState:
         yaw = np.asarray(self.yaw, dtype=np.float32)
         velocity = np.asarray(self.velocity_xy, dtype=np.float32)
         valid = np.asarray(self.valid, dtype=bool)
+        z = None if self.z is None else np.asarray(self.z, dtype=np.float32)
         count = len(ids)
         expected_vector = (count,)
         if types.shape != expected_vector or yaw.shape != expected_vector:
@@ -324,12 +326,16 @@ class PufferFrameState:
             raise ValueError("valid must match agent_ids")
         if xy.shape != (count, 2) or velocity.shape != (count, 2):
             raise ValueError("xy and velocity_xy must have shape (num_agents, 2)")
+        if z is not None and z.shape != expected_vector:
+            raise ValueError("z must match agent_ids")
 
         finite = (
             np.isfinite(xy).all(axis=1)
             & np.isfinite(yaw)
             & np.isfinite(velocity).all(axis=1)
         )
+        if z is not None:
+            finite &= np.isfinite(z)
         valid = valid & finite
         safe_xy = np.where(np.isfinite(xy), xy, 0.0)
         safe_yaw = np.where(np.isfinite(yaw), yaw, 0.0)
@@ -348,10 +354,13 @@ class PufferFrameState:
             "vx": safe_velocity[:, 0].tolist(),
             "vy": safe_velocity[:, 1].tolist(),
             "valid": valid.tolist(),
-            # Dreamer NPZs do not retain z.  The worker obtains it from the
-            # loaded Scenario rather than incorrectly forcing world z=0.
-            "preserve_scene_z": True,
+            # Dreamer predictions do not contain z, so their requests retain
+            # the renderer's logged elevation. Ground-truth replay can provide
+            # an explicit per-frame z from the converted scene sidecar.
+            "preserve_scene_z": z is None,
         }
+        if z is not None:
+            request["z"] = np.where(np.isfinite(z), z, 0.0).tolist()
         if self.source_time_index is not None:
             # Keep the source index in the protocol for diagnostics and a
             # future elevation-aware renderer.  The current native Puffer

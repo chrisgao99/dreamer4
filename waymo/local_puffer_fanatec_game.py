@@ -24,6 +24,8 @@ import io
 import math
 import os
 import queue
+import signal
+import subprocess
 import sys
 import threading
 import time
@@ -47,6 +49,10 @@ from waymo.interactive_world_model_game import (  # noqa: E402
 
 
 DEFAULT_LOCAL_MANIFEST = WAYMO_ROOT / "cache/pufferdrive_static_smoke/manifest.csv"
+DEFAULT_PRIORITY_SCENE_QUEUE = (3155, 3445, 331, 2121, 4188)
+DEFAULT_AUTO_CENTER_SCRIPT = Path(
+    "/p/liverobotics/yf_metadrive/code/auto_center.py"
+)
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -482,6 +488,8 @@ def _draw_overlay(
     status: dict[str, Any] | None,
     input_name: str,
     message: str,
+    *,
+    recording: bool = False,
 ) -> None:
     width, _height = screen.get_size()
     panel = pygame_module.Surface((min(width, 760), 144), pygame_module.SRCALPHA)
@@ -510,6 +518,9 @@ def _draw_overlay(
     if paused:
         headline += "  |  PAUSED"
     screen.blit(font.render(headline, True, (238, 241, 246)), (22, 18))
+    if recording:
+        badge = font.render("REC", True, (255, 85, 75))
+        screen.blit(badge, (width - badge.get_width() - 18, 18))
 
     # Display steering in physical screen direction: right is visually right.
     # Internally the action convention is left-positive, hence the minus sign.
@@ -554,6 +565,188 @@ def _import_pygame() -> Any:
     return pygame
 
 
+class AutoCenterProcess:
+    """Keep the standalone PySDL2 centering loop isolated from Pygame's SDL."""
+
+    def __init__(self, script_path: str | Path, joystick_index: int) -> None:
+        self.script_path = Path(script_path).expanduser().resolve()
+        if not self.script_path.is_file():
+            raise FileNotFoundError(
+                f"Auto-centering script does not exist: {self.script_path}"
+            )
+        command = [
+            sys.executable,
+            str(self.script_path),
+            "--joystick-index",
+            str(int(joystick_index)),
+        ]
+        self.process = subprocess.Popen(command, start_new_session=True)
+        print(
+            f"[auto-center] started pid={self.process.pid} "
+            f"for joystick index {joystick_index}",
+            flush=True,
+        )
+
+    def poll(self) -> int | None:
+        return self.process.poll()
+
+    def close(self) -> None:
+        if self.process.poll() is not None:
+            return
+        self.process.send_signal(signal.SIGINT)
+        try:
+            self.process.wait(timeout=3.0)
+        except subprocess.TimeoutExpired:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait()
+        print("[auto-center] stopped", flush=True)
+
+
+_VIDEO_SENTINEL = object()
+
+
+class Mp4ScreenRecorder:
+    """Encode Pygame surfaces to an atomic MP4 without blocking input."""
+
+    def __init__(
+        self,
+        output_path: str | Path,
+        *,
+        size: tuple[int, int],
+        fps: float,
+        overwrite: bool = False,
+        queue_size: int = 8,
+    ) -> None:
+        self.output_path = Path(output_path).expanduser().resolve()
+        source_width, source_height = (int(size[0]), int(size[1]))
+        # The available MPEG-4 encoder requires even dimensions. A one-pixel
+        # upscale also makes odd-sized, resizable Pygame windows record safely.
+        self.width = source_width + source_width % 2
+        self.height = source_height + source_height % 2
+        self.fps = float(fps)
+        self.overwrite = bool(overwrite)
+        if self.width <= 0 or self.height <= 0:
+            raise ValueError(f"recording dimensions must be positive, got {size}")
+        if self.fps <= 0.0:
+            raise ValueError(f"recording FPS must be positive, got {fps}")
+        if self.output_path.exists() and not self.overwrite:
+            raise FileExistsError(
+                f"Recording already exists: {self.output_path}; "
+                "pass --record-overwrite to replace it"
+            )
+        try:
+            import cv2
+            import numpy
+        except ImportError as error:
+            raise RuntimeError(
+                "MP4 recording requires OpenCV and NumPy in the Dreamer environment"
+            ) from error
+        self._cv2 = cv2
+        self._numpy = numpy
+
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        self.temp_path = self.output_path.with_name(
+            f".{self.output_path.stem}.{os.getpid()}.tmp.mp4"
+        )
+        self.temp_path.unlink(missing_ok=True)
+        self.frames_submitted = 0
+        self.frames_dropped = 0
+        self.closed = False
+        self._items: "queue.Queue[Any]" = queue.Queue(maxsize=max(1, int(queue_size)))
+        self._error: BaseException | None = None
+        self._thread = threading.Thread(
+            target=self._encode,
+            name="pygame-mp4-encoder",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _start_writer(self) -> Any:
+        writer = self._cv2.VideoWriter(
+            str(self.temp_path),
+            self._cv2.VideoWriter_fourcc(*"mp4v"),
+            self.fps,
+            (self.width, self.height),
+        )
+        if not writer.isOpened():
+            writer.release()
+            raise RuntimeError("OpenCV could not initialize its MPEG-4 video encoder")
+        return writer
+
+    def _encode(self) -> None:
+        writer = None
+        try:
+            while True:
+                item = self._items.get()
+                if item is _VIDEO_SENTINEL:
+                    break
+                if writer is None:
+                    writer = self._start_writer()
+                rgb = self._numpy.frombuffer(item, dtype=self._numpy.uint8).reshape(
+                    self.height, self.width, 3
+                )
+                writer.write(self._cv2.cvtColor(rgb, self._cv2.COLOR_RGB2BGR))
+
+            # No model frame arrived before the game closed, so there is no
+            # useful recording to create.
+            if writer is None:
+                return
+            writer.release()
+            writer = None
+            if not self.temp_path.is_file() or self.temp_path.stat().st_size == 0:
+                raise RuntimeError("OpenCV produced an empty MP4")
+            if self.output_path.exists() and not self.overwrite:
+                raise FileExistsError(f"Output appeared while encoding: {self.output_path}")
+            self.temp_path.replace(self.output_path)
+        except BaseException as error:
+            self._error = error
+            if writer is not None:
+                writer.release()
+            self.temp_path.unlink(missing_ok=True)
+
+    def capture(self, pygame_module: Any, surface: Any) -> bool:
+        """Queue the current surface; return false if the encoder is behind."""
+
+        if self.closed:
+            raise RuntimeError("Cannot capture to a closed video recorder")
+        if self._error is not None:
+            raise RuntimeError(f"MP4 encoder failed: {self._error}") from self._error
+        if surface.get_size() != (self.width, self.height):
+            surface = pygame_module.transform.smoothscale(
+                surface, (self.width, self.height)
+            )
+        frame = pygame_module.image.tobytes(surface, "RGB")
+        try:
+            self._items.put_nowait(frame)
+        except queue.Full:
+            self.frames_dropped += 1
+            return False
+        self.frames_submitted += 1
+        return True
+
+    def close(self) -> None:
+        """Finish the MP4 and atomically move it to the requested path."""
+
+        if self.closed:
+            return
+        self.closed = True
+        while self._thread.is_alive() and self._error is None:
+            try:
+                self._items.put(_VIDEO_SENTINEL, timeout=0.1)
+                break
+            except queue.Full:
+                continue
+        self._thread.join(timeout=30.0)
+        if self._thread.is_alive():
+            raise RuntimeError("MP4 encoder did not finish within 30 seconds")
+        if self._error is not None:
+            raise RuntimeError(f"MP4 encoder failed: {self._error}") from self._error
+
+
 def connect_optional_wheel(
     pygame_module: Any,
     args: argparse.Namespace,
@@ -585,7 +778,12 @@ def run_local_game(args: argparse.Namespace) -> int:
     clock = pygame.time.Clock()
 
     wheel: FanatecWheel | None = None
+    auto_center: AutoCenterProcess | None = None
     worker: LocalGameWorker | None = None
+    recorder: Mp4ScreenRecorder | None = None
+    recording_path: Path | None = None
+    recording_period = 0.0
+    next_recording_at: float | None = None
     stop_event = threading.Event()
     commands: queue.Queue[str] = queue.Queue()
     updates: queue.Queue[GameUpdate] = queue.Queue()
@@ -598,19 +796,46 @@ def run_local_game(args: argparse.Namespace) -> int:
     exit_code = 0
 
     def fall_back_to_keyboard(reason: object) -> None:
-        nonlocal wheel, input_name, latest_sample
+        nonlocal wheel, auto_center, input_name, latest_sample
         print(f"[input] {reason}; keyboard active", flush=True)
         # Clear a possibly nonzero last wheel throttle before the next sample.
         latest_sample = WheelSample.neutral(source="keyboard")
         latest_input.set(latest_sample)
+        if auto_center is not None:
+            auto_center.close()
+            auto_center = None
         if wheel is not None:
             wheel.close()
         wheel = None
         input_name = "Keyboard (Arrows/WASD)"
 
     try:
+        if args.record_video:
+            recording_path = Path(args.record_video).expanduser().resolve()
+            recording_fps = (
+                float(args.record_fps)
+                if args.record_fps is not None
+                else float(args.fps)
+            )
+            recorder = Mp4ScreenRecorder(
+                recording_path,
+                size=screen.get_size(),
+                fps=recording_fps,
+                overwrite=args.record_overwrite,
+            )
+            recording_period = 1.0 / recording_fps
+            print(
+                f"[recording] {screen.get_width()}x{screen.get_height()} "
+                f"at {recording_fps:g} FPS -> {recording_path}",
+                flush=True,
+            )
         wheel = connect_optional_wheel(pygame, args)
         input_name = wheel.name if wheel is not None else "Keyboard (Arrows/WASD)"
+        if wheel is not None and args.auto_center:
+            auto_center = AutoCenterProcess(
+                args.auto_center_script,
+                wheel.index,
+            )
         keyboard_sample = read_keyboard_sample(pygame)
         try:
             wheel_sample = wheel.read() if wheel is not None else None
@@ -638,6 +863,16 @@ def run_local_game(args: argparse.Namespace) -> int:
         worker.start()
         running = True
         while running:
+            if auto_center is not None:
+                auto_center_exit = auto_center.poll()
+                if auto_center_exit is not None:
+                    print(
+                        f"[auto-center warning] process stopped unexpectedly "
+                        f"with exit code {auto_center_exit}; driving will continue "
+                        "without centering force",
+                        file=sys.stderr,
+                    )
+                    auto_center = None
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -726,8 +961,17 @@ def run_local_game(args: argparse.Namespace) -> int:
                 latest_status,
                 input_name,
                 message,
+                recording=recorder is not None,
             )
             pygame.display.flip()
+
+            # Begin with the first actual Puffer frame (not the loading screen)
+            # and sample the fully composed window at a stable wall-clock rate.
+            if recorder is not None and latest_frame is not None:
+                now = time.monotonic()
+                if next_recording_at is None or now >= next_recording_at:
+                    recorder.capture(pygame, screen)
+                    next_recording_at = now + recording_period
 
             if fatal_error is not None:
                 print(f"[local game error] {fatal_error.message}", file=sys.stderr)
@@ -746,6 +990,8 @@ def run_local_game(args: argparse.Namespace) -> int:
         # A stale input must never survive shutdown while inference finishes.
         latest_input.set(WheelSample.neutral())
         stop_event.set()
+        if auto_center is not None:
+            auto_center.close()
         if worker is not None:
             worker.join(timeout=float(args.puffer_timeout) + 5.0)
             if worker.is_alive():
@@ -756,6 +1002,29 @@ def run_local_game(args: argparse.Namespace) -> int:
                 exit_code = 1
         if wheel is not None:
             wheel.close()
+        if recorder is not None:
+            try:
+                recorder.close()
+                if recorder.frames_submitted:
+                    print(
+                        f"[recording] saved {recorder.frames_submitted} frames to "
+                        f"{recording_path}",
+                        flush=True,
+                    )
+                    if recorder.frames_dropped:
+                        print(
+                            f"[recording warning] dropped {recorder.frames_dropped} "
+                            "frames because the encoder could not keep up",
+                            file=sys.stderr,
+                        )
+                else:
+                    print(
+                        "[recording warning] no model frame arrived; no MP4 was created",
+                        file=sys.stderr,
+                    )
+            except Exception as error:
+                print(f"[recording error] {error}", file=sys.stderr)
+                exit_code = 1
         pygame.joystick.quit()
         pygame.font.quit()
         pygame.display.quit()
@@ -768,6 +1037,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.set_defaults(
         renderer="puffer",
         autoplay=True,
+        scene_index=DEFAULT_PRIORITY_SCENE_QUEUE[0],
         puffer_strict=True,
         puffer_timeout=120.0,
         puffer_use_inherited_display=True,
@@ -808,10 +1078,56 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.5,
         help="Use neutral controls if no fresh input sample arrives for this many seconds.",
     )
+    parser.add_argument(
+        "--auto-center",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Run wheel auto-centering for the lifetime of the game when a wheel "
+            "is connected (default: enabled)."
+        ),
+    )
+    parser.add_argument(
+        "--auto-center-script",
+        default=str(DEFAULT_AUTO_CENTER_SCRIPT),
+        metavar="PATH",
+        help="Standalone PySDL2 auto-centering script to run.",
+    )
     parser.add_argument("--window-width", type=int, default=1280)
     parser.add_argument("--window-height", type=int, default=720)
     parser.add_argument("--ui-fps", type=int, default=60)
     parser.add_argument("--fullscreen", action="store_true")
+    parser.add_argument(
+        "--scene-queue",
+        type=int,
+        nargs="+",
+        default=list(DEFAULT_PRIORITY_SCENE_QUEUE),
+        metavar="INDEX",
+        help=(
+            "Dataset indices to visit first when N is pressed. The local default "
+            "is the requested five-scene recording queue: %(default)s."
+        ),
+    )
+    parser.add_argument(
+        "--record-video",
+        default=None,
+        metavar="PATH.mp4",
+        help=(
+            "Record the composed driving window, including the control overlay, "
+            "to an MP4. The file is finalized when the game exits."
+        ),
+    )
+    parser.add_argument(
+        "--record-fps",
+        type=float,
+        default=None,
+        help="Recording frame rate. Default: use the model --fps value.",
+    )
+    parser.add_argument(
+        "--record-overwrite",
+        action="store_true",
+        help="Allow --record-video to replace an existing MP4.",
+    )
     return parser
 
 
@@ -828,8 +1144,24 @@ def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) ->
         parser.error("window dimensions must be positive")
     if args.ui_fps <= 0:
         parser.error("--ui-fps must be positive")
+    if args.record_video and Path(args.record_video).suffix.lower() != ".mp4":
+        parser.error("--record-video must end in .mp4")
+    if args.record_fps is not None and args.record_fps <= 0:
+        parser.error("--record-fps must be positive")
+    if any(index < 0 for index in args.scene_queue):
+        parser.error("--scene-queue indices must be non-negative")
+    if len(set(args.scene_queue)) != len(args.scene_queue):
+        parser.error("--scene-queue must not contain duplicate indices")
     if args.input_timeout <= 0:
         parser.error("--input-timeout must be positive")
+    if (
+        args.auto_center
+        and args.input_device != "keyboard"
+        and not Path(args.auto_center_script).expanduser().is_file()
+    ):
+        parser.error(
+            f"auto-centering script does not exist: {args.auto_center_script}"
+        )
     if not 0.0 <= args.steering_deadzone < 1.0:
         parser.error("--steering-deadzone must be in [0, 1)")
     if not 0.0 <= args.pedal_deadzone < 1.0:

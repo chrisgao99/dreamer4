@@ -1,0 +1,83 @@
+{
+  "action_source": "recorded focus car; [dx,dy,dyaw,speed,vx,vy,valid]",
+  "checkpoint_path": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_wm_original_stmlayer_3_stage/waymo_wm_stage1best_mon8_fullmotion_physproxy_h30best30k_ctx1_h90_d1_chunk32s30_30k/step_00027000.pt",
+  "checkpoint_profile": "h90",
+  "context_frames": 11,
+  "elapsed_seconds": 54.09600830078125,
+  "generated_frames": 80,
+  "num_videos": 5,
+  "puffer_manifest": "/p/yufeng/tri30/dreamer4/waymo/cache/pufferdrive_val128_seed0/manifest.csv",
+  "subset_manifest": "/p/yufeng/tri30/dreamer4/waymo/evaluation/val_random128_seed0_manifest.json",
+  "videos": [
+    {
+      "context_frames": 11,
+      "dataset_index": 3155,
+      "focus_track_id": 1,
+      "fps": 10.0,
+      "generated_frames": 80,
+      "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k/val/a9a7480e5c110232_focus_1_src1.npz",
+      "output_mp4": "/p/yufeng/tri30/dreamer4/waymo/eval_results/puffer_gt_focus_h90_first5_ctx11_u80/sample_000_scene_3155_a9a7480e5c110232_focus_1_ctx11_u80.mp4",
+      "sample_order": 0,
+      "scenario_id": "a9a7480e5c110232",
+      "seconds": 12.22681736946106,
+      "seed": 0,
+      "total_frames": 91
+    },
+    {
+      "context_frames": 11,
+      "dataset_index": 3445,
+      "focus_track_id": 1105,
+      "fps": 10.0,
+      "generated_frames": 80,
+      "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k/val/b79347e2af17740f_focus_1105_src1.npz",
+      "output_mp4": "/p/yufeng/tri30/dreamer4/waymo/eval_results/puffer_gt_focus_h90_first5_ctx11_u80/sample_001_scene_3445_b79347e2af17740f_focus_1105_ctx11_u80.mp4",
+      "sample_order": 1,
+      "scenario_id": "b79347e2af17740f",
+      "seconds": 8.729053735733032,
+      "seed": 1,
+      "total_frames": 91
+    },
+    {
+      "context_frames": 11,
+      "dataset_index": 331,
+      "focus_track_id": 1724,
+      "fps": 10.0,
+      "generated_frames": 80,
+      "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k/val/1f5654ec3318e22d_focus_1724_src1.npz",
+      "output_mp4": "/p/yufeng/tri30/dreamer4/waymo/eval_results/puffer_gt_focus_h90_first5_ctx11_u80/sample_002_scene_331_1f5654ec3318e22d_focus_1724_ctx11_u80.mp4",
+      "sample_order": 2,
+      "scenario_id": "1f5654ec3318e22d",
+      "seconds": 9.403111934661865,
+      "seed": 2,
+      "total_frames": 91
+    },
+    {
+      "context_frames": 11,
+      "dataset_index": 2121,
+      "focus_track_id": 278,
+      "fps": 10.0,
+      "generated_frames": 80,
+      "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k/val/77046993fcd9f0bc_focus_278_src3.npz",
+      "output_mp4": "/p/yufeng/tri30/dreamer4/waymo/eval_results/puffer_gt_focus_h90_first5_ctx11_u80/sample_003_scene_2121_77046993fcd9f0bc_focus_278_ctx11_u80.mp4",
+      "sample_order": 3,
+      "scenario_id": "77046993fcd9f0bc",
+      "seconds": 9.565664768218994,
+      "seed": 3,
+      "total_frames": 91
+    },
+    {
+      "context_frames": 11,
+      "dataset_index": 4188,
+      "focus_track_id": 71,
+      "fps": 10.0,
+      "generated_frames": 80,
+      "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k/val/dbbe45a6594fbfd6_focus_71_src0.npz",
+      "output_mp4": "/p/yufeng/tri30/dreamer4/waymo/eval_results/puffer_gt_focus_h90_first5_ctx11_u80/sample_004_scene_4188_dbbe45a6594fbfd6_focus_71_ctx11_u80.mp4",
+      "sample_order": 4,
+      "scenario_id": "dbbe45a6594fbfd6",
+      "seconds": 8.388109922409058,
+      "seed": 4,
+      "total_frames": 91
+    }
+  ]
+}

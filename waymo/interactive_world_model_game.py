@@ -561,6 +561,7 @@ class WaymoInteractiveServer:
         self.puffer_manifest: ScenarioManifest | None = None
         self.puffer_renderer: PufferRendererClient | None = None
         self.puffer_scene_indices: tuple[int, ...] = ()
+        self.scene_queue: tuple[int, ...] = ()
         self._reported_puffer_errors: set[str] = set()
         if args.renderer == "puffer":
             if args.puffer_manifest:
@@ -633,6 +634,36 @@ class WaymoInteractiveServer:
                     )
                     self.initial_scene_index = replacement
 
+        requested_scene_queue = tuple(
+            int(index) for index in (getattr(args, "scene_queue", None) or ())
+        )
+        if requested_scene_queue:
+            available_scene_indices: tuple[int, ...] | range
+            if args.renderer == "puffer" and self.puffer_scene_indices:
+                available_scene_indices = self.puffer_scene_indices
+            else:
+                available_scene_indices = range(len(self.dataset))
+            available_set = set(available_scene_indices)
+            unavailable = [
+                index for index in requested_scene_queue if index not in available_set
+            ]
+            if unavailable:
+                raise ValueError(
+                    "Queued scene indices are not available to the active renderer: "
+                    + ", ".join(str(index) for index in unavailable)
+                )
+            requested_set = set(requested_scene_queue)
+            self.scene_queue = requested_scene_queue + tuple(
+                int(index)
+                for index in available_scene_indices
+                if index not in requested_set
+            )
+            print(
+                "[scene queue] priority: "
+                + " -> ".join(str(index) for index in requested_scene_queue),
+                flush=True,
+            )
+
         self.html = Path(args.html).read_text(encoding="utf-8")
         print(
             f"[ready] checkpoint step={int(self.checkpoint.get('step', -1))} "
@@ -695,6 +726,14 @@ class WaymoInteractiveServer:
         return bool(agent_mask[0]) and bool(focus_valid.all())
 
     def _pick_new_scene_index(self, current: int) -> int:
+        scene_queue = getattr(self, "scene_queue", ())
+        if scene_queue:
+            try:
+                current_position = scene_queue.index(int(current))
+            except ValueError:
+                return int(scene_queue[0])
+            return int(scene_queue[(current_position + 1) % len(scene_queue)])
+
         candidates: tuple[int, ...] | range
         if self.args.renderer == "puffer" and self.puffer_scene_indices:
             candidates = self.puffer_scene_indices

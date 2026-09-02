@@ -150,6 +150,13 @@ class ConvertedSceneSelectionTest(unittest.TestCase):
         self.assertEqual(server._pick_new_scene_index(7), 7)
         self.assertEqual(server._pick_new_scene_index(3), 7)
 
+    def test_priority_queue_is_visited_in_order_before_remaining_scenes(self):
+        server = self.make_server((2, 5, 7, 9))
+        server.scene_queue = (5, 9, 2, 7)
+        self.assertEqual(server._pick_new_scene_index(5), 9)
+        self.assertEqual(server._pick_new_scene_index(9), 2)
+        self.assertEqual(server._pick_new_scene_index(2), 7)
+
 
 class CheckpointProfileTest(unittest.TestCase):
     def test_default_profile_is_h90(self):

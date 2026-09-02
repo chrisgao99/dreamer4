@@ -165,6 +165,68 @@ class PufferFrameStateTest(unittest.TestCase):
         self.assertEqual(request["step"], 160)
         self.assertEqual(request["source_time_index"], 160)
 
+    def test_explicit_ground_truth_z_is_sent_instead_of_preserving_logged_z(self):
+        frame = PufferFrameState(
+            step=4,
+            agent_ids=np.asarray([10, 20]),
+            agent_types=np.asarray([1, 1]),
+            xy=np.asarray([[1.0, 2.0], [3.0, 4.0]]),
+            z=np.asarray([8.5, 9.25]),
+            yaw=np.asarray([0.5, 0.25]),
+            velocity_xy=np.asarray([[3.0, 4.0], [5.0, 6.0]]),
+            valid=np.asarray([True, True]),
+        )
+        scene = PufferSceneReference(
+            scenario_id="abc",
+            npz_path=Path("abc.npz"),
+            focus_track_id=10,
+            puffer_map_dir=Path("view"),
+        )
+        request = frame.as_request(scene)
+        self.assertFalse(request["preserve_scene_z"])
+        self.assertEqual(request["z"], [8.5, 9.25])
+
+    def test_explicit_z_must_match_agent_count(self):
+        frame = PufferFrameState(
+            step=0,
+            agent_ids=np.asarray([10, 20]),
+            agent_types=np.asarray([1, 1]),
+            xy=np.asarray([[1.0, 2.0], [3.0, 4.0]]),
+            z=np.asarray([8.5]),
+            yaw=np.asarray([0.5, 0.25]),
+            velocity_xy=np.asarray([[3.0, 4.0], [5.0, 6.0]]),
+            valid=np.asarray([True, True]),
+        )
+        scene = PufferSceneReference(
+            scenario_id="abc",
+            npz_path=Path("abc.npz"),
+            focus_track_id=10,
+            puffer_map_dir=Path("view"),
+        )
+        with self.assertRaisesRegex(ValueError, "z must match agent_ids"):
+            frame.as_request(scene)
+
+    def test_nonfinite_explicit_z_invalidates_agent_and_serializes_zero(self):
+        frame = PufferFrameState(
+            step=0,
+            agent_ids=np.asarray([10, 20]),
+            agent_types=np.asarray([1, 1]),
+            xy=np.asarray([[1.0, 2.0], [3.0, 4.0]]),
+            z=np.asarray([8.5, np.nan]),
+            yaw=np.asarray([0.5, 0.25]),
+            velocity_xy=np.asarray([[3.0, 4.0], [5.0, 6.0]]),
+            valid=np.asarray([True, True]),
+        )
+        scene = PufferSceneReference(
+            scenario_id="abc",
+            npz_path=Path("abc.npz"),
+            focus_track_id=10,
+            puffer_map_dir=Path("view"),
+        )
+        request = frame.as_request(scene)
+        self.assertEqual(request["valid"], [True, False])
+        self.assertEqual(request["z"], [8.5, 0.0])
+
 
 class PufferRendererClientTest(unittest.TestCase):
     def test_length_prefixed_scene_ack_and_jpeg_response(self):

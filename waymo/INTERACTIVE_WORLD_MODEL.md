@@ -157,6 +157,68 @@ native PufferDrive renderer intentionally draws roads and actors on fixed
 display planes, matching the supplied demo video's visual style. It is not yet
 an elevation-aware renderer for overpasses or sloped roads.
 
+## Headless 3D videos with recorded focus actions
+
+`waymo/evaluation/render_puffer_gt_focus_rollouts.py` creates offline MP4s
+without a browser or physical display. It takes scenes in the durable
+`sample_order` from `val_random128_seed0_manifest.json`, displays 11 recorded
+frames, computes future focus-car actions from the full NPZ trajectory, and
+uses Dreamer to generate the other actors for the requested rollout length.
+For the standard first-five, context-11, future-80 run:
+
+```bash
+unset DISPLAY
+
+/p/yufeng/.conda/envs/dreamer4/bin/python -u \
+  waymo/evaluation/render_puffer_gt_focus_rollouts.py \
+  --device cuda:0 \
+  --ckpt h90 \
+  --subset-manifest waymo/evaluation/val_random128_seed0_manifest.json \
+  --puffer-manifest waymo/cache/pufferdrive_val128_seed0/manifest.csv \
+  --sample-start 0 \
+  --num-scenes 5 \
+  --context-frames 11 \
+  --unroll-steps 80 \
+  --fps 10 \
+  --puffer-width 1280 \
+  --puffer-height 720 \
+  --puffer-timeout 120 \
+  --output-dir waymo/eval_results/puffer_gt_focus_h90_first5_ctx11_u80
+```
+
+Do not pass `--puffer-use-inherited-display` on a headless node and do not wrap
+this command in `xvfb-run`. The external Puffer worker owns an isolated Xvfb.
+Each standard output contains exactly 91 frames and lasts 9.1 seconds at 10
+FPS. The frame overlay and `summary.json` preserve subset order, full dataset
+index, scenario ID, focus track ID, checkpoint, and random seed.
+
+To render the same five scenes as complete 91-frame ground-truth replays, with
+no action input and without loading the tokenizer, checkpoint, or world model,
+use the standalone renderer and place its output in the model-run directory's
+`ground_truth` child:
+
+```bash
+env -u DISPLAY PYTHONUNBUFFERED=1 \
+  /p/yufeng/.conda/envs/dreamer4/bin/python -u \
+  waymo/evaluation/render_puffer_ground_truth_replays.py \
+  --subset-manifest waymo/evaluation/val_random128_seed0_manifest.json \
+  --puffer-manifest waymo/cache/pufferdrive_val128_seed0/manifest.csv \
+  --sample-start 0 \
+  --num-scenes 5 \
+  --fps 10 \
+  --puffer-width 1280 \
+  --puffer-height 720 \
+  --puffer-timeout 120 \
+  --output-dir \
+    waymo/eval_results/puffer_gt_focus_h90_first5_ctx11_u80/ground_truth
+```
+
+This script is renderer-only and does not require a GPU. It replays all actor
+poses directly from each NPZ and sends the matching converted Puffer scene's
+per-frame elevation; it has no device or checkpoint argument. Puffer's current
+native renderer still draws actors on fixed display planes, so elevation is
+preserved in the request but is not yet visible in the video.
+
 ## Local 3D wheel/joystick or keyboard game
 
 For a machine with a desktop display, run the Pygame frontend instead of the
