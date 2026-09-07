@@ -5,8 +5,24 @@
 
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-/p/yufeng/tri30/dreamer4}"
-PYTHON="${PYTHON:-/p/yufeng/.conda/envs/dreamer4/bin/python}"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+DEFAULT_REPO_ROOT="$(readlink -f "$SCRIPT_DIR/../../..")"
+REPO_ROOT="${REPO_ROOT:-$DEFAULT_REPO_ROOT}"
+OWNER_ROOT="$(dirname "$(dirname "$REPO_ROOT")")"
+if [[ -z "${PYTHON:-}" ]]; then
+  PYTHON="$OWNER_ROOT/.conda/envs/dreamer4/bin/python"
+  OWNER_NAME="$(basename "$OWNER_ROOT")"
+  if [[ ! -x "$PYTHON" && -x "/home/$OWNER_NAME/.conda/envs/dreamer4/bin/python" ]]; then
+    PYTHON="/home/$OWNER_NAME/.conda/envs/dreamer4/bin/python"
+  fi
+  if [[ ! -x "$PYTHON" && -n "${CONDA_PREFIX:-}" && -x "$CONDA_PREFIX/bin/python" ]]; then
+    PYTHON="$CONDA_PREFIX/bin/python"
+  fi
+  if [[ ! -x "$PYTHON" ]]; then
+    PYTHON="$(command -v python || true)"
+  fi
+fi
 TRAIN_SCRIPT="$REPO_ROOT/waymo/training/world_model/train_waymo_direct_action_flow.py"
 DATA_ROOT="${DATA_ROOT:-$REPO_ROOT/data/waymo_vector_dataset_ooi_centered_50k}"
 
@@ -35,6 +51,7 @@ TRAIN_LOG="$REPO_ROOT/waymo/logs/wm/$RUN_NAME.log"
 for required_file in "$PYTHON" "$TRAIN_SCRIPT" "$ACTION_STATS"; do
   [[ -f "$required_file" ]] || { echo "Missing required file: $required_file" >&2; exit 1; }
 done
+[[ -x "$PYTHON" ]] || { echo "Python is not executable: $PYTHON" >&2; exit 1; }
 for required_dir in "$DATA_ROOT/train" "$DATA_ROOT/val"; do
   [[ -d "$required_dir" ]] || { echo "Missing required directory: $required_dir" >&2; exit 1; }
 done
@@ -54,7 +71,6 @@ if [[ "${RUN_INSIDE_TMUX:-0}" != "1" ]]; then
     echo "tmux session already exists: $SESSION_NAME" >&2
     exit 1
   fi
-  script_path="$(readlink -f "${BASH_SOURCE[0]}")"
   printf -v tmux_command '%q ' env \
     RUN_INSIDE_TMUX=1 \
     REPO_ROOT="$REPO_ROOT" \
@@ -79,7 +95,7 @@ if [[ "${RUN_INSIDE_TMUX:-0}" != "1" ]]; then
     ACTION_STATS="$ACTION_STATS" \
     WANDB_MODE="${WANDB_MODE:-online}" \
     OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}" \
-    bash "$script_path"
+    bash "$SCRIPT_PATH"
   tmux new-session -d -s "$SESSION_NAME" -c "$REPO_ROOT" "$tmux_command"
   tmux set-option -t "$SESSION_NAME" remain-on-exit on
   echo "Started fresh all-agent training in tmux: $SESSION_NAME"
