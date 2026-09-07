@@ -38,6 +38,7 @@ from waymo.training.world_model.direct_action_flow import (
     flow_matching_loss,
     gather_agent_window,
     inverse_holonomic_actions,
+    physical_transition_valid,
     rollout_receding_horizon,
     select_window_anchors,
     wrap_angle_rad,
@@ -112,6 +113,8 @@ def compute_action_statistics(
     batch_size: int,
     num_workers: int,
     max_files: int,
+    max_displacement_m: float = 0.0,
+    max_yaw_delta_rad: float = 0.0,
 ) -> dict[str, Any]:
     """Compute local-action moments over all valid future adjacent pairs."""
     dataset = AgentStatsDataset(data_dir, max_files=max_files)
@@ -152,6 +155,12 @@ def compute_action_statistics(
             ),
             dim=-1,
         ).double()
+        valid = valid & physical_transition_valid(
+            action[..., 0:2],
+            action[..., 2],
+            max_displacement_m=max_displacement_m,
+            max_yaw_delta_rad=max_yaw_delta_rad,
+        )
         agent_type = current[..., 7].round().long().clamp(0, num_types - 1)
         for type_index in range(num_types):
             selected = valid & (agent_type == type_index)
@@ -190,7 +199,7 @@ def compute_action_statistics(
             std[type_index] = global_std
     std = torch.maximum(std, minimum_std)
     return {
-        "version": 1,
+        "version": 2 if max_displacement_m > 0.0 or max_yaw_delta_rad > 0.0 else 1,
         "source_data_dir": str(Path(data_dir).resolve()),
         "first_action_index": first_action_index,
         "num_files": len(dataset),
@@ -201,6 +210,8 @@ def compute_action_statistics(
         "std": std.tolist(),
         "global_mean": global_mean.tolist(),
         "global_std": global_std.tolist(),
+        "physical_max_displacement_m": float(max_displacement_m),
+        "physical_max_yaw_delta_rad": float(max_yaw_delta_rad),
     }
 
 
@@ -218,6 +229,8 @@ def load_or_compute_action_statistics(args: argparse.Namespace) -> dict[str, Any
         batch_size=args.stats_batch_size,
         num_workers=args.num_workers,
         max_files=args.stats_max_files,
+        max_displacement_m=args.physical_max_displacement_m,
+        max_yaw_delta_rad=args.physical_max_yaw_delta_rad,
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -265,6 +278,8 @@ def prepare_batch(
         history_length=args.history_length,
         horizon=args.horizon,
         random_start=random_start,
+        max_displacement_m=args.physical_max_displacement_m,
+        max_yaw_delta_rad=args.physical_max_yaw_delta_rad,
     )
     history, future = gather_agent_window(
         agents,
@@ -272,7 +287,13 @@ def prepare_batch(
         history_length=args.history_length,
         horizon=args.horizon,
     )
-    targets = inverse_holonomic_actions(history, future, batch["agent_mask"])
+    targets = inverse_holonomic_actions(
+        history,
+        future,
+        batch["agent_mask"],
+        max_displacement_m=args.physical_max_displacement_m,
+        max_yaw_delta_rad=args.physical_max_yaw_delta_rad,
+    )
     normalized = normalizer.normalize(targets.actions, targets.agent_type)
     normalized = normalized * targets.valid[..., None].to(normalized.dtype)
     current_lights, current_light_mask = gather_current_lights(
@@ -334,16 +355,23 @@ def create_model(args: argparse.Namespace) -> DirectActionFlowModel:
         dropout=args.dropout,
         mlp_ratio=args.mlp_ratio,
         position_scale_m=args.position_scale_m,
+        modulation_scale_limit=args.modulation_scale_limit,
+        modulation_shift_limit=args.modulation_shift_limit,
     )
 
 
 def lr_multiplier(step: int, args: argparse.Namespace) -> float:
     if step < args.warmup_steps:
         return max(1e-8, float(step + 1) / float(max(1, args.warmup_steps)))
+    decay_steps = (
+        int(args.lr_decay_steps)
+        if int(args.lr_decay_steps) > 0
+        else int(args.max_steps)
+    )
     progress = min(
         1.0,
         float(step - args.warmup_steps)
-        / float(max(1, args.max_steps - args.warmup_steps)),
+        / float(max(1, decay_steps - args.warmup_steps)),
     )
     cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
     return args.min_lr_ratio + (1.0 - args.min_lr_ratio) * cosine
@@ -386,13 +414,15 @@ def load_checkpoint(
     ema: ModelEMA,
     optimizer: torch.optim.Optimizer,
     scaler: GradScaler,
+    load_optimizer: bool = True,
 ) -> tuple[int, int, float]:
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     model.load_state_dict(checkpoint["model"], strict=True)
     ema.model.load_state_dict(checkpoint.get("ema_model", checkpoint["model"]), strict=True)
-    optimizer.load_state_dict(checkpoint["optimizer"])
-    if "scaler" in checkpoint:
-        scaler.load_state_dict(checkpoint["scaler"])
+    if load_optimizer:
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        if "scaler" in checkpoint:
+            scaler.load_state_dict(checkpoint["scaler"])
     return (
         int(checkpoint.get("step", 0)),
         int(checkpoint.get("epoch", 0)),
@@ -422,6 +452,9 @@ def evaluate_flow(
             scene,
             prepared.normalized_actions,
             prepared.targets.valid,
+            loss_type=args.flow_loss_type,
+            huber_beta=args.flow_huber_beta,
+            condition_focus_actions=args.condition_focus_actions,
         )
         predicted_pose = execute_holonomic_actions(
             prepared.targets.current_pose,
@@ -471,7 +504,11 @@ def evaluate_samples(
         model_mask = scene.agent_mask[:, :, None].expand(
             -1, -1, args.horizon
         ).clone()
-        focus = prepared.normalized_actions[:, 0]
+        focus = (
+            prepared.normalized_actions[:, 0]
+            if args.condition_focus_actions
+            else None
+        )
         candidate_poses = []
         for _ in range(args.eval_num_rollouts):
             normalized = model.sample_normalized_actions(
@@ -490,7 +527,8 @@ def evaluate_samples(
         poses = torch.stack(candidate_poses, dim=1)  # (B,R,N,H,3)
         target_xy = prepared.targets.future_pose[..., 0:2]
         valid = prepared.targets.valid.clone()
-        valid[:, 0] = False
+        if args.condition_focus_actions:
+            valid[:, 0] = False
         distance = torch.linalg.vector_norm(
             poses[..., 0:2] - target_xy[:, None], dim=-1
         )
@@ -564,7 +602,13 @@ def evaluate_receding_rollout(
             history_length=args.history_length,
             horizon=available,
         )
-        targets = inverse_holonomic_actions(history, future, batch["agent_mask"])
+        targets = inverse_holonomic_actions(
+            history,
+            future,
+            batch["agent_mask"],
+            max_displacement_m=args.physical_max_displacement_m,
+            max_yaw_delta_rad=args.physical_max_yaw_delta_rad,
+        )
         light_sequence = batch["lights"][:, anchor : anchor + available]
         light_mask_sequence = batch["light_mask"][:, anchor : anchor + available]
         poses = rollout_receding_horizon(
@@ -576,15 +620,20 @@ def evaluate_receding_rollout(
             map_mask=batch["map_mask"],
             current_light_sequence=light_sequence,
             current_light_mask_sequence=light_mask_sequence,
-            focus_action_sequence=targets.actions[:, 0],
-            focus_action_valid=targets.valid[:, 0],
+            focus_action_sequence=(
+                targets.actions[:, 0] if args.condition_focus_actions else None
+            ),
+            focus_action_valid=(
+                targets.valid[:, 0] if args.condition_focus_actions else None
+            ),
             rollout_steps=available,
             commitment=args.commitment,
             solver_steps=args.eval_solver_steps,
             generator=generator,
         )
         valid = targets.valid.clone()
-        valid[:, 0] = False
+        if args.condition_focus_actions:
+            valid[:, 0] = False
         distance = torch.linalg.vector_norm(
             poses[..., 0:2] - targets.future_pose[..., 0:2], dim=-1
         )
@@ -594,7 +643,12 @@ def evaluate_receding_rollout(
         scenes += int(scene_ade.shape[0])
     if scenes == 0:
         return {}
-    return {"receding_nonfocus_ade_m": error_sum / scenes}
+    metric_name = (
+        "receding_nonfocus_ade_m"
+        if args.condition_focus_actions
+        else "receding_all_agent_ade_m"
+    )
+    return {metric_name: error_sum / scenes}
 
 
 def make_loader(
@@ -621,6 +675,18 @@ def make_loader(
 def train(args: argparse.Namespace) -> None:
     if args.horizon % args.commitment:
         raise ValueError("--horizon must be divisible by --commitment")
+    if not 0.0 < args.train_flow_time_max <= 1.0:
+        raise ValueError("--train_flow_time_max must be in (0, 1]")
+    if args.train_normalized_action_clip < 0.0:
+        raise ValueError("--train_normalized_action_clip must be >= 0")
+    if args.physical_max_displacement_m < 0.0:
+        raise ValueError("--physical_max_displacement_m must be >= 0")
+    if args.physical_max_yaw_delta_rad < 0.0:
+        raise ValueError("--physical_max_yaw_delta_rad must be >= 0")
+    if args.modulation_scale_limit < 0.0 or args.modulation_shift_limit < 0.0:
+        raise ValueError("modulation limits must be >= 0")
+    if args.flow_loss_type == "huber" and args.flow_huber_beta <= 0.0:
+        raise ValueError("--flow_huber_beta must be > 0 for Huber loss")
     device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
     if device.type == "cuda" and device.index is not None:
         torch.cuda.set_device(device)
@@ -672,8 +738,13 @@ def train(args: argparse.Namespace) -> None:
             ema=ema,
             optimizer=optimizer,
             scaler=scaler,
+            load_optimizer=not args.reset_optimizer_on_resume,
         )
-        print(f"Resumed {args.resume}: step={step} epoch={epoch} best_val={best_val:.6f}")
+        optimizer_status = "reset" if args.reset_optimizer_on_resume else "restored"
+        print(
+            f"Resumed {args.resume}: step={step} epoch={epoch} "
+            f"best_val={best_val:.6f} optimizer={optimizer_status}"
+        )
     # Set the learning rate used by the first optimizer update (and restore the
     # analytically defined schedule after resume) before entering the loop.
     initial_lr_multiplier = lr_multiplier(step, args)
@@ -697,9 +768,14 @@ def train(args: argparse.Namespace) -> None:
         f"{args.action_depth}/{args.step_refiner_depth}",
         flush=True,
     )
+    generation_description = (
+        "focus=known_H_step_action; generated=nonfocus"
+        if args.condition_focus_actions
+        else "focus=no_future_action; generated=all_agents"
+    )
     print(
         "agent_state=x,y,yaw; valid=mask; type=static_condition; "
-        "light=current_only; focus=known_H_step_action; generated=nonfocus",
+        f"light=current_only; {generation_description}",
         flush=True,
     )
 
@@ -728,15 +804,30 @@ def train(args: argparse.Namespace) -> None:
         for raw_batch in train_loader:
             batch = move_batch(raw_batch, device)
             prepared = prepare_batch(batch, normalizer, args, random_start=True)
+            training_actions = prepared.normalized_actions
+            if args.train_normalized_action_clip > 0.0:
+                training_actions = training_actions.clamp(
+                    -args.train_normalized_action_clip,
+                    args.train_normalized_action_clip,
+                )
             with autocast(device_type=device.type, dtype=amp_dtype, enabled=use_amp):
                 scene = model.encode_scene(**scene_kwargs(batch, prepared))
                 loss, metrics = flow_matching_loss(
                     model,
                     scene,
-                    prepared.normalized_actions,
+                    training_actions,
                     prepared.targets.valid,
+                    flow_time_max=args.train_flow_time_max,
+                    loss_type=args.flow_loss_type,
+                    huber_beta=args.flow_huber_beta,
+                    condition_focus_actions=args.condition_focus_actions,
                 )
                 scaled_loss = loss / float(args.grad_accum_steps)
+            if args.fail_on_nonfinite and not bool(torch.isfinite(loss).item()):
+                raise FloatingPointError(
+                    f"Non-finite training loss before backward at "
+                    f"step={step} epoch={epoch}: loss={float(loss)}"
+                )
             scaler.scale(scaled_loss).backward()
             micro_step += 1
             rolling_count += 1
@@ -746,7 +837,11 @@ def train(args: argparse.Namespace) -> None:
                 continue
 
             scaler.unscale_(optimizer)
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                model.parameters(),
+                args.grad_clip,
+                error_if_nonfinite=args.fail_on_nonfinite,
+            )
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
@@ -875,12 +970,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ckpt_dir", required=True)
     parser.add_argument("--action_stats_path", required=True)
     parser.add_argument("--resume", default=None)
+    parser.add_argument(
+        "--reset_optimizer_on_resume",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Load model/EMA and step metadata but initialize a fresh optimizer/scaler.",
+    )
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=0)
 
     parser.add_argument("--history_length", type=int, default=11)
     parser.add_argument("--horizon", type=int, default=30)
     parser.add_argument("--commitment", type=int, default=5)
+    parser.add_argument(
+        "--condition_focus_actions",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Clamp the focus agent to its logged future actions and exclude it "
+            "from flow supervision. Disable to jointly generate all agents."
+        ),
+    )
     parser.add_argument("--position_scale_m", type=float, default=100.0)
     parser.add_argument("--num_agent_types", type=int, default=16)
     parser.add_argument("--d_model", type=int, default=256)
@@ -893,6 +1003,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--step_refiner_depth", type=int, default=2)
     parser.add_argument("--dropout", type=float, default=0.05)
     parser.add_argument("--mlp_ratio", type=float, default=4.0)
+    parser.add_argument(
+        "--modulation_scale_limit",
+        type=float,
+        default=0.0,
+        help="Positive tanh bound for DiT modulation scale; 0 disables it.",
+    )
+    parser.add_argument(
+        "--modulation_shift_limit",
+        type=float,
+        default=0.0,
+        help="Positive tanh bound for DiT modulation shift; 0 disables it.",
+    )
 
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--eval_batch_size", type=int, default=4)
@@ -909,10 +1031,52 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--min_lr_ratio", type=float, default=0.1)
     parser.add_argument("--warmup_steps", type=int, default=5_000)
+    parser.add_argument(
+        "--lr_decay_steps",
+        type=int,
+        default=0,
+        help="Cosine schedule endpoint; 0 uses --max_steps.",
+    )
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--grad_clip", type=float, default=1.0)
+    parser.add_argument(
+        "--fail_on_nonfinite",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Abort before optimizer.step when the loss or gradient norm is NaN/Inf.",
+    )
     parser.add_argument("--ema_decay", type=float, default=0.9999)
     parser.add_argument("--amp_dtype", choices=("bf16", "fp16", "none"), default="bf16")
+    parser.add_argument(
+        "--train_flow_time_max",
+        type=float,
+        default=1.0,
+        help="Upper bound for uniformly sampled training flow time; validation remains on [0, 1).",
+    )
+    parser.add_argument(
+        "--train_normalized_action_clip",
+        type=float,
+        default=0.0,
+        help="Symmetric training-only normalized-action clip; 0 disables clipping.",
+    )
+    parser.add_argument(
+        "--physical_max_displacement_m",
+        type=float,
+        default=0.0,
+        help="Invalidate an action and its suffix above this 0.1-s displacement; 0 disables.",
+    )
+    parser.add_argument(
+        "--physical_max_yaw_delta_rad",
+        type=float,
+        default=0.0,
+        help="Invalidate an action and its suffix above this wrapped yaw change; 0 disables.",
+    )
+    parser.add_argument(
+        "--flow_loss_type",
+        choices=("mse", "huber"),
+        default="mse",
+    )
+    parser.add_argument("--flow_huber_beta", type=float, default=1.0)
 
     parser.add_argument("--log_every", type=int, default=20)
     parser.add_argument("--eval_every", type=int, default=5_000)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 
 from waymo.training.world_model.multisample_validation import (
+    flow_erd_cpd_metrics,
     multisample_selection_score,
     multisample_trajectory_metrics,
 )
@@ -87,3 +88,32 @@ def test_8s_endpoint_spatial_std_uses_future_step_80() -> None:
     torch.testing.assert_close(
         metrics["multisample_nonfocus_8s_endpoint_mean_spatial_std_m"], expected
     )
+
+
+def test_flow_erd_cpd_is_type_normalized_rms_and_log_free() -> None:
+    # One final context frame followed by two rollout steps.  Future GT is
+    # deliberately invalid: CPD must freeze the roster at the context frame.
+    target = torch.zeros((1, 3, 3, 8), dtype=torch.float32)
+    target[:, 0, :, 5] = 1.0
+    target[:, 0, 0, 7] = 1.0  # controlled focus vehicle
+    target[:, 0, 1, 7] = 1.0  # simulated vehicle
+    target[:, 0, 2, 7] = 2.0  # simulated pedestrian
+
+    predicted = torch.zeros((1, 2, 3, 3, 2), dtype=torch.float32)
+    predicted[:, 1, 1:, 0, 0] = 100.0  # ignored controlled focus
+    predicted[:, 1, 1:, 1, 0] = 3.0
+    predicted[:, 1, 1:, 2, 0] = 4.0
+
+    metrics, components = flow_erd_cpd_metrics(
+        predicted,
+        target,
+        future_start=1,
+        type_scales=(3.0, 4.0, 2.0),
+        exclude_focus=True,
+    )
+
+    torch.testing.assert_close(metrics["flow_erd_cpd"], torch.sqrt(torch.tensor(2.0)))
+    torch.testing.assert_close(metrics["flow_erd_cpd_unscaled"], torch.tensor(5.0))
+    torch.testing.assert_close(components["type_mse"][0, 0], torch.tensor([9.0, 16.0, 0.0]))
+    torch.testing.assert_close(components["type_count"][0], torch.tensor([1, 1, 0]))
+    assert components["pair_indices"].tolist() == [[0, 1]]

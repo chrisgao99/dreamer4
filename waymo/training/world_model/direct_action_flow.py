@@ -24,6 +24,32 @@ def wrap_angle_rad(angle: torch.Tensor) -> torch.Tensor:
     return torch.atan2(torch.sin(angle), torch.cos(angle))
 
 
+def physical_transition_valid(
+    delta_xy: torch.Tensor,
+    delta_yaw: torch.Tensor,
+    *,
+    max_displacement_m: float = 0.0,
+    max_yaw_delta_rad: float = 0.0,
+) -> torch.Tensor:
+    """Return a finite/plausible mask for one-step metric pose changes.
+
+    A non-positive threshold disables that particular physical bound. The
+    finite check is always active so invalid coordinates cannot survive a
+    later multiplication by a zero validity mask as NaNs.
+    """
+    if float(max_displacement_m) < 0.0:
+        raise ValueError("max_displacement_m must be >= 0")
+    if float(max_yaw_delta_rad) < 0.0:
+        raise ValueError("max_yaw_delta_rad must be >= 0")
+    valid = torch.isfinite(delta_xy).all(dim=-1) & torch.isfinite(delta_yaw)
+    if float(max_displacement_m) > 0.0:
+        distance = torch.linalg.vector_norm(delta_xy.float(), dim=-1)
+        valid = valid & (distance <= float(max_displacement_m))
+    if float(max_yaw_delta_rad) > 0.0:
+        valid = valid & (delta_yaw.float().abs() <= float(max_yaw_delta_rad))
+    return valid
+
+
 def agents_to_bntf(agents: torch.Tensor, agent_mask: torch.Tensor) -> torch.Tensor:
     """Accept dataset ``(B,N,T,F)`` or legacy ``(B,T,N,F)`` layout."""
     if agents.dim() != 4:
@@ -73,8 +99,10 @@ def select_window_anchors(
     history_length: int,
     horizon: int,
     random_start: bool,
+    max_displacement_m: float = 0.0,
+    max_yaw_delta_rad: float = 0.0,
 ) -> torch.Tensor:
-    """Choose anchors with a complete valid H-step focus plan when possible."""
+    """Choose anchors with a complete valid and plausible focus plan."""
     bsz, _, total_steps, _ = agents_bntf.shape
     first = int(history_length) - 1
     last = total_steps - int(horizon) - 1
@@ -83,22 +111,40 @@ def select_window_anchors(
             f"Need L+H={history_length + horizon} states, dataset only has {total_steps}"
         )
 
-    focus_valid = (agents_bntf[:, 0, :, 5] > 0.5) & agent_mask[:, 0, None].bool()
+    focus = agents_bntf[:, 0]
+    focus_finite = torch.isfinite(focus[..., 0:2]).all(dim=-1) & torch.isfinite(
+        focus[..., 6]
+    )
+    focus_valid = (
+        (focus[..., 5] > 0.5)
+        & focus_finite
+        & agent_mask[:, 0, None].bool()
+    )
+    focus_delta_xy = focus[:, 1:, 0:2] - focus[:, :-1, 0:2]
+    focus_delta_yaw = wrap_angle_rad(focus[:, 1:, 6] - focus[:, :-1, 6])
+    focus_transition_valid = (
+        focus_valid[:, :-1]
+        & focus_valid[:, 1:]
+        & physical_transition_valid(
+            focus_delta_xy,
+            focus_delta_yaw,
+            max_displacement_m=max_displacement_m,
+            max_yaw_delta_rad=max_yaw_delta_rad,
+        )
+    )
     candidates = torch.arange(first, last + 1, device=agents_bntf.device)
     valid_candidates = []
-    for anchor in range(first, last + 1):
-        valid_candidates.append(focus_valid[:, anchor : anchor + horizon + 1].all(dim=1))
-    valid_matrix = torch.stack(valid_candidates, dim=1)
-
-    # Every prepared sample is centered on a current-valid focus at index 10,
-    # but a track can disappear before all H future steps.  Prefer a complete
-    # focus plan and fall back to the candidate with the most valid focus steps.
     future_scores = []
     for anchor in range(first, last + 1):
-        future_scores.append(
-            focus_valid[:, anchor : anchor + horizon + 1].float().sum(dim=1)
-        )
-    score_matrix = torch.stack(future_scores, dim=1)
+        transitions = focus_transition_valid[:, anchor : anchor + horizon]
+        valid_candidates.append(transitions.all(dim=1))
+        future_scores.append(transitions.long().cumprod(dim=1).sum(dim=1))
+    valid_matrix = torch.stack(valid_candidates, dim=1)
+
+    # Prefer a complete plan and otherwise select the longest physically valid
+    # contiguous prefix. A later inverse pass applies the same rule to every
+    # agent in the selected window.
+    score_matrix = torch.stack(future_scores, dim=1).float()
 
     if random_start:
         random_score = torch.rand_like(score_matrix)
@@ -125,6 +171,9 @@ def inverse_holonomic_actions(
     history: torch.Tensor,
     future: torch.Tensor,
     agent_mask: torch.Tensor,
+    *,
+    max_displacement_m: float = 0.0,
+    max_yaw_delta_rad: float = 0.0,
 ) -> ActionTargets:
     """Invert logged poses recursively using the same holonomic executor.
 
@@ -144,7 +193,11 @@ def inverse_holonomic_actions(
         (current[..., 0], current[..., 1], current[..., 6]), dim=-1
     )
     agent_type = current[..., 7].round().long().clamp(min=0)
-    alive = agent_mask.bool() & (current[..., 5] > 0.5)
+    alive = (
+        agent_mask.bool()
+        & (current[..., 5] > 0.5)
+        & torch.isfinite(current_pose).all(dim=-1)
+    )
     pose = current_pose
     actions = []
     valids = []
@@ -160,7 +213,13 @@ def inverse_holonomic_actions(
         a_lat = -s * delta_world[..., 0] + c * delta_world[..., 1]
         a_yaw = wrap_angle_rad(nxt_pose[..., 2] - pose[..., 2])
         action = torch.stack((a_long, a_lat, a_yaw), dim=-1)
-        action = action * step_valid[..., None].to(action.dtype)
+        step_valid = step_valid & physical_transition_valid(
+            delta_world,
+            a_yaw,
+            max_displacement_m=max_displacement_m,
+            max_yaw_delta_rad=max_yaw_delta_rad,
+        )
+        action = torch.where(step_valid[..., None], action, torch.zeros_like(action))
         actions.append(action)
         valids.append(step_valid)
 
@@ -169,7 +228,7 @@ def inverse_holonomic_actions(
         # prevents target/inference semantics from silently diverging later.
         executed = execute_holonomic_step(pose, action)
         pose = torch.where(step_valid[..., None], executed, pose)
-        future_poses.append(nxt_pose)
+        future_poses.append(torch.where(torch.isfinite(nxt_pose), nxt_pose, pose))
         alive = step_valid
 
     return ActionTargets(
@@ -705,8 +764,18 @@ class FlowTimeEmbedding(nn.Module):
         return self.mlp(torch.cat((torch.sin(phase), torch.cos(phase)), dim=-1))
 
 
-def _modulate(x: torch.Tensor, params: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def _modulate(
+    x: torch.Tensor,
+    params: torch.Tensor,
+    *,
+    scale_limit: float = 0.0,
+    shift_limit: float = 0.0,
+) -> tuple[torch.Tensor, torch.Tensor]:
     shift, scale, gate = params.chunk(3, dim=-1)
+    if float(scale_limit) > 0.0:
+        scale = float(scale_limit) * torch.tanh(scale / float(scale_limit))
+    if float(shift_limit) > 0.0:
+        shift = float(shift_limit) * torch.tanh(shift / float(shift_limit))
     while shift.dim() < x.dim():
         shift = shift.unsqueeze(1)
         scale = scale.unsqueeze(1)
@@ -715,8 +784,19 @@ def _modulate(x: torch.Tensor, params: torch.Tensor) -> tuple[torch.Tensor, torc
 
 
 class JointActionDiTBlock(nn.Module):
-    def __init__(self, d_model: int, n_heads: int, dropout: float, mlp_ratio: float):
+    def __init__(
+        self,
+        d_model: int,
+        n_heads: int,
+        dropout: float,
+        mlp_ratio: float,
+        *,
+        modulation_scale_limit: float = 0.0,
+        modulation_shift_limit: float = 0.0,
+    ):
         super().__init__()
+        self.modulation_scale_limit = float(modulation_scale_limit)
+        self.modulation_shift_limit = float(modulation_shift_limit)
         self.norm_time = nn.LayerNorm(d_model, elementwise_affine=False)
         self.time_attn = MultiheadAttention(d_model, n_heads, dropout)
         self.mod_time = nn.Sequential(nn.SiLU(), nn.Linear(d_model, 3 * d_model))
@@ -749,7 +829,13 @@ class JointActionDiTBlock(nn.Module):
         cond_time = condition[:, None].expand(-1, num_agents, -1).reshape(
             bsz * num_agents, dim
         )
-        normed, gate = _modulate(self.norm_time(flat), self.mod_time(cond_time))
+        modulation_kwargs = {
+            "scale_limit": self.modulation_scale_limit,
+            "shift_limit": self.modulation_shift_limit,
+        }
+        normed, gate = _modulate(
+            self.norm_time(flat), self.mod_time(cond_time), **modulation_kwargs
+        )
         flat = flat + gate * self.time_attn(
             normed, query_mask=flat_mask, key_mask=flat_mask
         )
@@ -764,7 +850,9 @@ class JointActionDiTBlock(nn.Module):
         relation_bias = scene.relative_bias[:, None].expand(
             -1, num_chunks, -1, -1, -1
         ).reshape(bsz * num_chunks, scene.relative_bias.shape[1], num_agents, num_agents)
-        normed, gate = _modulate(self.norm_agent(flat), self.mod_agent(cond_agent))
+        normed, gate = _modulate(
+            self.norm_agent(flat), self.mod_agent(cond_agent), **modulation_kwargs
+        )
         flat = flat + gate * self.agent_attn(
             normed,
             query_mask=flat_mask,
@@ -777,7 +865,7 @@ class JointActionDiTBlock(nn.Module):
         flat = x.reshape(bsz, num_agents * num_chunks, dim)
         flat_mask = chunk_mask.reshape(bsz, num_agents * num_chunks)
         normed, gate = _modulate(
-            self.norm_cross(flat), self.mod_cross(condition)
+            self.norm_cross(flat), self.mod_cross(condition), **modulation_kwargs
         )
         cross = self.scene_cross(
             normed,
@@ -787,7 +875,9 @@ class JointActionDiTBlock(nn.Module):
         )
         flat = flat + gate * cross
 
-        normed, gate = _modulate(self.norm_ffn(flat), self.mod_ffn(condition))
+        normed, gate = _modulate(
+            self.norm_ffn(flat), self.mod_ffn(condition), **modulation_kwargs
+        )
         flat = flat + gate * self.ffn(normed) * flat_mask[..., None].to(flat.dtype)
         return flat.reshape(bsz, num_agents, num_chunks, dim) * chunk_mask[
             ..., None
@@ -814,6 +904,8 @@ class DirectActionFlowModel(nn.Module):
         dropout: float = 0.05,
         mlp_ratio: float = 4.0,
         position_scale_m: float = 100.0,
+        modulation_scale_limit: float = 0.0,
+        modulation_shift_limit: float = 0.0,
     ) -> None:
         super().__init__()
         if horizon % chunk_size:
@@ -843,7 +935,14 @@ class DirectActionFlowModel(nn.Module):
         nn.init.normal_(self.chunk_position, std=0.02)
         self.flow_time = FlowTimeEmbedding(d_model)
         self.action_layers = nn.ModuleList(
-            JointActionDiTBlock(d_model, n_heads, dropout, mlp_ratio)
+            JointActionDiTBlock(
+                d_model,
+                n_heads,
+                dropout,
+                mlp_ratio,
+                modulation_scale_limit=modulation_scale_limit,
+                modulation_shift_limit=modulation_shift_limit,
+            )
             for _ in range(int(action_depth))
         )
         self.action_final_norm = nn.LayerNorm(d_model)
@@ -949,7 +1048,7 @@ class DirectActionFlowModel(nn.Module):
         self,
         scene: SceneEncoding,
         action_mask: torch.Tensor,
-        focus_actions: torch.Tensor,
+        focus_actions: Optional[torch.Tensor] = None,
         *,
         solver_steps: int = 8,
         focus_index: int = 0,
@@ -964,9 +1063,16 @@ class DirectActionFlowModel(nn.Module):
             generator=generator,
         )
         generated_mask = action_mask.clone().bool()
-        generated_mask[:, int(focus_index)] = False
+        if focus_actions is not None:
+            if focus_actions.shape != (int(x.shape[0]), self.horizon, 3):
+                raise ValueError(
+                    "Expected focus_actions="
+                    f"{(int(x.shape[0]), self.horizon, 3)}, got {tuple(focus_actions.shape)}"
+                )
+            generated_mask[:, int(focus_index)] = False
         x = x * generated_mask[..., None].to(x.dtype)
-        x[:, int(focus_index)] = focus_actions.to(x.dtype)
+        if focus_actions is not None:
+            x[:, int(focus_index)] = focus_actions.to(x.dtype)
         dt = 1.0 / float(solver_steps)
         for step in range(int(solver_steps)):
             flow_time = torch.full(
@@ -984,7 +1090,8 @@ class DirectActionFlowModel(nn.Module):
                 focus_index=focus_index,
             )
             x = x + dt * velocity * generated_mask[..., None].to(velocity.dtype)
-            x[:, int(focus_index)] = focus_actions.to(x.dtype)
+            if focus_actions is not None:
+                x[:, int(focus_index)] = focus_actions.to(x.dtype)
             x = x * action_mask[..., None].to(x.dtype)
         return x
 
@@ -996,16 +1103,33 @@ def flow_matching_loss(
     action_valid: torch.Tensor,
     *,
     focus_index: int = 0,
+    condition_focus_actions: bool = True,
+    flow_time_max: float = 1.0,
+    loss_type: str = "mse",
+    huber_beta: float = 1.0,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """Standard affine-path conditional flow-matching objective."""
+    if not 0.0 < float(flow_time_max) <= 1.0:
+        raise ValueError(f"flow_time_max must be in (0, 1], got {flow_time_max}")
+    if loss_type not in ("mse", "huber"):
+        raise ValueError(f"loss_type must be mse or huber, got {loss_type}")
+    if loss_type == "huber" and float(huber_beta) <= 0.0:
+        raise ValueError("huber_beta must be > 0 for Huber loss")
     bsz = int(normalized_actions.shape[0])
     x0 = torch.randn_like(normalized_actions)
-    flow_time = torch.rand((bsz,), device=normalized_actions.device)
+    flow_time = torch.rand((bsz,), device=normalized_actions.device) * float(
+        flow_time_max
+    )
     lam = flow_time[:, None, None, None].to(normalized_actions.dtype)
     x_lambda = (1.0 - lam) * x0 + lam * normalized_actions
-    focus_actions = normalized_actions[:, int(focus_index)]
-    x_lambda = x_lambda.clone()
-    x_lambda[:, int(focus_index)] = focus_actions
+    focus_actions = (
+        normalized_actions[:, int(focus_index)]
+        if condition_focus_actions
+        else None
+    )
+    if focus_actions is not None:
+        x_lambda = x_lambda.clone()
+        x_lambda[:, int(focus_index)] = focus_actions
     target_velocity = normalized_actions - x0
     # Future validity is a supervision mask, not a model input.  V1 keeps the
     # roster of current-valid agents fixed across H and therefore must not leak
@@ -1020,11 +1144,20 @@ def flow_matching_loss(
         focus_index=focus_index,
     )
     generated_valid = action_valid.clone().bool()
-    generated_valid[:, int(focus_index)] = False
+    if condition_focus_actions:
+        generated_valid[:, int(focus_index)] = False
     weight = generated_valid[..., None].to(pred_velocity.dtype)
     denom = weight.sum().clamp_min(1.0) * pred_velocity.shape[-1]
-    sq_error = (pred_velocity.float() - target_velocity.float()).pow(2)
-    loss = (sq_error * weight.float()).sum() / denom.float()
+    if loss_type == "mse":
+        per_element_loss = (pred_velocity.float() - target_velocity.float()).pow(2)
+    else:
+        per_element_loss = F.smooth_l1_loss(
+            pred_velocity.float(),
+            target_velocity.float(),
+            reduction="none",
+            beta=float(huber_beta),
+        )
+    loss = (per_element_loss * weight.float()).sum() / denom.float()
     endpoint = x_lambda.float() + (1.0 - lam.float()) * pred_velocity.float()
     endpoint_mae = (
         (endpoint - normalized_actions.float()).abs() * weight.float()
@@ -1048,8 +1181,8 @@ def rollout_receding_horizon(
     map_mask: torch.Tensor,
     current_light_sequence: torch.Tensor,
     current_light_mask_sequence: torch.Tensor,
-    focus_action_sequence: torch.Tensor,
-    focus_action_valid: torch.Tensor,
+    focus_action_sequence: Optional[torch.Tensor],
+    focus_action_valid: Optional[torch.Tensor],
     rollout_steps: int,
     commitment: int,
     solver_steps: int,
@@ -1060,8 +1193,9 @@ def rollout_receding_horizon(
 
     Traffic lights are supplied only one current frame per replan through
     ``current_light_sequence``; the model is never given future light states
-    inside an H-step plan.  Focus actions are exogenous and may be padded past
-    the requested rollout using ``focus_action_valid=False``.
+    inside an H-step plan. When supplied, focus actions are exogenous and may
+    be padded past the requested rollout using ``focus_action_valid=False``.
+    Passing both focus arguments as ``None`` jointly generates every agent.
 
     Returns:
         Executed poses with shape ``(B,N,rollout_steps,3)``.
@@ -1075,7 +1209,16 @@ def rollout_receding_horizon(
         raise ValueError("initial_history must use the raw >=8 feature layout")
     if int(current_light_sequence.shape[1]) < int(rollout_steps):
         raise ValueError("current_light_sequence is shorter than rollout_steps")
-    if focus_action_sequence.shape[:2] != focus_action_valid.shape:
+    if (focus_action_sequence is None) != (focus_action_valid is None):
+        raise ValueError(
+            "focus_action_sequence and focus_action_valid must either both be "
+            "supplied or both be None"
+        )
+    condition_focus_actions = focus_action_sequence is not None
+    if (
+        condition_focus_actions
+        and focus_action_sequence.shape[:2] != focus_action_valid.shape
+    ):
         raise ValueError("focus action values and validity have incompatible shapes")
 
     history = initial_history.clone()
@@ -1083,15 +1226,26 @@ def rollout_receding_horizon(
     executed_parts = []
     elapsed = 0
     while elapsed < int(rollout_steps):
-        available = int(focus_action_sequence.shape[1]) - elapsed
-        take = min(model.horizon, max(0, available))
-        focus_metric = history.new_zeros((bsz, model.horizon, 3))
-        focus_valid = torch.zeros(
-            (bsz, model.horizon), dtype=torch.bool, device=history.device
-        )
-        if take > 0:
-            focus_metric[:, :take] = focus_action_sequence[:, elapsed : elapsed + take]
-            focus_valid[:, :take] = focus_action_valid[:, elapsed : elapsed + take].bool()
+        focus_norm = None
+        focus_valid = None
+        if condition_focus_actions:
+            available = int(focus_action_sequence.shape[1]) - elapsed
+            take = min(model.horizon, max(0, available))
+            focus_metric = history.new_zeros((bsz, model.horizon, 3))
+            focus_valid = torch.zeros(
+                (bsz, model.horizon), dtype=torch.bool, device=history.device
+            )
+            if take > 0:
+                focus_metric[:, :take] = focus_action_sequence[
+                    :, elapsed : elapsed + take
+                ]
+                focus_valid[:, :take] = focus_action_valid[
+                    :, elapsed : elapsed + take
+                ].bool()
+            focus_norm = normalizer.normalize(
+                focus_metric[:, None],
+                static_type[:, int(focus_index) : int(focus_index) + 1],
+            )[:, 0]
 
         scene = model.encode_scene(
             history=history,
@@ -1104,10 +1258,8 @@ def rollout_receding_horizon(
         action_mask = scene.agent_mask[:, :, None].expand(
             -1, -1, model.horizon
         ).clone()
-        action_mask[:, int(focus_index)] = focus_valid
-        focus_norm = normalizer.normalize(
-            focus_metric[:, None], static_type[:, int(focus_index) : int(focus_index) + 1]
-        )[:, 0]
+        if focus_valid is not None:
+            action_mask[:, int(focus_index)] = focus_valid
         normalized = model.sample_normalized_actions(
             scene,
             action_mask,

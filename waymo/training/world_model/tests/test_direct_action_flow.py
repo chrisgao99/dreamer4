@@ -5,10 +5,12 @@ import torch
 from waymo.training.world_model.direct_action_flow import (
     ActionNormalizer,
     DirectActionFlowModel,
+    _modulate,
     execute_holonomic_actions,
     flow_matching_loss,
     inverse_holonomic_actions,
     rollout_receding_horizon,
+    select_window_anchors,
 )
 
 
@@ -82,6 +84,55 @@ def test_inverse_actions_round_trip_logged_poses() -> None:
     assert angle_error.abs().max().item() < 2e-6
 
 
+def test_physical_filter_invalidates_jump_and_remaining_suffix() -> None:
+    batch = _synthetic_batch(batch_size=1)
+    history = batch["agents"][:, :, :4]
+    future = batch["agents"][:, :, 4:].clone()
+    future[:, 1, 2, 0] += 20.0
+    targets = inverse_holonomic_actions(
+        history,
+        future,
+        batch["agent_mask"],
+        max_displacement_m=5.0,
+        max_yaw_delta_rad=0.75,
+    )
+    assert targets.valid[0, 1, :2].all()
+    assert not targets.valid[0, 1, 2:].any()
+    assert torch.equal(
+        targets.actions[0, 1, 2:], torch.zeros_like(targets.actions[0, 1, 2:])
+    )
+
+
+def test_random_anchor_selection_accepts_physical_integer_scores() -> None:
+    batch = _synthetic_batch(batch_size=2, history=4, horizon=6)
+    anchors = select_window_anchors(
+        batch["agents"],
+        batch["agent_mask"],
+        history_length=4,
+        horizon=6,
+        random_start=True,
+        max_displacement_m=5.0,
+        max_yaw_delta_rad=0.75,
+    )
+    assert anchors.dtype == torch.long
+    assert anchors.shape == (2,)
+
+
+def test_bounded_modulation_limits_scale_and_shift() -> None:
+    x = torch.ones(2, 3, 4)
+    params = torch.cat(
+        (
+            torch.full((2, 4), 1_000.0),
+            torch.full((2, 4), 1_000.0),
+            torch.zeros(2, 4),
+        ),
+        dim=-1,
+    )
+    modulated, gate = _modulate(x, params, scale_limit=2.0, shift_limit=5.0)
+    assert modulated.abs().max().item() <= 8.0
+    torch.testing.assert_close(gate, torch.full_like(gate, 0.5))
+
+
 def test_joint_flow_has_explicit_agent_and_action_tokens() -> None:
     batch = _synthetic_batch()
     model = _small_model()
@@ -108,6 +159,40 @@ def test_joint_flow_has_explicit_agent_and_action_tokens() -> None:
     assert model.velocity_head[-1].weight.grad is not None
 
 
+def test_huber_flow_loss_bounds_extreme_target_penalty() -> None:
+    torch.manual_seed(7)
+    batch = _synthetic_batch()
+    model = _small_model()
+    history = batch["agents"][:, :, :4]
+    future = batch["agents"][:, :, 4:]
+    targets = inverse_holonomic_actions(history, future, batch["agent_mask"])
+    scene = model.encode_scene(
+        history=history,
+        agent_mask=batch["agent_mask"],
+        map_polylines=batch["map_polylines"],
+        map_mask=batch["map_mask"],
+        current_lights=batch["lights"][:, 3],
+        current_light_mask=batch["light_mask"][:, 3],
+    )
+    normalized = targets.actions.clone()
+    normalized[:, 1, 0, 0] = 1_000.0
+    torch.manual_seed(11)
+    mse, _ = flow_matching_loss(
+        model, scene, normalized, targets.valid, loss_type="mse"
+    )
+    torch.manual_seed(11)
+    huber, _ = flow_matching_loss(
+        model,
+        scene,
+        normalized,
+        targets.valid,
+        loss_type="huber",
+        huber_beta=1.0,
+    )
+    assert torch.isfinite(huber)
+    assert huber < mse
+
+
 def test_sampling_keeps_known_focus_plan_exact() -> None:
     batch = _synthetic_batch(batch_size=1)
     model = _small_model()
@@ -127,6 +212,71 @@ def test_sampling_keeps_known_focus_plan_exact() -> None:
         scene, model_mask, targets.actions[:, 0], solver_steps=2
     )
     torch.testing.assert_close(sampled[:, 0], targets.actions[:, 0])
+
+
+def test_sampling_without_focus_actions_generates_focus() -> None:
+    batch = _synthetic_batch(batch_size=1)
+    model = _small_model()
+    history = batch["agents"][:, :, :4]
+    scene = model.encode_scene(
+        history=history,
+        agent_mask=batch["agent_mask"],
+        map_polylines=batch["map_polylines"],
+        map_mask=batch["map_mask"],
+        current_lights=batch["lights"][:, 3],
+        current_light_mask=batch["light_mask"][:, 3],
+    )
+    model_mask = scene.agent_mask[:, :, None].expand(-1, -1, 6)
+    first = model.sample_normalized_actions(
+        scene,
+        model_mask,
+        focus_actions=None,
+        solver_steps=1,
+        generator=torch.Generator().manual_seed(1),
+    )
+    second = model.sample_normalized_actions(
+        scene,
+        model_mask,
+        focus_actions=None,
+        solver_steps=1,
+        generator=torch.Generator().manual_seed(2),
+    )
+    assert not torch.equal(first[:, 0], second[:, 0])
+
+
+def test_unconditioned_flow_loss_supervises_focus() -> None:
+    batch = _synthetic_batch(batch_size=1)
+    model = _small_model()
+    history = batch["agents"][:, :, :4]
+    future = batch["agents"][:, :, 4:]
+    targets = inverse_holonomic_actions(history, future, batch["agent_mask"])
+    scene = model.encode_scene(
+        history=history,
+        agent_mask=batch["agent_mask"],
+        map_polylines=batch["map_polylines"],
+        map_mask=batch["map_mask"],
+        current_lights=batch["lights"][:, 3],
+        current_light_mask=batch["light_mask"][:, 3],
+    )
+    focus_only_valid = torch.zeros_like(targets.valid)
+    focus_only_valid[:, 0] = targets.valid[:, 0]
+    conditioned_loss, _ = flow_matching_loss(
+        model,
+        scene,
+        targets.actions,
+        focus_only_valid,
+        condition_focus_actions=True,
+    )
+    generated_loss, metrics = flow_matching_loss(
+        model,
+        scene,
+        targets.actions,
+        focus_only_valid,
+        condition_focus_actions=False,
+    )
+    torch.testing.assert_close(conditioned_loss, torch.tensor(0.0))
+    assert generated_loss.item() > 0.0
+    assert metrics["valid_action_fraction"].item() > 0.0
 
 
 def test_receding_rollout_generate_h_execute_b_shape() -> None:
@@ -149,6 +299,29 @@ def test_receding_rollout_generate_h_execute_b_shape() -> None:
         current_light_mask_sequence=batch["light_mask"][:, 3 : 3 + 8],
         focus_action_sequence=targets.actions[:, 0],
         focus_action_valid=targets.valid[:, 0],
+        rollout_steps=8,
+        commitment=2,
+        solver_steps=1,
+    )
+    assert poses.shape == (1, 3, 8, 3)
+    assert torch.isfinite(poses).all()
+
+
+def test_receding_rollout_can_generate_all_agents() -> None:
+    batch = _synthetic_batch(batch_size=1, history=4, horizon=8)
+    model = _small_model(history=4, horizon=6)
+    normalizer = ActionNormalizer(torch.zeros(16, 3), torch.ones(16, 3))
+    poses = rollout_receding_horizon(
+        model,
+        normalizer,
+        initial_history=batch["agents"][:, :, :4],
+        agent_mask=batch["agent_mask"],
+        map_polylines=batch["map_polylines"],
+        map_mask=batch["map_mask"],
+        current_light_sequence=batch["lights"][:, 3 : 3 + 8],
+        current_light_mask_sequence=batch["light_mask"][:, 3 : 3 + 8],
+        focus_action_sequence=None,
+        focus_action_valid=None,
         rollout_steps=8,
         commitment=2,
         solver_steps=1,

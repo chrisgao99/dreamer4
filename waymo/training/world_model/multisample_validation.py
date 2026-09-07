@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, Mapping, Optional
+from typing import Dict, Mapping, Optional, Sequence
 
 import torch
+
+
+# Waymo object types used by Flow-ERD: vehicle, pedestrian, cyclist.  Keep the
+# tensor order stable because CPD component sidecars use the same convention.
+FLOW_ERD_CPD_TYPE_IDS = (1, 2, 3)
+FLOW_ERD_CPD_TYPE_NAMES = ("vehicle", "pedestrian", "cyclist")
 
 
 def _masked_scene_mean(value: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
@@ -163,6 +169,117 @@ def _scope_metrics(
             endpoint_8s_spatial_std * endpoint_8s_weight
         ).sum() / endpoint_8s_weight.sum().clamp_min(1.0)
     return metrics
+
+
+def flow_erd_cpd_metrics(
+    predicted_xy: torch.Tensor,
+    agents_btkf: torch.Tensor,
+    *,
+    future_start: int,
+    type_scales: Sequence[float],
+    exclude_focus: bool = True,
+) -> tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+    """Compute Flow-ERD Cross-Pair Diversity (Eq. 20--21).
+
+    ``predicted_xy`` contains full joint closed-loop rollouts with shape
+    ``(B, K, T, A, 2)``.  Agent membership and type are frozen at the final
+    context frame, so this metric does not inspect the logged future.  The
+    returned component tensors retain each scene/pair/type mean squared
+    displacement, allowing CPD to be re-normalized later with different
+    training-set scales without rerunning the model.
+    """
+    if predicted_xy.dim() != 5 or int(predicted_xy.shape[-1]) != 2:
+        raise ValueError(f"Expected predicted_xy=(B,K,T,A,2), got {tuple(predicted_xy.shape)}")
+    if agents_btkf.dim() != 4 or int(agents_btkf.shape[-1]) < 8:
+        raise ValueError(f"Expected agents_btkf=(B,T,A,F>=8), got {tuple(agents_btkf.shape)}")
+    if len(type_scales) != len(FLOW_ERD_CPD_TYPE_IDS):
+        raise ValueError(
+            f"Expected {len(FLOW_ERD_CPD_TYPE_IDS)} CPD type scales, got {len(type_scales)}"
+        )
+    if any((not math.isfinite(float(scale))) or float(scale) <= 0.0 for scale in type_scales):
+        raise ValueError(f"CPD type scales must be finite and positive, got {tuple(type_scales)}")
+
+    future_start = int(future_start)
+    future = predicted_xy[:, :, future_start:].float()
+    num_rollouts = int(future.shape[1])
+    horizon = int(future.shape[2])
+    num_agents = int(future.shape[3])
+    if num_rollouts < 2:
+        raise ValueError("Flow-ERD CPD requires at least two rollouts")
+    if horizon < 1:
+        raise ValueError("Flow-ERD CPD requires at least one future step")
+    if tuple(agents_btkf.shape[:1]) != tuple(future.shape[:1]) or int(agents_btkf.shape[2]) != num_agents:
+        raise ValueError(
+            "Predicted rollouts and agent metadata disagree: "
+            f"{tuple(predicted_xy.shape)} vs {tuple(agents_btkf.shape)}"
+        )
+
+    # p_0 in the paper is the final context state.  Freeze the roster here so
+    # neither future GT validity nor future GT positions enter this log-free metric.
+    context_index = max(0, future_start - 1)
+    if context_index >= int(agents_btkf.shape[1]):
+        raise ValueError(
+            f"CPD context index {context_index} is outside metadata length {agents_btkf.shape[1]}"
+        )
+    context = agents_btkf[:, context_index]
+    roster_valid = context[..., 5] > 0.5
+    agent_type = context[..., 7].round().long()
+    if exclude_focus and num_agents > 0:
+        roster_valid = roster_valid.clone()
+        roster_valid[..., 0] = False
+
+    pair_squared_distance = (future[:, :, None] - future[:, None, :]).pow(2).sum(dim=-1)
+    type_mse_parts = []
+    type_count_parts = []
+    type_present_parts = []
+    for type_id in FLOW_ERD_CPD_TYPE_IDS:
+        selected = roster_valid & (agent_type == int(type_id))
+        count = selected.sum(dim=-1)
+        denominator = (count * horizon).clamp_min(1).to(dtype=pair_squared_distance.dtype)
+        type_mse = (
+            pair_squared_distance * selected[:, None, None, None].to(pair_squared_distance.dtype)
+        ).sum(dim=(3, 4)) / denominator[:, None, None]
+        present = count > 0
+        type_mse = torch.where(present[:, None, None], type_mse, torch.zeros_like(type_mse))
+        type_mse_parts.append(type_mse)
+        type_count_parts.append(count)
+        type_present_parts.append(present)
+
+    # (B,K,K,C), with absent types represented by a zero contribution exactly
+    # as Eq. 20's "types with N_c=0 are omitted" prescription.
+    type_mse = torch.stack(type_mse_parts, dim=-1)
+    type_count = torch.stack(type_count_parts, dim=-1)
+    type_present = torch.stack(type_present_parts, dim=-1)
+    upper = torch.triu(
+        torch.ones((num_rollouts, num_rollouts), device=future.device, dtype=torch.bool),
+        diagonal=1,
+    )
+    pair_type_mse = type_mse[:, upper]
+    pair_indices = upper.nonzero(as_tuple=False)
+    scale = torch.as_tensor(type_scales, device=future.device, dtype=pair_type_mse.dtype)
+    pair_cpd = (pair_type_mse / scale.square()).sum(dim=-1).clamp_min(0.0).sqrt()
+    pair_cpd_unscaled = pair_type_mse.sum(dim=-1).clamp_min(0.0).sqrt()
+    scene_cpd = pair_cpd.mean(dim=-1)
+    scene_cpd_unscaled = pair_cpd_unscaled.mean(dim=-1)
+    scene_valid = type_present.any(dim=-1)
+    valid_weight = scene_valid.to(dtype=scene_cpd.dtype)
+    valid_denominator = valid_weight.sum().clamp_min(1.0)
+
+    metrics = {
+        "flow_erd_cpd": (scene_cpd * valid_weight).sum() / valid_denominator,
+        "flow_erd_cpd_unscaled": (scene_cpd_unscaled * valid_weight).sum() / valid_denominator,
+        "flow_erd_cpd_valid_scene_fraction": valid_weight.mean(),
+    }
+    components = {
+        "type_mse": pair_type_mse,
+        "type_count": type_count,
+        "type_present": type_present,
+        "pair_indices": pair_indices,
+        "scene_cpd": scene_cpd,
+        "scene_cpd_unscaled": scene_cpd_unscaled,
+        "scene_valid": scene_valid,
+    }
+    return metrics, components
 
 
 def multisample_trajectory_metrics(

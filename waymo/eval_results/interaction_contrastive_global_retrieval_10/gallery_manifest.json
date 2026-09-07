@@ -1,0 +1,5070 @@
+{
+  "anchors": [
+    {
+      "anchor_row": 5,
+      "metrics": {
+        "hard": {
+          "finite_rms_count_at_k": 6,
+          "median_exact_rms_at_k": 0.5590190589427948,
+          "relation_difference_fraction_at_k": 0.0,
+          "relation_known_count_at_k": 6,
+          "rms_positive_scene_recall_at_k": 0.05,
+          "same_stratum_fraction_at_k": 1.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "hybrid": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 0.41073255240917206,
+          "relation_difference_fraction_at_k": 0.0,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.05,
+          "same_stratum_fraction_at_k": 1.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 1
+        },
+        "raw_z": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 0.5043499916791916,
+          "relation_difference_fraction_at_k": 0.1,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.05,
+          "same_stratum_fraction_at_k": 1.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "reader_z": {
+          "finite_rms_count_at_k": 9,
+          "median_exact_rms_at_k": 0.6543697714805603,
+          "relation_difference_fraction_at_k": 0.0,
+          "relation_known_count_at_k": 9,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 1.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        }
+      },
+      "page": "anchor_01_idx00005.html",
+      "query_step": 60,
+      "retrievals": {
+        "hard": [
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9984124898910522,
+            "exact_rms": 1.0639570951461792,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 6149,
+            "same_stratum": true,
+            "scenario_id": "7bf444eaa39209b6",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.998026967048645,
+            "exact_rms": 0.4343751072883606,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 1142,
+            "same_stratum": true,
+            "scenario_id": "ada519b6cdc10c98",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5,
+            "cosine": 0.9955492615699768,
+            "exact_rms": null,
+            "rank": 3,
+            "relation_outcome": null,
+            "row": 5897,
+            "same_stratum": true,
+            "scenario_id": "5c8a0ea3f01f6029",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8166666626930237,
+            "cosine": 0.9954841136932373,
+            "exact_rms": 0.5540602803230286,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 5247,
+            "same_stratum": true,
+            "scenario_id": "fd4bbd43dbef6365",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6499999761581421,
+            "cosine": 0.9954242706298828,
+            "exact_rms": null,
+            "rank": 5,
+            "relation_outcome": null,
+            "row": 5392,
+            "same_stratum": true,
+            "scenario_id": "4be4df64e0c36677",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6166666746139526,
+            "cosine": 0.9953804612159729,
+            "exact_rms": null,
+            "rank": 6,
+            "relation_outcome": null,
+            "row": 7507,
+            "same_stratum": true,
+            "scenario_id": "4b2dced3ebba31b2",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9949342012405396,
+            "exact_rms": 0.4643554091453552,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 6884,
+            "same_stratum": true,
+            "scenario_id": "b6ff5b9a0fd71fac",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.994600236415863,
+            "exact_rms": 0.563977837562561,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 12148,
+            "same_stratum": true,
+            "scenario_id": "26c4b9f171333490",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6166666746139526,
+            "cosine": 0.9942830204963684,
+            "exact_rms": null,
+            "rank": 9,
+            "relation_outcome": null,
+            "row": 12737,
+            "same_stratum": true,
+            "scenario_id": "9421894b31b4f0b7",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.699999988079071,
+            "cosine": 0.9942053556442261,
+            "exact_rms": 0.816956639289856,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 9643,
+            "same_stratum": true,
+            "scenario_id": "93c0325c2be365c4",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "hybrid": [
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9934020042419434,
+            "exact_rms": 0.4141440689563751,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 5400,
+            "same_stratum": true,
+            "scenario_id": "4be4df64e0c36677",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.990432858467102,
+            "exact_rms": 0.29571333527565,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 8710,
+            "same_stratum": true,
+            "scenario_id": "4b6c17e8fdab4c1c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9898766875267029,
+            "exact_rms": 0.492072731256485,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 6366,
+            "same_stratum": true,
+            "scenario_id": "73bcc2238f1db897",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9876779317855835,
+            "exact_rms": 0.407321035861969,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 2732,
+            "same_stratum": true,
+            "scenario_id": "d426e6609a653c6f",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9866248369216919,
+            "exact_rms": 0.8055412769317627,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 1169,
+            "same_stratum": true,
+            "scenario_id": "44e39b1170139718",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8166666626930237,
+            "cosine": 0.9840052723884583,
+            "exact_rms": 0.33323028683662415,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 6178,
+            "same_stratum": true,
+            "scenario_id": "966ff278ef1cdda7",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6499999761581421,
+            "cosine": 0.9822582006454468,
+            "exact_rms": null,
+            "rank": 7,
+            "relation_outcome": null,
+            "row": 3917,
+            "same_stratum": true,
+            "scenario_id": "b9f8add649ae8d01",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.38333332538604736,
+            "cosine": 0.9808571338653564,
+            "exact_rms": null,
+            "rank": 8,
+            "relation_outcome": null,
+            "row": 7818,
+            "same_stratum": true,
+            "scenario_id": "bb6f8c504c8a9623",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7333333492279053,
+            "cosine": 0.9808346629142761,
+            "exact_rms": 0.4603014588356018,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 5930,
+            "same_stratum": true,
+            "scenario_id": "8f7bce97014c40d",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.800000011920929,
+            "cosine": 0.9796679615974426,
+            "exact_rms": 0.2040361911058426,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 6360,
+            "same_stratum": true,
+            "scenario_id": "4aa23a7665a6fead",
+            "stored_label": "positive"
+          }
+        ],
+        "raw_z": [
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.7552663087844849,
+            "exact_rms": 0.6108100414276123,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 7224,
+            "same_stratum": true,
+            "scenario_id": "f8c478502b2a3617",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.7236943244934082,
+            "exact_rms": 0.4917772710323334,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 8829,
+            "same_stratum": true,
+            "scenario_id": "dcbad99b0ae8ec06",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.718389630317688,
+            "exact_rms": 0.5169227123260498,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 11069,
+            "same_stratum": true,
+            "scenario_id": "c64aec67a0504da4",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.7083175778388977,
+            "exact_rms": 0.2697716951370239,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 12271,
+            "same_stratum": true,
+            "scenario_id": "a6e162c394223c01",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7666666507720947,
+            "cosine": 0.7065991163253784,
+            "exact_rms": 0.29897990822792053,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 2448,
+            "same_stratum": true,
+            "scenario_id": "6ac322ea651b25f8",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7666666507720947,
+            "cosine": 0.6996940970420837,
+            "exact_rms": 0.48197224736213684,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 10866,
+            "same_stratum": true,
+            "scenario_id": "58b56d867eccad79",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.699672281742096,
+            "exact_rms": 0.45111513137817383,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 7202,
+            "same_stratum": true,
+            "scenario_id": "dc0c37fdfd2fc401",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.6972405910491943,
+            "exact_rms": 0.9846498370170593,
+            "rank": 8,
+            "relation_outcome": "future order differs, future order opposite",
+            "row": 11892,
+            "same_stratum": true,
+            "scenario_id": "ba523d09ae9af70f",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.6971924304962158,
+            "exact_rms": 0.6760474443435669,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 589,
+            "same_stratum": true,
+            "scenario_id": "f2a8bd06562037a0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.6943426132202148,
+            "exact_rms": 0.7834311723709106,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 3197,
+            "same_stratum": true,
+            "scenario_id": "369866ccdaff05d8",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "reader_z": [
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9986463189125061,
+            "exact_rms": 0.5814730525016785,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 3765,
+            "same_stratum": true,
+            "scenario_id": "fca6a7890d0d1565",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9983597993850708,
+            "exact_rms": 1.0639570951461792,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 6149,
+            "same_stratum": true,
+            "scenario_id": "7bf444eaa39209b6",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9982377886772156,
+            "exact_rms": 0.7661200761795044,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 7966,
+            "same_stratum": true,
+            "scenario_id": "46cae17f9173c5fc",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9982236623764038,
+            "exact_rms": 0.8601493239402771,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 7594,
+            "same_stratum": true,
+            "scenario_id": "ac561d66bbc77cc5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9973952770233154,
+            "exact_rms": 0.534061849117279,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 3024,
+            "same_stratum": true,
+            "scenario_id": "ceb5718b1ed0a439",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9970057606697083,
+            "exact_rms": 0.4944661855697632,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 2001,
+            "same_stratum": true,
+            "scenario_id": "6dcbe32f6481318d",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9968864917755127,
+            "exact_rms": 1.015668511390686,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 1660,
+            "same_stratum": true,
+            "scenario_id": "b3878ad0497a8274",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8166666626930237,
+            "cosine": 0.9968339800834656,
+            "exact_rms": 0.6543697714805603,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 6662,
+            "same_stratum": true,
+            "scenario_id": "570b8097eedcc910",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9962052702903748,
+            "exact_rms": 0.44306790828704834,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 8885,
+            "same_stratum": true,
+            "scenario_id": "a1ea5b843aaa0283",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6333333253860474,
+            "cosine": 0.9959197640419006,
+            "exact_rms": null,
+            "rank": 10,
+            "relation_outcome": null,
+            "row": 8377,
+            "same_stratum": true,
+            "scenario_id": "eb10e96d8a2a811f",
+            "stored_label": "unlabelled"
+          }
+        ]
+      },
+      "sample_index": 5,
+      "scenario_id": "7d50948ea567e6a1",
+      "stratum": "vehicle \u2192 vehicle \u00b7 contact",
+      "stratum_key": 110
+    },
+    {
+      "anchor_row": 60,
+      "metrics": {
+        "hard": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 2.210214376449585,
+          "relation_difference_fraction_at_k": 0.4,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.3,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "hybrid": {
+          "finite_rms_count_at_k": 9,
+          "median_exact_rms_at_k": 2.079096794128418,
+          "relation_difference_fraction_at_k": 0.0,
+          "relation_known_count_at_k": 9,
+          "rms_positive_scene_recall_at_k": 0.05263157894736842,
+          "same_stratum_fraction_at_k": 0.8,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 1
+        },
+        "raw_z": {
+          "finite_rms_count_at_k": 9,
+          "median_exact_rms_at_k": 1.7662827968597412,
+          "relation_difference_fraction_at_k": 0.5555555555555556,
+          "relation_known_count_at_k": 9,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.1,
+          "stored_negative_count_at_k": 1,
+          "stored_positive_count_at_k": 0
+        },
+        "reader_z": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 2.1951756477355957,
+          "relation_difference_fraction_at_k": 0.4,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.05263157894736842,
+          "same_stratum_fraction_at_k": 0.3,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 1
+        }
+      },
+      "page": "anchor_02_idx00060.html",
+      "query_step": 39,
+      "retrievals": {
+        "hard": [
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9987895488739014,
+            "exact_rms": 1.977385401725769,
+            "rank": 1,
+            "relation_outcome": "order swap",
+            "row": 12449,
+            "same_stratum": false,
+            "scenario_id": "b20d8750fa72732c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9978865385055542,
+            "exact_rms": 2.303769111633301,
+            "rank": 2,
+            "relation_outcome": "order swap",
+            "row": 3678,
+            "same_stratum": false,
+            "scenario_id": "bbddfecfa50062b6",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.997627317905426,
+            "exact_rms": 1.2098591327667236,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 11725,
+            "same_stratum": false,
+            "scenario_id": "79a2a02acd20e60b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9970560073852539,
+            "exact_rms": 2.2200169563293457,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 11383,
+            "same_stratum": true,
+            "scenario_id": "adb9ea3ff54c4444",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.996894896030426,
+            "exact_rms": 2.25630784034729,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 9368,
+            "same_stratum": false,
+            "scenario_id": "56b53a09759866a9",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.9962356686592102,
+            "exact_rms": 2.441880226135254,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 7290,
+            "same_stratum": true,
+            "scenario_id": "1a7a87f60c7d0cfc",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9962151646614075,
+            "exact_rms": 1.7458562850952148,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 12781,
+            "same_stratum": false,
+            "scenario_id": "6a9b1978d8320f26",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9955607652664185,
+            "exact_rms": 2.645967960357666,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 9363,
+            "same_stratum": true,
+            "scenario_id": "35db83f4a4e87140",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9954794645309448,
+            "exact_rms": 2.200411796569824,
+            "rank": 9,
+            "relation_outcome": "order swap",
+            "row": 13223,
+            "same_stratum": false,
+            "scenario_id": "97ba49a54dcee04c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9954127073287964,
+            "exact_rms": 1.7256072759628296,
+            "rank": 10,
+            "relation_outcome": "future order differs, future order opposite",
+            "row": 9392,
+            "same_stratum": false,
+            "scenario_id": "765e37905d142561",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "hybrid": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9904921650886536,
+            "exact_rms": 2.3303918838500977,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 9725,
+            "same_stratum": true,
+            "scenario_id": "e820eb42adeae77b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9904555082321167,
+            "exact_rms": 1.1198537349700928,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 1179,
+            "same_stratum": false,
+            "scenario_id": "2c52762f4ef38bc0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9890177845954895,
+            "exact_rms": 2.2991857528686523,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 10209,
+            "same_stratum": true,
+            "scenario_id": "2724f2df13903bee",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9830663800239563,
+            "exact_rms": 2.3605220317840576,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 6688,
+            "same_stratum": true,
+            "scenario_id": "38aa769c2e335bcd",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9817358255386353,
+            "exact_rms": 1.1030834913253784,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 6808,
+            "same_stratum": true,
+            "scenario_id": "e9c939e4d4d8c62",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9815342426300049,
+            "exact_rms": 2.351235866546631,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 2375,
+            "same_stratum": true,
+            "scenario_id": "b1ecbe7975923945",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.981460690498352,
+            "exact_rms": 2.079096794128418,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 414,
+            "same_stratum": true,
+            "scenario_id": "5630b5cc6580b322",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9801591038703918,
+            "exact_rms": 1.1767679452896118,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 9835,
+            "same_stratum": true,
+            "scenario_id": "182a8ec1fa8343c2",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9788748621940613,
+            "exact_rms": 0.8711159825325012,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 1077,
+            "same_stratum": true,
+            "scenario_id": "487145bbbf21a84f",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 0.6333333253860474,
+            "cosine": 0.9783217906951904,
+            "exact_rms": null,
+            "rank": 10,
+            "relation_outcome": null,
+            "row": 3591,
+            "same_stratum": false,
+            "scenario_id": "e5d824a3a9031ed0",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "raw_z": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7063475847244263,
+            "exact_rms": 3.2580630779266357,
+            "rank": 1,
+            "relation_outcome": "order swap",
+            "row": 373,
+            "same_stratum": true,
+            "scenario_id": "e931c028263f52df",
+            "stored_label": "negative"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.687882125377655,
+            "exact_rms": 1.5037305355072021,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 12508,
+            "same_stratum": false,
+            "scenario_id": "1535ba67b8f75a78",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.6749746203422546,
+            "exact_rms": 1.7662827968597412,
+            "rank": 3,
+            "relation_outcome": "future order differs, future order opposite",
+            "row": 9157,
+            "same_stratum": false,
+            "scenario_id": "2defc1a85d309cb5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.6701504588127136,
+            "exact_rms": 0.8663676381111145,
+            "rank": 4,
+            "relation_outcome": "order swap",
+            "row": 4829,
+            "same_stratum": false,
+            "scenario_id": "a0c558ef521ec4e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.3333333432674408,
+            "cosine": 0.6679719686508179,
+            "exact_rms": null,
+            "rank": 5,
+            "relation_outcome": null,
+            "row": 13231,
+            "same_stratum": false,
+            "scenario_id": "47e1a3280de443ea",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.6650901436805725,
+            "exact_rms": 2.1631906032562256,
+            "rank": 6,
+            "relation_outcome": "gap trend opposite",
+            "row": 10213,
+            "same_stratum": false,
+            "scenario_id": "2ead6c0aef7cf86",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9666666388511658,
+            "cosine": 0.6633350253105164,
+            "exact_rms": 1.2918150424957275,
+            "rank": 7,
+            "relation_outcome": "gap trend opposite",
+            "row": 1555,
+            "same_stratum": false,
+            "scenario_id": "d4bc0da520ae6824",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.6576485633850098,
+            "exact_rms": 2.6121604442596436,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 2283,
+            "same_stratum": false,
+            "scenario_id": "8838b4bfe92c0f19",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.6568523645401001,
+            "exact_rms": 2.238762378692627,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 9371,
+            "same_stratum": false,
+            "scenario_id": "56b53a09759866a9",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9666666388511658,
+            "cosine": 0.6560891270637512,
+            "exact_rms": 1.3131321668624878,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 3393,
+            "same_stratum": false,
+            "scenario_id": "e46a1ba5d99c8f0",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "reader_z": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9997087717056274,
+            "exact_rms": 1.4832566976547241,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 12926,
+            "same_stratum": false,
+            "scenario_id": "c0ebcc1c8680e85a",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9995319247245789,
+            "exact_rms": 2.906992197036743,
+            "rank": 2,
+            "relation_outcome": "order swap",
+            "row": 12778,
+            "same_stratum": false,
+            "scenario_id": "770b5def55d029b5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9994499087333679,
+            "exact_rms": 1.3197612762451172,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 12340,
+            "same_stratum": false,
+            "scenario_id": "be1eb772d0f18830",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9993728399276733,
+            "exact_rms": 2.364222526550293,
+            "rank": 4,
+            "relation_outcome": "order swap",
+            "row": 10885,
+            "same_stratum": false,
+            "scenario_id": "5ec13ac93befd75a",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9993326663970947,
+            "exact_rms": 2.0261287689208984,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 5156,
+            "same_stratum": false,
+            "scenario_id": "e4bd16464066290c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9991421699523926,
+            "exact_rms": 2.8502511978149414,
+            "rank": 6,
+            "relation_outcome": "order swap",
+            "row": 13144,
+            "same_stratum": false,
+            "scenario_id": "6dbfd570143ba5cc",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9991413354873657,
+            "exact_rms": 2.645967960357666,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 9363,
+            "same_stratum": true,
+            "scenario_id": "35db83f4a4e87140",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9991253614425659,
+            "exact_rms": 2.8110203742980957,
+            "rank": 8,
+            "relation_outcome": "gap trend opposite",
+            "row": 8606,
+            "same_stratum": true,
+            "scenario_id": "bc2ed9f84ac76e29",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.999116837978363,
+            "exact_rms": 1.6027573347091675,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 5469,
+            "same_stratum": false,
+            "scenario_id": "6d904c95bd7c45d0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9990682005882263,
+            "exact_rms": 0.9182472825050354,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 1766,
+            "same_stratum": true,
+            "scenario_id": "fad307d4a69b8c27",
+            "stored_label": "positive"
+          }
+        ]
+      },
+      "sample_index": 60,
+      "scenario_id": "74407b59f94a13a7",
+      "stratum": "pedestrian \u2192 vehicle \u00b7 contact",
+      "stratum_key": 210
+    },
+    {
+      "anchor_row": 97,
+      "metrics": {
+        "hard": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 1.0320072770118713,
+          "relation_difference_fraction_at_k": 0.375,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.1,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "hybrid": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 1.4204502701759338,
+          "relation_difference_fraction_at_k": 0.0,
+          "relation_known_count_at_k": 9,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.2,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "raw_z": {
+          "finite_rms_count_at_k": 9,
+          "median_exact_rms_at_k": 0.8380937576293945,
+          "relation_difference_fraction_at_k": 0.125,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "reader_z": {
+          "finite_rms_count_at_k": 9,
+          "median_exact_rms_at_k": 1.4542827606201172,
+          "relation_difference_fraction_at_k": 0.3333333333333333,
+          "relation_known_count_at_k": 9,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        }
+      },
+      "page": "anchor_03_idx00097.html",
+      "query_step": 42,
+      "retrievals": {
+        "hard": [
+          {
+            "common_valid_fraction": 0.4333333373069763,
+            "cosine": 0.999093234539032,
+            "exact_rms": null,
+            "rank": 1,
+            "relation_outcome": null,
+            "row": 4843,
+            "same_stratum": false,
+            "scenario_id": "1d6199bfefc5d234",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9975009560585022,
+            "exact_rms": 0.669450581073761,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 10790,
+            "same_stratum": false,
+            "scenario_id": "d55f207433c22e34",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9965603351593018,
+            "exact_rms": 0.9074823260307312,
+            "rank": 3,
+            "relation_outcome": "order swap",
+            "row": 3781,
+            "same_stratum": false,
+            "scenario_id": "f41e9c06ebfbb386",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9953739643096924,
+            "exact_rms": 1.1363385915756226,
+            "rank": 4,
+            "relation_outcome": "order swap",
+            "row": 3970,
+            "same_stratum": false,
+            "scenario_id": "1fe4b2d3418cb9bf",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9952883124351501,
+            "exact_rms": 0.9276759624481201,
+            "rank": 5,
+            "relation_outcome": "order swap",
+            "row": 8053,
+            "same_stratum": false,
+            "scenario_id": "5f0ac1040dd6fba3",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.9941073060035706,
+            "exact_rms": 0.6999699473381042,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 9375,
+            "same_stratum": false,
+            "scenario_id": "e89053bad1eccaf5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.4833333194255829,
+            "cosine": 0.9936496019363403,
+            "exact_rms": null,
+            "rank": 7,
+            "relation_outcome": null,
+            "row": 4032,
+            "same_stratum": false,
+            "scenario_id": "51e0e28a2c1e8097",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9931327700614929,
+            "exact_rms": 1.8380367755889893,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 1517,
+            "same_stratum": false,
+            "scenario_id": "3ede9e8c17767c3",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9930379986763,
+            "exact_rms": 1.3713587522506714,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 2257,
+            "same_stratum": true,
+            "scenario_id": "4cc10be1c515f0e3",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9917590618133545,
+            "exact_rms": 2.010693311691284,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 948,
+            "same_stratum": false,
+            "scenario_id": "77046993fcd9f0bc",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "hybrid": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9923194646835327,
+            "exact_rms": 1.9695793390274048,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 4268,
+            "same_stratum": true,
+            "scenario_id": "988518f04dae3556",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.991947591304779,
+            "exact_rms": 1.4090206623077393,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 1689,
+            "same_stratum": true,
+            "scenario_id": "c230dbdfefe7c2fc",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9919167160987854,
+            "exact_rms": 1.7525320053100586,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 2904,
+            "same_stratum": false,
+            "scenario_id": "e1721b371dd87012",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5833333134651184,
+            "cosine": 0.9901275634765625,
+            "exact_rms": null,
+            "rank": 4,
+            "relation_outcome": null,
+            "row": 3000,
+            "same_stratum": false,
+            "scenario_id": "5087f98d3ead915e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9895907640457153,
+            "exact_rms": 0.9429008960723877,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 8198,
+            "same_stratum": false,
+            "scenario_id": "538bd49d7288b5e9",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9883396625518799,
+            "exact_rms": 0.19531068205833435,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 9096,
+            "same_stratum": false,
+            "scenario_id": "f9cb25dc487ec768",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9880729913711548,
+            "exact_rms": 1.4318798780441284,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 7126,
+            "same_stratum": false,
+            "scenario_id": "1f5d688b5b49efa0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9873065948486328,
+            "exact_rms": 1.8776941299438477,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 8766,
+            "same_stratum": false,
+            "scenario_id": "ff4e47c354230b9d",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9870732426643372,
+            "exact_rms": 0.48064249753952026,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 8633,
+            "same_stratum": false,
+            "scenario_id": "248fb9a329d2ff4e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6833333373069763,
+            "cosine": 0.984302282333374,
+            "exact_rms": null,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 9166,
+            "same_stratum": false,
+            "scenario_id": "bbff90324cdbb4e4",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "raw_z": [
+          {
+            "common_valid_fraction": 0.7666666507720947,
+            "cosine": 0.7628216743469238,
+            "exact_rms": 0.7158567905426025,
+            "rank": 1,
+            "relation_outcome": null,
+            "row": 10854,
+            "same_stratum": false,
+            "scenario_id": "8533d15b7198060c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.7428532242774963,
+            "exact_rms": 0.8380937576293945,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 3162,
+            "same_stratum": false,
+            "scenario_id": "da086f952930241d",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7412785887718201,
+            "exact_rms": 2.0469651222229004,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 10664,
+            "same_stratum": false,
+            "scenario_id": "7b85aa1bffc04fd2",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7381243109703064,
+            "exact_rms": 1.2565110921859741,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 10339,
+            "same_stratum": false,
+            "scenario_id": "8750fc596b92a923",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7372534275054932,
+            "exact_rms": 0.7027258276939392,
+            "rank": 5,
+            "relation_outcome": "order swap",
+            "row": 12898,
+            "same_stratum": false,
+            "scenario_id": "449895449be1fa",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.699999988079071,
+            "cosine": 0.7367764115333557,
+            "exact_rms": 0.4765471816062927,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 7976,
+            "same_stratum": false,
+            "scenario_id": "bb8bb1c5e17f613",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7333333492279053,
+            "cosine": 0.732747495174408,
+            "exact_rms": 2.5409326553344727,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 6800,
+            "same_stratum": false,
+            "scenario_id": "8c1f2cba3dc2f44",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7280007600784302,
+            "exact_rms": 1.2795289754867554,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 11937,
+            "same_stratum": false,
+            "scenario_id": "2d9fccb6010ccf9f",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7261685132980347,
+            "exact_rms": 0.5991989374160767,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 7236,
+            "same_stratum": false,
+            "scenario_id": "ae252b6b4c279d92",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.4000000059604645,
+            "cosine": 0.7253690361976624,
+            "exact_rms": null,
+            "rank": 10,
+            "relation_outcome": null,
+            "row": 660,
+            "same_stratum": false,
+            "scenario_id": "56a3b1d395938d98",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "reader_z": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9994171857833862,
+            "exact_rms": 1.924826979637146,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 9987,
+            "same_stratum": false,
+            "scenario_id": "c880e44f56e1d7a0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9990043044090271,
+            "exact_rms": 0.8506143689155579,
+            "rank": 2,
+            "relation_outcome": "order swap",
+            "row": 6218,
+            "same_stratum": false,
+            "scenario_id": "f280a8bdbe8972c3",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.75,
+            "cosine": 0.9988657832145691,
+            "exact_rms": 0.8051580786705017,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 7367,
+            "same_stratum": false,
+            "scenario_id": "35532334f184c9c3",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5333333611488342,
+            "cosine": 0.998738169670105,
+            "exact_rms": null,
+            "rank": 4,
+            "relation_outcome": null,
+            "row": 781,
+            "same_stratum": false,
+            "scenario_id": "e2b00e6da83a7d63",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9985397458076477,
+            "exact_rms": 1.593009352684021,
+            "rank": 5,
+            "relation_outcome": "order swap",
+            "row": 11906,
+            "same_stratum": false,
+            "scenario_id": "1a9943866d179163",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.998509407043457,
+            "exact_rms": 2.1824281215667725,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 5538,
+            "same_stratum": false,
+            "scenario_id": "a2a5979b1295203b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.998197078704834,
+            "exact_rms": 0.9579340815544128,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 5829,
+            "same_stratum": false,
+            "scenario_id": "8b8165fe9f0b114",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7333333492279053,
+            "cosine": 0.9981234073638916,
+            "exact_rms": 0.4485747814178467,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 11005,
+            "same_stratum": false,
+            "scenario_id": "12a2bc09a6f4732c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9980210065841675,
+            "exact_rms": 1.4542827606201172,
+            "rank": 9,
+            "relation_outcome": "order swap",
+            "row": 10463,
+            "same_stratum": false,
+            "scenario_id": "36de3265ac33b943",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9979572892189026,
+            "exact_rms": 3.6322853565216064,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 33,
+            "same_stratum": false,
+            "scenario_id": "5353ba6c38857ea6",
+            "stored_label": "unlabelled"
+          }
+        ]
+      },
+      "sample_index": 97,
+      "scenario_id": "e8954ddd37ba52bb",
+      "stratum": "cyclist \u2192 vehicle \u00b7 contact",
+      "stratum_key": 310
+    },
+    {
+      "anchor_row": 412,
+      "metrics": {
+        "hard": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 0.5527343451976776,
+          "relation_difference_fraction_at_k": 0.1,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "hybrid": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 0.4939878284931183,
+          "relation_difference_fraction_at_k": 0.125,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "raw_z": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 0.8359805941581726,
+          "relation_difference_fraction_at_k": 0.0,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.1,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "reader_z": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 0.8741374015808105,
+          "relation_difference_fraction_at_k": 0.2,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        }
+      },
+      "page": "anchor_04_idx00412.html",
+      "query_step": 46,
+      "retrievals": {
+        "hard": [
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.9989432096481323,
+            "exact_rms": 0.5332730412483215,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 3157,
+            "same_stratum": false,
+            "scenario_id": "b4732558d6829911",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.997875452041626,
+            "exact_rms": 1.2089684009552002,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 9283,
+            "same_stratum": false,
+            "scenario_id": "712d1c40c8a499",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9977864027023315,
+            "exact_rms": 0.5721956491470337,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 9597,
+            "same_stratum": false,
+            "scenario_id": "82ff4ea91cd67125",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9971954226493835,
+            "exact_rms": 0.9212729334831238,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 3258,
+            "same_stratum": false,
+            "scenario_id": "ce1e2fd1ceb4b988",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9971908926963806,
+            "exact_rms": 1.4745134115219116,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 7094,
+            "same_stratum": false,
+            "scenario_id": "d7f84b4b261183bf",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8666666746139526,
+            "cosine": 0.9971150755882263,
+            "exact_rms": 0.44614869356155396,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 11106,
+            "same_stratum": false,
+            "scenario_id": "e6b17621be5315b3",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.997037410736084,
+            "exact_rms": 1.4084030389785767,
+            "rank": 7,
+            "relation_outcome": "order swap",
+            "row": 6806,
+            "same_stratum": false,
+            "scenario_id": "3174156c73de3b71",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9967688322067261,
+            "exact_rms": 0.5044088959693909,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 9143,
+            "same_stratum": false,
+            "scenario_id": "2ca6c5d3f02b30b5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9967444539070129,
+            "exact_rms": 0.47583311796188354,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 7905,
+            "same_stratum": false,
+            "scenario_id": "7a7649eaedaa9e75",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.9966634511947632,
+            "exact_rms": 0.5113701820373535,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 11395,
+            "same_stratum": false,
+            "scenario_id": "2249d44d6addb708",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "hybrid": [
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9920567870140076,
+            "exact_rms": 0.4835667610168457,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 10062,
+            "same_stratum": false,
+            "scenario_id": "2113335366f0836e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9666666388511658,
+            "cosine": 0.9893646240234375,
+            "exact_rms": 0.3007747232913971,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 2933,
+            "same_stratum": false,
+            "scenario_id": "b172b5e64a430d69",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.800000011920929,
+            "cosine": 0.9826658964157104,
+            "exact_rms": 0.29960349202156067,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 10232,
+            "same_stratum": false,
+            "scenario_id": "e21683f616febebf",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9824972152709961,
+            "exact_rms": 0.5044088959693909,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 9143,
+            "same_stratum": false,
+            "scenario_id": "2ca6c5d3f02b30b5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5666666626930237,
+            "cosine": 0.9820442199707031,
+            "exact_rms": null,
+            "rank": 5,
+            "relation_outcome": null,
+            "row": 2137,
+            "same_stratum": false,
+            "scenario_id": "8083b5b81c1493ac",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9796085357666016,
+            "exact_rms": 0.6376044750213623,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 10747,
+            "same_stratum": false,
+            "scenario_id": "a0a5106e36bfd196",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7666666507720947,
+            "cosine": 0.9772274494171143,
+            "exact_rms": 1.0834903717041016,
+            "rank": 7,
+            "relation_outcome": "order swap",
+            "row": 9526,
+            "same_stratum": false,
+            "scenario_id": "60794b71cab4e300",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.973263144493103,
+            "exact_rms": 0.3311842679977417,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 1915,
+            "same_stratum": false,
+            "scenario_id": "aa96b8d5a57590e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.9715268015861511,
+            "exact_rms": 0.5332730412483215,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 3157,
+            "same_stratum": false,
+            "scenario_id": "b4732558d6829911",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.3499999940395355,
+            "cosine": 0.9705341458320618,
+            "exact_rms": null,
+            "rank": 10,
+            "relation_outcome": null,
+            "row": 1149,
+            "same_stratum": false,
+            "scenario_id": "8bc38817bcd12b9c",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "raw_z": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7539099454879761,
+            "exact_rms": 1.2057403326034546,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 9434,
+            "same_stratum": false,
+            "scenario_id": "63b634e0909ad05d",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.3333333432674408,
+            "cosine": 0.7485043406486511,
+            "exact_rms": null,
+            "rank": 2,
+            "relation_outcome": null,
+            "row": 13056,
+            "same_stratum": false,
+            "scenario_id": "fcd07fe35762537f",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7477062940597534,
+            "exact_rms": 0.7313659191131592,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 5239,
+            "same_stratum": false,
+            "scenario_id": "57df98ba26a65811",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7469931244850159,
+            "exact_rms": 1.443830132484436,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 2053,
+            "same_stratum": false,
+            "scenario_id": "fbf8ac583107191a",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.740913450717926,
+            "exact_rms": 1.3392292261123657,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 8356,
+            "same_stratum": false,
+            "scenario_id": "408fb302bff1ab45",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6166666746139526,
+            "cosine": 0.737399697303772,
+            "exact_rms": null,
+            "rank": 6,
+            "relation_outcome": null,
+            "row": 7292,
+            "same_stratum": false,
+            "scenario_id": "1a7a87f60c7d0cfc",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8666666746139526,
+            "cosine": 0.7307218313217163,
+            "exact_rms": 0.7123329639434814,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 8608,
+            "same_stratum": false,
+            "scenario_id": "e7010b9b1841ad94",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7306588888168335,
+            "exact_rms": 0.7764972448348999,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 10075,
+            "same_stratum": false,
+            "scenario_id": "54d1480145741573",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.699999988079071,
+            "cosine": 0.7304689288139343,
+            "exact_rms": 0.8954639434814453,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 12059,
+            "same_stratum": true,
+            "scenario_id": "9d1f77bf13b14b1a",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.699999988079071,
+            "cosine": 0.7302437424659729,
+            "exact_rms": 0.7138833403587341,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 2721,
+            "same_stratum": false,
+            "scenario_id": "43f1ca55d567a688",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "reader_z": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.999260425567627,
+            "exact_rms": 0.981387734413147,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 6226,
+            "same_stratum": false,
+            "scenario_id": "8b0956e6608d71d5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9992039203643799,
+            "exact_rms": 0.5131528973579407,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 6082,
+            "same_stratum": false,
+            "scenario_id": "563cbf153d6e0fb8",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8999999761581421,
+            "cosine": 0.9991008639335632,
+            "exact_rms": 0.6829355955123901,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 7029,
+            "same_stratum": false,
+            "scenario_id": "6b1faf0e4373653f",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9990938901901245,
+            "exact_rms": 0.7668870687484741,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 11015,
+            "same_stratum": false,
+            "scenario_id": "f572ec2f0d1334df",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9988349080085754,
+            "exact_rms": 1.1373043060302734,
+            "rank": 5,
+            "relation_outcome": "order swap",
+            "row": 6830,
+            "same_stratum": false,
+            "scenario_id": "6eca4858b8ef6342",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9987583756446838,
+            "exact_rms": 0.6967093348503113,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 6801,
+            "same_stratum": false,
+            "scenario_id": "a482cc19aade0f35",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9985874891281128,
+            "exact_rms": 1.8278007507324219,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 5890,
+            "same_stratum": false,
+            "scenario_id": "a473ba2a2b807cdb",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9985429048538208,
+            "exact_rms": 0.6583077311515808,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 4224,
+            "same_stratum": false,
+            "scenario_id": "4fd79be276ad1133",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9985206127166748,
+            "exact_rms": 1.267623782157898,
+            "rank": 9,
+            "relation_outcome": "order swap",
+            "row": 8024,
+            "same_stratum": false,
+            "scenario_id": "db14648e41199d45",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9666666388511658,
+            "cosine": 0.9984848499298096,
+            "exact_rms": 2.096717357635498,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 229,
+            "same_stratum": false,
+            "scenario_id": "30e647bc2904ba89",
+            "stored_label": "unlabelled"
+          }
+        ]
+      },
+      "sample_index": 412,
+      "scenario_id": "176f8ba9c6ae11c9",
+      "stratum": "vehicle \u2192 pedestrian \u00b7 contact",
+      "stratum_key": 120
+    },
+    {
+      "anchor_row": 418,
+      "metrics": {
+        "hard": {
+          "finite_rms_count_at_k": 9,
+          "median_exact_rms_at_k": 0.39070093631744385,
+          "relation_difference_fraction_at_k": 0.4444444444444444,
+          "relation_known_count_at_k": 9,
+          "rms_positive_scene_recall_at_k": 0.041666666666666664,
+          "same_stratum_fraction_at_k": 0.4,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 1
+        },
+        "hybrid": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 0.17477605491876602,
+          "relation_difference_fraction_at_k": 0.7,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.16666666666666666,
+          "same_stratum_fraction_at_k": 0.9,
+          "stored_negative_count_at_k": 2,
+          "stored_positive_count_at_k": 3
+        },
+        "raw_z": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 0.5596550405025482,
+          "relation_difference_fraction_at_k": 0.4,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.08333333333333333,
+          "same_stratum_fraction_at_k": 0.4,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 2
+        },
+        "reader_z": {
+          "finite_rms_count_at_k": 7,
+          "median_exact_rms_at_k": 0.885162889957428,
+          "relation_difference_fraction_at_k": 0.14285714285714285,
+          "relation_known_count_at_k": 7,
+          "rms_positive_scene_recall_at_k": 0.041666666666666664,
+          "same_stratum_fraction_at_k": 0.1,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        }
+      },
+      "page": "anchor_05_idx00418.html",
+      "query_step": 52,
+      "retrievals": {
+        "hard": [
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9967010021209717,
+            "exact_rms": 0.6712701916694641,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 4117,
+            "same_stratum": false,
+            "scenario_id": "9eaec29b32e323e0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9964983463287354,
+            "exact_rms": 0.16146862506866455,
+            "rank": 2,
+            "relation_outcome": "future order differs",
+            "row": 1081,
+            "same_stratum": true,
+            "scenario_id": "487145bbbf21a84f",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9944957494735718,
+            "exact_rms": 0.528741180896759,
+            "rank": 3,
+            "relation_outcome": "future order differs",
+            "row": 6548,
+            "same_stratum": true,
+            "scenario_id": "fa94c1ee20edfc71",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.46666666865348816,
+            "cosine": 0.9944199323654175,
+            "exact_rms": null,
+            "rank": 4,
+            "relation_outcome": null,
+            "row": 927,
+            "same_stratum": false,
+            "scenario_id": "e63c5b72028f0fe5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.699999988079071,
+            "cosine": 0.9940837621688843,
+            "exact_rms": 0.1357003152370453,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 1434,
+            "same_stratum": false,
+            "scenario_id": "b642ae6f941473f5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9937952160835266,
+            "exact_rms": 0.7997338175773621,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 9732,
+            "same_stratum": true,
+            "scenario_id": "e820eb42adeae77b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7666666507720947,
+            "cosine": 0.9936424493789673,
+            "exact_rms": 0.29791122674942017,
+            "rank": 7,
+            "relation_outcome": "future order differs",
+            "row": 12337,
+            "same_stratum": false,
+            "scenario_id": "688b508e016cda8c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9921929836273193,
+            "exact_rms": 0.42964980006217957,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 11277,
+            "same_stratum": true,
+            "scenario_id": "bba68deaf98966d0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9906934499740601,
+            "exact_rms": 0.39070093631744385,
+            "rank": 9,
+            "relation_outcome": "future order differs, future order opposite",
+            "row": 9955,
+            "same_stratum": false,
+            "scenario_id": "ffc3028959712297",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9905496835708618,
+            "exact_rms": 0.242935910820961,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 210,
+            "same_stratum": false,
+            "scenario_id": "72e67ac7c1b1a9f",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "hybrid": [
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9988020658493042,
+            "exact_rms": 0.16146862506866455,
+            "rank": 1,
+            "relation_outcome": "future order differs",
+            "row": 1081,
+            "same_stratum": true,
+            "scenario_id": "487145bbbf21a84f",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9979124665260315,
+            "exact_rms": 0.2984043061733246,
+            "rank": 2,
+            "relation_outcome": "future order differs",
+            "row": 4995,
+            "same_stratum": true,
+            "scenario_id": "3fb4d372ee21a488",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9961177706718445,
+            "exact_rms": 0.16817796230316162,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 9786,
+            "same_stratum": true,
+            "scenario_id": "2207506ad76dc541",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9956640005111694,
+            "exact_rms": 0.20470163226127625,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 11195,
+            "same_stratum": true,
+            "scenario_id": "e611ea5d1eeae593",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9954491853713989,
+            "exact_rms": 0.1672588437795639,
+            "rank": 5,
+            "relation_outcome": "future order differs",
+            "row": 7935,
+            "same_stratum": true,
+            "scenario_id": "a4f119788e36db75",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9945181608200073,
+            "exact_rms": 0.2295130044221878,
+            "rank": 6,
+            "relation_outcome": "future order differs",
+            "row": 1412,
+            "same_stratum": true,
+            "scenario_id": "3fdce681aa4a822d",
+            "stored_label": "negative"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9925263524055481,
+            "exact_rms": 0.2288455218076706,
+            "rank": 7,
+            "relation_outcome": "future order differs",
+            "row": 10820,
+            "same_stratum": true,
+            "scenario_id": "4027d2af0692875d",
+            "stored_label": "negative"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9918984174728394,
+            "exact_rms": 0.1227538138628006,
+            "rank": 8,
+            "relation_outcome": "future order differs",
+            "row": 4190,
+            "same_stratum": true,
+            "scenario_id": "7c5705fd9341c87b",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9913651943206787,
+            "exact_rms": 0.18137414753437042,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 12022,
+            "same_stratum": false,
+            "scenario_id": "9c8793c8577a22c8",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9904137849807739,
+            "exact_rms": 0.13345780968666077,
+            "rank": 10,
+            "relation_outcome": "future order differs",
+            "row": 2357,
+            "same_stratum": true,
+            "scenario_id": "bb8dc6a4310598aa",
+            "stored_label": "positive"
+          }
+        ],
+        "raw_z": [
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.7565195560455322,
+            "exact_rms": 0.6150461435317993,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 4413,
+            "same_stratum": false,
+            "scenario_id": "4fccd95653f6379c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.7537202835083008,
+            "exact_rms": 0.42964980006217957,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 11277,
+            "same_stratum": true,
+            "scenario_id": "bba68deaf98966d0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.7403167486190796,
+            "exact_rms": 0.7397144436836243,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 11067,
+            "same_stratum": false,
+            "scenario_id": "c94886d2100a874c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.7322714924812317,
+            "exact_rms": 0.7703920602798462,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 6385,
+            "same_stratum": false,
+            "scenario_id": "505ee3fc63e08a27",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.7314921617507935,
+            "exact_rms": 0.1532946079969406,
+            "rank": 5,
+            "relation_outcome": "future order differs",
+            "row": 6320,
+            "same_stratum": true,
+            "scenario_id": "dbc69af1eada759c",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.7303892374038696,
+            "exact_rms": 0.2868122160434723,
+            "rank": 6,
+            "relation_outcome": "future order differs",
+            "row": 8178,
+            "same_stratum": true,
+            "scenario_id": "4180d75dcba21921",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.7285352945327759,
+            "exact_rms": 0.5437915921211243,
+            "rank": 7,
+            "relation_outcome": "future order differs",
+            "row": 11313,
+            "same_stratum": false,
+            "scenario_id": "2c0420e909b83809",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.7238773107528687,
+            "exact_rms": 1.1215049028396606,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 2716,
+            "same_stratum": false,
+            "scenario_id": "b257beb50235b13",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.7235851287841797,
+            "exact_rms": 0.5755184888839722,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 11625,
+            "same_stratum": false,
+            "scenario_id": "4d656b42f813f442",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.7221812605857849,
+            "exact_rms": 0.1241847425699234,
+            "rank": 10,
+            "relation_outcome": "future order differs",
+            "row": 8345,
+            "same_stratum": true,
+            "scenario_id": "2a4572bb1781768b",
+            "stored_label": "positive"
+          }
+        ],
+        "reader_z": [
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9990647435188293,
+            "exact_rms": 0.8312021493911743,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 2355,
+            "same_stratum": false,
+            "scenario_id": "bb8dc6a4310598aa",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6166666746139526,
+            "cosine": 0.9987725019454956,
+            "exact_rms": null,
+            "rank": 2,
+            "relation_outcome": null,
+            "row": 4826,
+            "same_stratum": false,
+            "scenario_id": "2a0bd458eff955ab",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9984707236289978,
+            "exact_rms": 0.3603600561618805,
+            "rank": 3,
+            "relation_outcome": "future order differs, future order opposite",
+            "row": 2413,
+            "same_stratum": false,
+            "scenario_id": "6d7a69522bfccfe5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9983704090118408,
+            "exact_rms": 0.9842555522918701,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 4294,
+            "same_stratum": false,
+            "scenario_id": "9d7926cd1fc5cecb",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.44999998807907104,
+            "cosine": 0.9983118176460266,
+            "exact_rms": null,
+            "rank": 5,
+            "relation_outcome": null,
+            "row": 4434,
+            "same_stratum": false,
+            "scenario_id": "faca1926e3ee7b13",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.9982893466949463,
+            "exact_rms": 1.1240307092666626,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 685,
+            "same_stratum": false,
+            "scenario_id": "75939c0e4853fc0c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9982779622077942,
+            "exact_rms": 0.885162889957428,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 12478,
+            "same_stratum": false,
+            "scenario_id": "76b09b387361eb48",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8166666626930237,
+            "cosine": 0.9982542991638184,
+            "exact_rms": 0.2233157604932785,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 10927,
+            "same_stratum": false,
+            "scenario_id": "c06f18647dce2265",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6166666746139526,
+            "cosine": 0.9979225397109985,
+            "exact_rms": null,
+            "rank": 9,
+            "relation_outcome": null,
+            "row": 10637,
+            "same_stratum": true,
+            "scenario_id": "26979440ce97cfcb",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9977481365203857,
+            "exact_rms": 2.0037925243377686,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 8263,
+            "same_stratum": false,
+            "scenario_id": "2a8ec3040f667dc8",
+            "stored_label": "unlabelled"
+          }
+        ]
+      },
+      "sample_index": 418,
+      "scenario_id": "5630b5cc6580b322",
+      "stratum": "pedestrian \u2192 pedestrian \u00b7 contact",
+      "stratum_key": 220
+    },
+    {
+      "anchor_row": 567,
+      "metrics": {
+        "hard": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 4.361112833023071,
+          "relation_difference_fraction_at_k": 0.25,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0625,
+          "same_stratum_fraction_at_k": 0.1,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 1
+        },
+        "hybrid": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 4.603738784790039,
+          "relation_difference_fraction_at_k": 1.0,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.0625,
+          "same_stratum_fraction_at_k": 0.1,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 1
+        },
+        "raw_z": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 4.327298402786255,
+          "relation_difference_fraction_at_k": 0.3,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.0625,
+          "same_stratum_fraction_at_k": 0.1,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 1
+        },
+        "reader_z": {
+          "finite_rms_count_at_k": 9,
+          "median_exact_rms_at_k": 4.229654788970947,
+          "relation_difference_fraction_at_k": 0.1111111111111111,
+          "relation_known_count_at_k": 9,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        }
+      },
+      "page": "anchor_06_idx00567.html",
+      "query_step": 34,
+      "retrievals": {
+        "hard": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9973597526550293,
+            "exact_rms": 4.67352294921875,
+            "rank": 1,
+            "relation_outcome": "order swap",
+            "row": 4482,
+            "same_stratum": true,
+            "scenario_id": "abb41f6765b8cfbb",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9969831109046936,
+            "exact_rms": 5.1305108070373535,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 37,
+            "same_stratum": false,
+            "scenario_id": "aab8369adc85c709",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5666666626930237,
+            "cosine": 0.9966632723808289,
+            "exact_rms": null,
+            "rank": 3,
+            "relation_outcome": null,
+            "row": 3026,
+            "same_stratum": false,
+            "scenario_id": "f718e1d294c27ff9",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9961296319961548,
+            "exact_rms": 3.407526731491089,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 1255,
+            "same_stratum": false,
+            "scenario_id": "f75609aa01f6aac0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.38333332538604736,
+            "cosine": 0.9961121678352356,
+            "exact_rms": null,
+            "rank": 5,
+            "relation_outcome": null,
+            "row": 4074,
+            "same_stratum": false,
+            "scenario_id": "404d5d56347513e0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9958826899528503,
+            "exact_rms": 3.4088332653045654,
+            "rank": 6,
+            "relation_outcome": "order swap",
+            "row": 7656,
+            "same_stratum": false,
+            "scenario_id": "3b341da3e94b6e17",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.995755672454834,
+            "exact_rms": 4.391166687011719,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 12246,
+            "same_stratum": false,
+            "scenario_id": "e2daf96f5bb80745",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8166666626930237,
+            "cosine": 0.9954317212104797,
+            "exact_rms": 4.514786243438721,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 5321,
+            "same_stratum": false,
+            "scenario_id": "f43fa7050c9a5f7e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.699999988079071,
+            "cosine": 0.9952265620231628,
+            "exact_rms": 4.331058979034424,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 3339,
+            "same_stratum": false,
+            "scenario_id": "e202cb6a68dd4b27",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7166666388511658,
+            "cosine": 0.9952006340026855,
+            "exact_rms": 3.5704612731933594,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 3203,
+            "same_stratum": false,
+            "scenario_id": "ed38fe3c58a33d68",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "hybrid": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9809619784355164,
+            "exact_rms": 5.0143585205078125,
+            "rank": 1,
+            "relation_outcome": "order swap",
+            "row": 5218,
+            "same_stratum": true,
+            "scenario_id": "ef4f2cc22a4490f9",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9760558009147644,
+            "exact_rms": 4.522085189819336,
+            "rank": 2,
+            "relation_outcome": "order swap",
+            "row": 7356,
+            "same_stratum": false,
+            "scenario_id": "456cf45469512811",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9671087861061096,
+            "exact_rms": 4.532620906829834,
+            "rank": 3,
+            "relation_outcome": "order swap, distance trend opposite",
+            "row": 11931,
+            "same_stratum": false,
+            "scenario_id": "b70c391a003c82dc",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9637303352355957,
+            "exact_rms": 4.720236778259277,
+            "rank": 4,
+            "relation_outcome": "order swap",
+            "row": 9819,
+            "same_stratum": false,
+            "scenario_id": "5efcbdfb2ea9f9da",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9624031782150269,
+            "exact_rms": 2.7831616401672363,
+            "rank": 5,
+            "relation_outcome": "future order differs, distance trend opposite",
+            "row": 6342,
+            "same_stratum": false,
+            "scenario_id": "cef16330f64fe06",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.957653284072876,
+            "exact_rms": 4.68079137802124,
+            "rank": 6,
+            "relation_outcome": "order swap, distance trend opposite",
+            "row": 4272,
+            "same_stratum": false,
+            "scenario_id": "ae1bc6d3e33943fa",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9560937285423279,
+            "exact_rms": 4.872974872589111,
+            "rank": 7,
+            "relation_outcome": "order swap",
+            "row": 12449,
+            "same_stratum": false,
+            "scenario_id": "b20d8750fa72732c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9559537768363953,
+            "exact_rms": 4.674856662750244,
+            "rank": 8,
+            "relation_outcome": "order swap",
+            "row": 658,
+            "same_stratum": false,
+            "scenario_id": "56a3b1d395938d98",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9540941715240479,
+            "exact_rms": 4.477027893066406,
+            "rank": 9,
+            "relation_outcome": "order swap",
+            "row": 9574,
+            "same_stratum": false,
+            "scenario_id": "72ebeddddcb55881",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9539718627929688,
+            "exact_rms": 4.377697944641113,
+            "rank": 10,
+            "relation_outcome": "order swap",
+            "row": 4234,
+            "same_stratum": false,
+            "scenario_id": "31c8ebdded642125",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "raw_z": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7439890503883362,
+            "exact_rms": 4.102197647094727,
+            "rank": 1,
+            "relation_outcome": "order swap, distance trend opposite",
+            "row": 10463,
+            "same_stratum": false,
+            "scenario_id": "36de3265ac33b943",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.729456901550293,
+            "exact_rms": 4.43881368637085,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 1920,
+            "same_stratum": false,
+            "scenario_id": "aa96b8d5a57590e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.7162567377090454,
+            "exact_rms": 4.342954158782959,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 1069,
+            "same_stratum": false,
+            "scenario_id": "33216166504313c6",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.7087096571922302,
+            "exact_rms": 5.386145114898682,
+            "rank": 4,
+            "relation_outcome": "future order differs, future order opposite, distance trend opposite",
+            "row": 901,
+            "same_stratum": false,
+            "scenario_id": "773153ede1740660",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.7062726616859436,
+            "exact_rms": 4.311642646789551,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 2305,
+            "same_stratum": false,
+            "scenario_id": "6dc437099551c64b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.7035933136940002,
+            "exact_rms": 4.108554840087891,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 8126,
+            "same_stratum": false,
+            "scenario_id": "d108559351451179",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9666666388511658,
+            "cosine": 0.7014973163604736,
+            "exact_rms": 6.465402603149414,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 5411,
+            "same_stratum": false,
+            "scenario_id": "481934cf501b427a",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7333333492279053,
+            "cosine": 0.7007684707641602,
+            "exact_rms": 3.8264241218566895,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 11005,
+            "same_stratum": false,
+            "scenario_id": "12a2bc09a6f4732c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.6973842978477478,
+            "exact_rms": 1.3168511390686035,
+            "rank": 9,
+            "relation_outcome": "order swap",
+            "row": 1264,
+            "same_stratum": true,
+            "scenario_id": "669cafe222d59755",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 0.8500000238418579,
+            "cosine": 0.6942600011825562,
+            "exact_rms": 4.867330074310303,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 8223,
+            "same_stratum": false,
+            "scenario_id": "31d7d638487e8f7b",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "reader_z": [
+          {
+            "common_valid_fraction": 0.699999988079071,
+            "cosine": 0.9996923208236694,
+            "exact_rms": 4.045367240905762,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 7171,
+            "same_stratum": false,
+            "scenario_id": "76c0a5f218d8ba83",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7666666507720947,
+            "cosine": 0.999254584312439,
+            "exact_rms": 3.489530324935913,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 175,
+            "same_stratum": false,
+            "scenario_id": "ed50059904b37591",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9991824626922607,
+            "exact_rms": 5.450840950012207,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 11533,
+            "same_stratum": false,
+            "scenario_id": "3d9d2801bb8edb03",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9990453720092773,
+            "exact_rms": 4.626060485839844,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 1942,
+            "same_stratum": false,
+            "scenario_id": "296cec195b4017ec",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9990394711494446,
+            "exact_rms": 3.2015368938446045,
+            "rank": 5,
+            "relation_outcome": "order swap",
+            "row": 12829,
+            "same_stratum": false,
+            "scenario_id": "8da14a7bf33edef9",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9988455176353455,
+            "exact_rms": 4.229654788970947,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 4745,
+            "same_stratum": false,
+            "scenario_id": "b0b757baf2b5d987",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9666666388511658,
+            "cosine": 0.9988108277320862,
+            "exact_rms": 5.620893955230713,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 5546,
+            "same_stratum": false,
+            "scenario_id": "ff1898b19bc8f4be",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.38333332538604736,
+            "cosine": 0.9987238049507141,
+            "exact_rms": null,
+            "rank": 8,
+            "relation_outcome": null,
+            "row": 4074,
+            "same_stratum": false,
+            "scenario_id": "404d5d56347513e0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8999999761581421,
+            "cosine": 0.9987001419067383,
+            "exact_rms": 5.085476398468018,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 4761,
+            "same_stratum": false,
+            "scenario_id": "e7441d23503b579a",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9986557960510254,
+            "exact_rms": 3.7028095722198486,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 12439,
+            "same_stratum": false,
+            "scenario_id": "e2b588684352100c",
+            "stored_label": "unlabelled"
+          }
+        ]
+      },
+      "sample_index": 567,
+      "scenario_id": "c9a74770611fe43d",
+      "stratum": "vehicle \u2192 vehicle \u00b7 fallback",
+      "stratum_key": 111
+    },
+    {
+      "anchor_row": 667,
+      "metrics": {
+        "hard": {
+          "finite_rms_count_at_k": 7,
+          "median_exact_rms_at_k": 2.6431448459625244,
+          "relation_difference_fraction_at_k": 0.25,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "hybrid": {
+          "finite_rms_count_at_k": 7,
+          "median_exact_rms_at_k": 3.5854249000549316,
+          "relation_difference_fraction_at_k": 0.125,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "raw_z": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 2.3958691358566284,
+          "relation_difference_fraction_at_k": 0.1,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.05263157894736842,
+          "same_stratum_fraction_at_k": 0.1,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 1
+        },
+        "reader_z": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 3.1183576583862305,
+          "relation_difference_fraction_at_k": 0.125,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        }
+      },
+      "page": "anchor_07_idx00667.html",
+      "query_step": 55,
+      "retrievals": {
+        "hard": [
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9983940124511719,
+            "exact_rms": 1.7353098392486572,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 10723,
+            "same_stratum": false,
+            "scenario_id": "da5e2faa079de8a3",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5,
+            "cosine": 0.9976066946983337,
+            "exact_rms": null,
+            "rank": 2,
+            "relation_outcome": null,
+            "row": 5015,
+            "same_stratum": false,
+            "scenario_id": "3a4cb46fdce86b23",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9965060949325562,
+            "exact_rms": 3.2510883808135986,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 2374,
+            "same_stratum": false,
+            "scenario_id": "86d64cbb532e5659",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9956734776496887,
+            "exact_rms": 2.8863797187805176,
+            "rank": 4,
+            "relation_outcome": "future order differs, future order opposite, gap trend opposite",
+            "row": 8083,
+            "same_stratum": false,
+            "scenario_id": "3889427fd877e2ce",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.75,
+            "cosine": 0.9953806400299072,
+            "exact_rms": 2.7308619022369385,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 1119,
+            "same_stratum": false,
+            "scenario_id": "32c7cc2faefbaba8",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8666666746139526,
+            "cosine": 0.9930394291877747,
+            "exact_rms": 2.203800678253174,
+            "rank": 6,
+            "relation_outcome": "distance trend opposite",
+            "row": 6694,
+            "same_stratum": false,
+            "scenario_id": "cf526269a839ab65",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5833333134651184,
+            "cosine": 0.9927821159362793,
+            "exact_rms": null,
+            "rank": 7,
+            "relation_outcome": null,
+            "row": 7062,
+            "same_stratum": false,
+            "scenario_id": "399042f17a6ae0b0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9923250675201416,
+            "exact_rms": 2.6431448459625244,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 8994,
+            "same_stratum": false,
+            "scenario_id": "dba0402a56dbeabc",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.9922552108764648,
+            "exact_rms": 2.1469271183013916,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 13105,
+            "same_stratum": false,
+            "scenario_id": "1dcc2fdea847cee7",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6833333373069763,
+            "cosine": 0.9922059774398804,
+            "exact_rms": null,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 3180,
+            "same_stratum": false,
+            "scenario_id": "375ffed51b56559",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "hybrid": [
+          {
+            "common_valid_fraction": 0.5833333134651184,
+            "cosine": 0.9938799142837524,
+            "exact_rms": null,
+            "rank": 1,
+            "relation_outcome": null,
+            "row": 10171,
+            "same_stratum": false,
+            "scenario_id": "671e5233dff75dee",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5833333134651184,
+            "cosine": 0.9880427718162537,
+            "exact_rms": null,
+            "rank": 2,
+            "relation_outcome": null,
+            "row": 4759,
+            "same_stratum": false,
+            "scenario_id": "75218b897227e829",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9879611134529114,
+            "exact_rms": 3.8101396560668945,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 11449,
+            "same_stratum": false,
+            "scenario_id": "53b8d6847064467e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8666666746139526,
+            "cosine": 0.9848731160163879,
+            "exact_rms": 4.5632429122924805,
+            "rank": 4,
+            "relation_outcome": "gap trend opposite, distance trend opposite",
+            "row": 1015,
+            "same_stratum": false,
+            "scenario_id": "dc790fadb6949277",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9832859635353088,
+            "exact_rms": 4.369044780731201,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 10297,
+            "same_stratum": false,
+            "scenario_id": "67460deac83750ca",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.9825267195701599,
+            "exact_rms": 2.0676252841949463,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 5938,
+            "same_stratum": false,
+            "scenario_id": "8f7bce97014c40d",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6833333373069763,
+            "cosine": 0.9813229441642761,
+            "exact_rms": null,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 3180,
+            "same_stratum": false,
+            "scenario_id": "375ffed51b56559",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9809344410896301,
+            "exact_rms": 3.467506170272827,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 7058,
+            "same_stratum": false,
+            "scenario_id": "b0c805ec1bc5b041",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9801063537597656,
+            "exact_rms": 3.5854249000549316,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 12531,
+            "same_stratum": false,
+            "scenario_id": "c716617240e5e621",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9750477075576782,
+            "exact_rms": 3.490215539932251,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 10725,
+            "same_stratum": false,
+            "scenario_id": "da5e2faa079de8a3",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "raw_z": [
+          {
+            "common_valid_fraction": 0.8999999761581421,
+            "cosine": 0.7596791982650757,
+            "exact_rms": 2.133751153945923,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 4453,
+            "same_stratum": false,
+            "scenario_id": "8262a0d4f6c661a8",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.7395601272583008,
+            "exact_rms": 2.8965587615966797,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 6541,
+            "same_stratum": false,
+            "scenario_id": "7210d1906806418",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8166666626930237,
+            "cosine": 0.7309627532958984,
+            "exact_rms": 1.626795768737793,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 3172,
+            "same_stratum": true,
+            "scenario_id": "b4fb27512ef3882",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.7298438549041748,
+            "exact_rms": 1.3153188228607178,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 7751,
+            "same_stratum": false,
+            "scenario_id": "58858cb972e68fdd",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.7132868766784668,
+            "exact_rms": 2.810859441757202,
+            "rank": 5,
+            "relation_outcome": "future order differs",
+            "row": 3990,
+            "same_stratum": false,
+            "scenario_id": "456aa1583e605b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.7131873369216919,
+            "exact_rms": 2.545525312423706,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 8992,
+            "same_stratum": false,
+            "scenario_id": "85a48910381de673",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.7111635208129883,
+            "exact_rms": 2.3605806827545166,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 212,
+            "same_stratum": false,
+            "scenario_id": "72e67ac7c1b1a9f",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.6993967294692993,
+            "exact_rms": 2.4311575889587402,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 8047,
+            "same_stratum": false,
+            "scenario_id": "31c2d6d244063410",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.6993206739425659,
+            "exact_rms": 2.9078338146209717,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 311,
+            "same_stratum": false,
+            "scenario_id": "45fd3d6652a86f79",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.6975225210189819,
+            "exact_rms": 1.244041919708252,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 8109,
+            "same_stratum": false,
+            "scenario_id": "ee2bcab2598a0035",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "reader_z": [
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9995214343070984,
+            "exact_rms": 3.0180962085723877,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 5329,
+            "same_stratum": false,
+            "scenario_id": "d9c15f00798003b5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9993337988853455,
+            "exact_rms": 3.981825828552246,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 501,
+            "same_stratum": false,
+            "scenario_id": "a5f73565b8573cf5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8999999761581421,
+            "cosine": 0.9993011951446533,
+            "exact_rms": 4.2308759689331055,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 12267,
+            "same_stratum": false,
+            "scenario_id": "10e9c4d8314e7c79",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9990370869636536,
+            "exact_rms": 2.61956787109375,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 3690,
+            "same_stratum": false,
+            "scenario_id": "308ea1cda23c6ad5",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9989654421806335,
+            "exact_rms": 2.1270089149475098,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 2034,
+            "same_stratum": false,
+            "scenario_id": "32083f3fe0e3f1fb",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9988705515861511,
+            "exact_rms": 3.505496025085449,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 6325,
+            "same_stratum": false,
+            "scenario_id": "1c8cdfdbb326a56e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6333333253860474,
+            "cosine": 0.9987119436264038,
+            "exact_rms": null,
+            "rank": 7,
+            "relation_outcome": null,
+            "row": 13253,
+            "same_stratum": false,
+            "scenario_id": "37100ff1cfd67b55",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8500000238418579,
+            "cosine": 0.998708963394165,
+            "exact_rms": 3.2186191082000732,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 11002,
+            "same_stratum": false,
+            "scenario_id": "f051382bdf42ba16",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9986675977706909,
+            "exact_rms": 2.8287549018859863,
+            "rank": 9,
+            "relation_outcome": "future order differs",
+            "row": 6690,
+            "same_stratum": false,
+            "scenario_id": "38aa769c2e335bcd",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5,
+            "cosine": 0.9986459612846375,
+            "exact_rms": null,
+            "rank": 10,
+            "relation_outcome": null,
+            "row": 5015,
+            "same_stratum": false,
+            "scenario_id": "3a4cb46fdce86b23",
+            "stored_label": "unlabelled"
+          }
+        ]
+      },
+      "sample_index": 667,
+      "scenario_id": "a9ee3eba2a87da15",
+      "stratum": "vehicle \u2192 cyclist \u00b7 contact",
+      "stratum_key": 130
+    },
+    {
+      "anchor_row": 4291,
+      "metrics": {
+        "hard": {
+          "finite_rms_count_at_k": 9,
+          "median_exact_rms_at_k": 1.3258051872253418,
+          "relation_difference_fraction_at_k": 0.2222222222222222,
+          "relation_known_count_at_k": 9,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.6,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "hybrid": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 1.9970426559448242,
+          "relation_difference_fraction_at_k": 0.25,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.6,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "raw_z": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 0.8639641106128693,
+          "relation_difference_fraction_at_k": 0.5,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.6,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "reader_z": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 1.065294474363327,
+          "relation_difference_fraction_at_k": 0.1,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.6,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        }
+      },
+      "page": "anchor_08_idx04291.html",
+      "query_step": 54,
+      "retrievals": {
+        "hard": [
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9993147850036621,
+            "exact_rms": 1.3258051872253418,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 5023,
+            "same_stratum": false,
+            "scenario_id": "5c9644edf711c82b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9991033673286438,
+            "exact_rms": 1.7170937061309814,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 5737,
+            "same_stratum": true,
+            "scenario_id": "f7b9e4023406d7dd",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.699999988079071,
+            "cosine": 0.998467743396759,
+            "exact_rms": 1.1797077655792236,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 12059,
+            "same_stratum": false,
+            "scenario_id": "9d1f77bf13b14b1a",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.550000011920929,
+            "cosine": 0.9982820153236389,
+            "exact_rms": null,
+            "rank": 4,
+            "relation_outcome": null,
+            "row": 6266,
+            "same_stratum": false,
+            "scenario_id": "d9e6fdab3e6e6f1",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.997929036617279,
+            "exact_rms": 1.5705476999282837,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 851,
+            "same_stratum": false,
+            "scenario_id": "fd1a9c77ca8ab2f2",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9978585839271545,
+            "exact_rms": 1.1241858005523682,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 3177,
+            "same_stratum": true,
+            "scenario_id": "375ffed51b56559",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8999999761581421,
+            "cosine": 0.9976533055305481,
+            "exact_rms": 0.8684550523757935,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 10832,
+            "same_stratum": true,
+            "scenario_id": "265b14074bfff93c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9975589513778687,
+            "exact_rms": 3.577296257019043,
+            "rank": 8,
+            "relation_outcome": "order swap",
+            "row": 395,
+            "same_stratum": true,
+            "scenario_id": "42e4ca5cb887f6dd",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9973261952400208,
+            "exact_rms": 0.9754759669303894,
+            "rank": 9,
+            "relation_outcome": "order swap",
+            "row": 1884,
+            "same_stratum": true,
+            "scenario_id": "9b4d3a12c2202d53",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9971933960914612,
+            "exact_rms": 1.4366964101791382,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 12596,
+            "same_stratum": true,
+            "scenario_id": "7e9d479db93e6396",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "hybrid": [
+          {
+            "common_valid_fraction": 0.3333333432674408,
+            "cosine": 0.9824130535125732,
+            "exact_rms": null,
+            "rank": 1,
+            "relation_outcome": null,
+            "row": 1040,
+            "same_stratum": false,
+            "scenario_id": "98e53d112032474",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9759125709533691,
+            "exact_rms": 1.4767893552780151,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 7751,
+            "same_stratum": true,
+            "scenario_id": "58858cb972e68fdd",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9758591651916504,
+            "exact_rms": 2.2993221282958984,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 1292,
+            "same_stratum": false,
+            "scenario_id": "75a8ee297e7f495e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9758038520812988,
+            "exact_rms": 1.9530773162841797,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 9601,
+            "same_stratum": false,
+            "scenario_id": "304ee4112d6435a1",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.97076416015625,
+            "exact_rms": 0.5794414281845093,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 10170,
+            "same_stratum": true,
+            "scenario_id": "671e5233dff75dee",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9694027304649353,
+            "exact_rms": 2.7566416263580322,
+            "rank": 6,
+            "relation_outcome": "future order differs",
+            "row": 3071,
+            "same_stratum": true,
+            "scenario_id": "3d0acca3d38c3364",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9658567905426025,
+            "exact_rms": 1.6152617931365967,
+            "rank": 7,
+            "relation_outcome": "order swap",
+            "row": 3079,
+            "same_stratum": false,
+            "scenario_id": "767b170b8beff87e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7666666507720947,
+            "cosine": 0.9657934308052063,
+            "exact_rms": 2.0410079956054688,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 175,
+            "same_stratum": true,
+            "scenario_id": "ed50059904b37591",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6000000238418579,
+            "cosine": 0.9655408263206482,
+            "exact_rms": null,
+            "rank": 9,
+            "relation_outcome": null,
+            "row": 7652,
+            "same_stratum": true,
+            "scenario_id": "69055f251461cb4",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9642223715782166,
+            "exact_rms": 2.7071633338928223,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 4180,
+            "same_stratum": true,
+            "scenario_id": "13046b102aba9afe",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "raw_z": [
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.7390996813774109,
+            "exact_rms": 0.7726624608039856,
+            "rank": 1,
+            "relation_outcome": "future order differs, future order opposite",
+            "row": 4128,
+            "same_stratum": true,
+            "scenario_id": "16d9d8ec73bbdf18",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.7291931509971619,
+            "exact_rms": 1.9824097156524658,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 436,
+            "same_stratum": true,
+            "scenario_id": "3c76e213b9839ca6",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.7262624502182007,
+            "exact_rms": 0.8315817713737488,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 3785,
+            "same_stratum": true,
+            "scenario_id": "219711ef6ae52c58",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.7240700125694275,
+            "exact_rms": 0.8963464498519897,
+            "rank": 4,
+            "relation_outcome": "future order differs",
+            "row": 8345,
+            "same_stratum": false,
+            "scenario_id": "2a4572bb1781768b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5833333134651184,
+            "cosine": 0.7204545736312866,
+            "exact_rms": null,
+            "rank": 5,
+            "relation_outcome": null,
+            "row": 4930,
+            "same_stratum": false,
+            "scenario_id": "a9674cdc59d69c42",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5,
+            "cosine": 0.7051839828491211,
+            "exact_rms": null,
+            "rank": 6,
+            "relation_outcome": null,
+            "row": 6222,
+            "same_stratum": false,
+            "scenario_id": "250f856ac8570ed9",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.7016281485557556,
+            "exact_rms": 0.7896592617034912,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 1056,
+            "same_stratum": true,
+            "scenario_id": "4c169acd02a6cf87",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.6994783282279968,
+            "exact_rms": 0.9537636637687683,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 4413,
+            "same_stratum": false,
+            "scenario_id": "4fccd95653f6379c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.6971471309661865,
+            "exact_rms": 0.6674768328666687,
+            "rank": 9,
+            "relation_outcome": "future order differs, future order opposite",
+            "row": 4756,
+            "same_stratum": true,
+            "scenario_id": "994650a2f4302e36",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.6956949830055237,
+            "exact_rms": 0.9821079969406128,
+            "rank": 10,
+            "relation_outcome": "order swap",
+            "row": 12260,
+            "same_stratum": true,
+            "scenario_id": "2ec4d24b3c297dfa",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "reader_z": [
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.9995715022087097,
+            "exact_rms": 0.8461588621139526,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 1567,
+            "same_stratum": false,
+            "scenario_id": "6e516b5d467dfedd",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9994468688964844,
+            "exact_rms": 0.5477529168128967,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 1965,
+            "same_stratum": true,
+            "scenario_id": "bb038965b643f75b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.999329149723053,
+            "exact_rms": 1.6373316049575806,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 8655,
+            "same_stratum": false,
+            "scenario_id": "e2463337c81ee5f9",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7333333492279053,
+            "cosine": 0.9992824792861938,
+            "exact_rms": 0.9007295966148376,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 10043,
+            "same_stratum": true,
+            "scenario_id": "96a9f950332e5a85",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.999162495136261,
+            "exact_rms": 1.2298593521118164,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 12402,
+            "same_stratum": false,
+            "scenario_id": "1c04f70d38a16070",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9991251230239868,
+            "exact_rms": 1.3804875612258911,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 7803,
+            "same_stratum": false,
+            "scenario_id": "b77cb809ba92528d",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9990019798278809,
+            "exact_rms": 2.4162871837615967,
+            "rank": 7,
+            "relation_outcome": "order swap",
+            "row": 3948,
+            "same_stratum": true,
+            "scenario_id": "1d1d59e8c28fb4b8",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9989640116691589,
+            "exact_rms": 0.7084317207336426,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 3003,
+            "same_stratum": true,
+            "scenario_id": "644d6969aa9475cf",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8999999761581421,
+            "cosine": 0.9989286661148071,
+            "exact_rms": 0.7560087442398071,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 3999,
+            "same_stratum": true,
+            "scenario_id": "7ff2efc7277a07f2",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9989263415336609,
+            "exact_rms": 1.9380319118499756,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 12292,
+            "same_stratum": true,
+            "scenario_id": "7963317177c27f5b",
+            "stored_label": "unlabelled"
+          }
+        ]
+      },
+      "sample_index": 4291,
+      "scenario_id": "9d7926cd1fc5cecb",
+      "stratum": "vehicle \u2192 vehicle \u00b7 contact",
+      "stratum_key": 110
+    },
+    {
+      "anchor_row": 8771,
+      "metrics": {
+        "hard": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 2.1840559244155884,
+          "relation_difference_fraction_at_k": 0.0,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 1.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "hybrid": {
+          "finite_rms_count_at_k": 7,
+          "median_exact_rms_at_k": 2.1987898349761963,
+          "relation_difference_fraction_at_k": 0.0,
+          "relation_known_count_at_k": 9,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 1.0,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "raw_z": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 2.3724194765090942,
+          "relation_difference_fraction_at_k": 0.6,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.7,
+          "stored_negative_count_at_k": 1,
+          "stored_positive_count_at_k": 0
+        },
+        "reader_z": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 2.322290778160095,
+          "relation_difference_fraction_at_k": 0.2,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.1111111111111111,
+          "same_stratum_fraction_at_k": 0.9,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 1
+        }
+      },
+      "page": "anchor_09_idx08771.html",
+      "query_step": 44,
+      "retrievals": {
+        "hard": [
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9975312352180481,
+            "exact_rms": 2.6127941608428955,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 8366,
+            "same_stratum": true,
+            "scenario_id": "ddddbf7b07df0a2b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.800000011920929,
+            "cosine": 0.9974030256271362,
+            "exact_rms": 1.8477483987808228,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 5949,
+            "same_stratum": true,
+            "scenario_id": "ccf53336717259c6",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.993619441986084,
+            "exact_rms": 2.1987898349761963,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 7658,
+            "same_stratum": true,
+            "scenario_id": "3b341da3e94b6e17",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9930166006088257,
+            "exact_rms": 1.393112063407898,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 6345,
+            "same_stratum": true,
+            "scenario_id": "cef16330f64fe06",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6333333253860474,
+            "cosine": 0.9918962121009827,
+            "exact_rms": null,
+            "rank": 5,
+            "relation_outcome": null,
+            "row": 143,
+            "same_stratum": true,
+            "scenario_id": "fb432a9f54a6f79f",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9917443990707397,
+            "exact_rms": 2.560457944869995,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 13053,
+            "same_stratum": true,
+            "scenario_id": "f6e2a918fcba7c84",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9898548722267151,
+            "exact_rms": 2.1596975326538086,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 7430,
+            "same_stratum": true,
+            "scenario_id": "2a05ab89a5a9a2e6",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7166666388511658,
+            "cosine": 0.9892526268959045,
+            "exact_rms": 2.1693220138549805,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 9521,
+            "same_stratum": true,
+            "scenario_id": "725466465195e8c8",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8999999761581421,
+            "cosine": 0.9889299869537354,
+            "exact_rms": 2.5076208114624023,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 8313,
+            "same_stratum": true,
+            "scenario_id": "fb3ba8984c05bf7",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5833333134651184,
+            "cosine": 0.9885477423667908,
+            "exact_rms": null,
+            "rank": 10,
+            "relation_outcome": null,
+            "row": 1754,
+            "same_stratum": true,
+            "scenario_id": "94e7762cbdee8792",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "hybrid": [
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.9915882349014282,
+            "exact_rms": 2.697716236114502,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 2817,
+            "same_stratum": true,
+            "scenario_id": "52ab6b2e07ad4557",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7833333611488342,
+            "cosine": 0.9908292293548584,
+            "exact_rms": 1.6074281930923462,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 6799,
+            "same_stratum": true,
+            "scenario_id": "8c1f2cba3dc2f44",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.988944947719574,
+            "exact_rms": 2.588510036468506,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 8051,
+            "same_stratum": true,
+            "scenario_id": "bd6e7d6db45925a4",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9882414937019348,
+            "exact_rms": 1.1624815464019775,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 7725,
+            "same_stratum": true,
+            "scenario_id": "aaf38cafbc3c7dec",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6000000238418579,
+            "cosine": 0.9872344732284546,
+            "exact_rms": null,
+            "rank": 5,
+            "relation_outcome": null,
+            "row": 10864,
+            "same_stratum": true,
+            "scenario_id": "e1e4dfa9d40711f1",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7666666507720947,
+            "cosine": 0.9858314990997314,
+            "exact_rms": 2.7422027587890625,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 12303,
+            "same_stratum": true,
+            "scenario_id": "c6c9b979812ef3d2",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9855273962020874,
+            "exact_rms": 2.1987898349761963,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 7658,
+            "same_stratum": true,
+            "scenario_id": "3b341da3e94b6e17",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6833333373069763,
+            "cosine": 0.9852281212806702,
+            "exact_rms": null,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 8034,
+            "same_stratum": true,
+            "scenario_id": "495fed673dcb9790",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.75,
+            "cosine": 0.985171377658844,
+            "exact_rms": 1.9803311824798584,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 2488,
+            "same_stratum": true,
+            "scenario_id": "3c781c40937f94",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.6166666746139526,
+            "cosine": 0.9844520092010498,
+            "exact_rms": null,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 3870,
+            "same_stratum": true,
+            "scenario_id": "b4e4e96f5fa04ce9",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "raw_z": [
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.7173547744750977,
+            "exact_rms": 2.4448776245117188,
+            "rank": 1,
+            "relation_outcome": "order swap",
+            "row": 7583,
+            "same_stratum": true,
+            "scenario_id": "7f3c7d62c03d9fd3",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.6945874691009521,
+            "exact_rms": 2.719729423522949,
+            "rank": 2,
+            "relation_outcome": "order swap, future order differs, future order opposite",
+            "row": 974,
+            "same_stratum": true,
+            "scenario_id": "2ccc7ad5dff9b314",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.6738499402999878,
+            "exact_rms": 2.5896174907684326,
+            "rank": 3,
+            "relation_outcome": "order swap",
+            "row": 5067,
+            "same_stratum": false,
+            "scenario_id": "de9e64081e8544d6",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.6703073978424072,
+            "exact_rms": 4.070516586303711,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 2520,
+            "same_stratum": true,
+            "scenario_id": "7d3ed6884df9cc61",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.6625822186470032,
+            "exact_rms": 1.9678326845169067,
+            "rank": 5,
+            "relation_outcome": "order swap",
+            "row": 6267,
+            "same_stratum": true,
+            "scenario_id": "d9e6fdab3e6e6f1",
+            "stored_label": "negative"
+          },
+          {
+            "common_valid_fraction": 0.800000011920929,
+            "cosine": 0.6607090830802917,
+            "exact_rms": 2.0108680725097656,
+            "rank": 6,
+            "relation_outcome": "order swap, future order differs, future order opposite",
+            "row": 6095,
+            "same_stratum": true,
+            "scenario_id": "b6aa92e630ab732d",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.6606632471084595,
+            "exact_rms": 1.1845344305038452,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 2284,
+            "same_stratum": true,
+            "scenario_id": "8838b4bfe92c0f19",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.6580860018730164,
+            "exact_rms": 1.5575183629989624,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 10213,
+            "same_stratum": true,
+            "scenario_id": "2ead6c0aef7cf86",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.6464017033576965,
+            "exact_rms": 3.4866859912872314,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 6542,
+            "same_stratum": false,
+            "scenario_id": "2531f5e9fb80a0eb",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.6444503664970398,
+            "exact_rms": 2.2999613285064697,
+            "rank": 10,
+            "relation_outcome": "future order differs, future order opposite",
+            "row": 2360,
+            "same_stratum": false,
+            "scenario_id": "bb8dc6a4310598aa",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "reader_z": [
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9993295669555664,
+            "exact_rms": 2.6648106575012207,
+            "rank": 1,
+            "relation_outcome": "future order differs, future order opposite",
+            "row": 9444,
+            "same_stratum": true,
+            "scenario_id": "64d0c77b8d21da55",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.7333333492279053,
+            "cosine": 0.9991648197174072,
+            "exact_rms": 2.932319402694702,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 6800,
+            "same_stratum": true,
+            "scenario_id": "8c1f2cba3dc2f44",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9989734888076782,
+            "exact_rms": 2.555938959121704,
+            "rank": 3,
+            "relation_outcome": "future order differs",
+            "row": 2288,
+            "same_stratum": false,
+            "scenario_id": "5002a2e4d5e90be9",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9989117383956909,
+            "exact_rms": 2.9642462730407715,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 7946,
+            "same_stratum": true,
+            "scenario_id": "6c8b32df9bff8caa",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9987910985946655,
+            "exact_rms": 2.142706871032715,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 8294,
+            "same_stratum": true,
+            "scenario_id": "b0b4a1211351200d",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8999999761581421,
+            "cosine": 0.998675525188446,
+            "exact_rms": 0.7521910667419434,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 11367,
+            "same_stratum": true,
+            "scenario_id": "f4caa99dfe23d706",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 0.7166666388511658,
+            "cosine": 0.9982300996780396,
+            "exact_rms": 1.9859930276870728,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 4250,
+            "same_stratum": true,
+            "scenario_id": "c2d4136539e2eedb",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9982057809829712,
+            "exact_rms": 1.9213696718215942,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 1970,
+            "same_stratum": true,
+            "scenario_id": "bb038965b643f75b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8500000238418579,
+            "cosine": 0.9981206655502319,
+            "exact_rms": 2.0991649627685547,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 434,
+            "same_stratum": true,
+            "scenario_id": "f16eb8c805d2168c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.9980754852294922,
+            "exact_rms": 2.5018746852874756,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 8883,
+            "same_stratum": true,
+            "scenario_id": "a9a7480e5c110232",
+            "stored_label": "unlabelled"
+          }
+        ]
+      },
+      "sample_index": 8771,
+      "scenario_id": "f0af8d70dcade11d",
+      "stratum": "vehicle \u2192 vehicle \u00b7 contact",
+      "stratum_key": 110
+    },
+    {
+      "anchor_row": 13259,
+      "metrics": {
+        "hard": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 2.0155791640281677,
+          "relation_difference_fraction_at_k": 0.5,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.7,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "hybrid": {
+          "finite_rms_count_at_k": 9,
+          "median_exact_rms_at_k": 0.6960861086845398,
+          "relation_difference_fraction_at_k": 0.1111111111111111,
+          "relation_known_count_at_k": 9,
+          "rms_positive_scene_recall_at_k": 0.11538461538461539,
+          "same_stratum_fraction_at_k": 0.8,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 3
+        },
+        "raw_z": {
+          "finite_rms_count_at_k": 10,
+          "median_exact_rms_at_k": 1.9830865263938904,
+          "relation_difference_fraction_at_k": 0.3,
+          "relation_known_count_at_k": 10,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.9,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        },
+        "reader_z": {
+          "finite_rms_count_at_k": 8,
+          "median_exact_rms_at_k": 1.832647979259491,
+          "relation_difference_fraction_at_k": 0.5,
+          "relation_known_count_at_k": 8,
+          "rms_positive_scene_recall_at_k": 0.0,
+          "same_stratum_fraction_at_k": 0.8,
+          "stored_negative_count_at_k": 0,
+          "stored_positive_count_at_k": 0
+        }
+      },
+      "page": "anchor_10_idx13259.html",
+      "query_step": 48,
+      "retrievals": {
+        "hard": [
+          {
+            "common_valid_fraction": 0.8166666626930237,
+            "cosine": 0.9992031455039978,
+            "exact_rms": 1.9880045652389526,
+            "rank": 1,
+            "relation_outcome": "order swap",
+            "row": 4492,
+            "same_stratum": true,
+            "scenario_id": "74f790c95ebd1dba",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9985526204109192,
+            "exact_rms": 2.8059659004211426,
+            "rank": 2,
+            "relation_outcome": "order swap, distance trend opposite",
+            "row": 11906,
+            "same_stratum": false,
+            "scenario_id": "1a9943866d179163",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8500000238418579,
+            "cosine": 0.9976947903633118,
+            "exact_rms": 2.383627414703369,
+            "rank": 3,
+            "relation_outcome": "same outcome",
+            "row": 6047,
+            "same_stratum": true,
+            "scenario_id": "793212b6fee6ad9b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.997562825679779,
+            "exact_rms": 1.9551780223846436,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 3428,
+            "same_stratum": true,
+            "scenario_id": "42dfe91825b26dc2",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9969249963760376,
+            "exact_rms": 2.043153762817383,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 4201,
+            "same_stratum": true,
+            "scenario_id": "4e3c594a8df98d4c",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8166666626930237,
+            "cosine": 0.9968442916870117,
+            "exact_rms": 2.1350646018981934,
+            "rank": 6,
+            "relation_outcome": "order swap",
+            "row": 8902,
+            "same_stratum": true,
+            "scenario_id": "77887fd002899957",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.995863676071167,
+            "exact_rms": 0.9054993391036987,
+            "rank": 7,
+            "relation_outcome": "distance trend opposite",
+            "row": 1766,
+            "same_stratum": false,
+            "scenario_id": "fad307d4a69b8c27",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9166666865348816,
+            "cosine": 0.9953608512878418,
+            "exact_rms": 2.8429229259490967,
+            "rank": 8,
+            "relation_outcome": "order swap",
+            "row": 7675,
+            "same_stratum": false,
+            "scenario_id": "e66921bc7e9d94b8",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9666666388511658,
+            "cosine": 0.9950591325759888,
+            "exact_rms": 0.6465874314308167,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 7210,
+            "same_stratum": true,
+            "scenario_id": "fd05b13eb80dad9f",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.949999988079071,
+            "cosine": 0.9942556619644165,
+            "exact_rms": 1.2233668565750122,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 4927,
+            "same_stratum": true,
+            "scenario_id": "5eea88de87485273",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "hybrid": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.989162266254425,
+            "exact_rms": 2.6919777393341064,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 9941,
+            "same_stratum": true,
+            "scenario_id": "3ad9f29ffe107e4",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9865409135818481,
+            "exact_rms": 0.6960861086845398,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 9987,
+            "same_stratum": true,
+            "scenario_id": "c880e44f56e1d7a0",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9861701130867004,
+            "exact_rms": 1.2433078289031982,
+            "rank": 3,
+            "relation_outcome": "distance trend opposite",
+            "row": 4180,
+            "same_stratum": true,
+            "scenario_id": "13046b102aba9afe",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.550000011920929,
+            "cosine": 0.9852480292320251,
+            "exact_rms": null,
+            "rank": 4,
+            "relation_outcome": null,
+            "row": 6266,
+            "same_stratum": false,
+            "scenario_id": "d9e6fdab3e6e6f1",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.981274425983429,
+            "exact_rms": 0.4987545609474182,
+            "rank": 5,
+            "relation_outcome": "same outcome",
+            "row": 7898,
+            "same_stratum": true,
+            "scenario_id": "c29bf53530e1c372",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9807580709457397,
+            "exact_rms": 0.3144962787628174,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 12597,
+            "same_stratum": true,
+            "scenario_id": "52aeb254cd5b135f",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9804900884628296,
+            "exact_rms": 0.5752227902412415,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 9442,
+            "same_stratum": true,
+            "scenario_id": "64d0c77b8d21da55",
+            "stored_label": "positive"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.9798047542572021,
+            "exact_rms": 1.9201360940933228,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 2135,
+            "same_stratum": true,
+            "scenario_id": "238ff1f064aa0216",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9793581962585449,
+            "exact_rms": 0.6078935265541077,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 7143,
+            "same_stratum": false,
+            "scenario_id": "9355409efaa90aa3",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.977867841720581,
+            "exact_rms": 3.47707200050354,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 12154,
+            "same_stratum": true,
+            "scenario_id": "217b63a568bbe217",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "raw_z": [
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.8591852188110352,
+            "exact_rms": 2.127652406692505,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 8992,
+            "same_stratum": true,
+            "scenario_id": "85a48910381de673",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.85438072681427,
+            "exact_rms": 2.3601109981536865,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 4757,
+            "same_stratum": true,
+            "scenario_id": "75218b897227e829",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.8417801260948181,
+            "exact_rms": 2.064375400543213,
+            "rank": 3,
+            "relation_outcome": "order swap",
+            "row": 2118,
+            "same_stratum": true,
+            "scenario_id": "aaa549845910f9ba",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.8376175165176392,
+            "exact_rms": 1.7703036069869995,
+            "rank": 4,
+            "relation_outcome": "same outcome",
+            "row": 7801,
+            "same_stratum": true,
+            "scenario_id": "9f14fc5e716a9611",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.8336435556411743,
+            "exact_rms": 1.7725436687469482,
+            "rank": 5,
+            "relation_outcome": "order swap",
+            "row": 8044,
+            "same_stratum": true,
+            "scenario_id": "182d56f317ba963e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.8250845670700073,
+            "exact_rms": 2.046036958694458,
+            "rank": 6,
+            "relation_outcome": "same outcome",
+            "row": 981,
+            "same_stratum": false,
+            "scenario_id": "c80aa39882827f77",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9833333492279053,
+            "cosine": 0.8248428106307983,
+            "exact_rms": 0.6370166540145874,
+            "rank": 7,
+            "relation_outcome": "same outcome",
+            "row": 3442,
+            "same_stratum": true,
+            "scenario_id": "7c0e2350f2d41936",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.699999988079071,
+            "cosine": 0.8223536610603333,
+            "exact_rms": 1.5307248830795288,
+            "rank": 8,
+            "relation_outcome": "order swap",
+            "row": 5855,
+            "same_stratum": true,
+            "scenario_id": "d31b68a00d0602a8",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8333333134651184,
+            "cosine": 0.8215341567993164,
+            "exact_rms": 1.9201360940933228,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 2135,
+            "same_stratum": true,
+            "scenario_id": "238ff1f064aa0216",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.8194952607154846,
+            "exact_rms": 3.1522111892700195,
+            "rank": 10,
+            "relation_outcome": "same outcome",
+            "row": 7751,
+            "same_stratum": true,
+            "scenario_id": "58858cb972e68fdd",
+            "stored_label": "unlabelled"
+          }
+        ],
+        "reader_z": [
+          {
+            "common_valid_fraction": 0.800000011920929,
+            "cosine": 0.999880313873291,
+            "exact_rms": 0.7773593664169312,
+            "rank": 1,
+            "relation_outcome": "same outcome",
+            "row": 10232,
+            "same_stratum": true,
+            "scenario_id": "e21683f616febebf",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9997231960296631,
+            "exact_rms": 1.6618163585662842,
+            "rank": 2,
+            "relation_outcome": "same outcome",
+            "row": 8058,
+            "same_stratum": false,
+            "scenario_id": "228304cad3d1a93b",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.9333333373069763,
+            "cosine": 0.9995573163032532,
+            "exact_rms": 1.6772913932800293,
+            "rank": 3,
+            "relation_outcome": "order swap",
+            "row": 2889,
+            "same_stratum": true,
+            "scenario_id": "e71d959b54cbc6d1",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.4833333194255829,
+            "cosine": 0.9993868470191956,
+            "exact_rms": null,
+            "rank": 4,
+            "relation_outcome": null,
+            "row": 3848,
+            "same_stratum": false,
+            "scenario_id": "29c00f72bd53081a",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9993529915809631,
+            "exact_rms": 2.4552001953125,
+            "rank": 5,
+            "relation_outcome": "future order differs, distance trend opposite",
+            "row": 12527,
+            "same_stratum": true,
+            "scenario_id": "599ecf74ed378598",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.5833333134651184,
+            "cosine": 0.9992436766624451,
+            "exact_rms": null,
+            "rank": 6,
+            "relation_outcome": null,
+            "row": 4907,
+            "same_stratum": true,
+            "scenario_id": "3bbc0db52f858a02",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8166666626930237,
+            "cosine": 0.9992435574531555,
+            "exact_rms": 1.9880045652389526,
+            "rank": 7,
+            "relation_outcome": "order swap",
+            "row": 4492,
+            "same_stratum": true,
+            "scenario_id": "74f790c95ebd1dba",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.9990364909172058,
+            "exact_rms": 2.456332206726074,
+            "rank": 8,
+            "relation_outcome": "same outcome",
+            "row": 889,
+            "same_stratum": true,
+            "scenario_id": "af5b480b57ce54dd",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 1.0,
+            "cosine": 0.998779833316803,
+            "exact_rms": 1.1934422254562378,
+            "rank": 9,
+            "relation_outcome": "same outcome",
+            "row": 6691,
+            "same_stratum": true,
+            "scenario_id": "e317a5f239c00f3e",
+            "stored_label": "unlabelled"
+          },
+          {
+            "common_valid_fraction": 0.8833333253860474,
+            "cosine": 0.99869304895401,
+            "exact_rms": 2.1156153678894043,
+            "rank": 10,
+            "relation_outcome": "order swap",
+            "row": 7232,
+            "same_stratum": true,
+            "scenario_id": "ae252b6b4c279d92",
+            "stored_label": "unlabelled"
+          }
+        ]
+      },
+      "sample_index": 13259,
+      "scenario_id": "ac2001b99f2cc64f",
+      "stratum": "vehicle \u2192 vehicle \u00b7 contact",
+      "stratum_key": 110
+    }
+  ],
+  "candidate_pair_rows": 6273,
+  "candidate_scope": "history",
+  "candidate_unique_scenarios": 2171,
+  "contrastive_cache": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_contrastive_v1/val_contrastive_training.npz",
+  "definition": "Full-corpus exact cosine retrieval followed by scenario-level max-pair deduplication.",
+  "device": "cuda",
+  "history_steps": 32,
+  "rms_features": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk_rms_v0/val_rms_features.npz",
+  "same_scenario_excluded": true,
+  "scenario_aggregation": "maximum pair cosine per scenario",
+  "stage_order": [
+    "raw_z",
+    "reader_z",
+    "hard",
+    "hybrid"
+  ],
+  "stages": {
+    "hard": {
+      "definition": "Pair representation from the hard Stage-B checkpoint, after encoder fine-tuning.",
+      "embedding_dimension": 128,
+      "encoder_checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/interaction_contrastive_hard_relneg_dupfiltered_v1/best.pt",
+      "encoder_checkpoint_step": 18500,
+      "label": "Hard: Stage-B encoder + reader",
+      "reader_checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/interaction_contrastive_hard_relneg_dupfiltered_v1/best.pt",
+      "reader_checkpoint_step": 18500
+    },
+    "hybrid": {
+      "definition": "Pair representation from the hybrid-soft Stage-B checkpoint.",
+      "embedding_dimension": 128,
+      "encoder_checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/interaction_contrastive_hybrid_soft_v2_from_hard_relneg_dupfiltered_cuda3/best.pt",
+      "encoder_checkpoint_step": 40000,
+      "label": "Hybrid: Stage-B encoder + reader",
+      "reader_checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/interaction_contrastive_hybrid_soft_v2_from_hard_relneg_dupfiltered_cuda3/best.pt",
+      "reader_checkpoint_step": 40000
+    },
+    "raw_z": {
+      "definition": "Flattened and L2-normalized query-time z from the untouched base tokenizer.",
+      "embedding_dimension": 4096,
+      "encoder_checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/ooi50k_lat64_b64_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_nofde_focus_randstart_noamp/best.pt",
+      "encoder_checkpoint_step": 83500,
+      "label": "Raw z: base tokenizer",
+      "reader_checkpoint": null,
+      "reader_checkpoint_step": null
+    },
+    "reader_z": {
+      "definition": "Pair representation produced by the hard Stage-A reader from the same untouched base z.",
+      "embedding_dimension": 128,
+      "encoder_checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/ooi50k_lat64_b64_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_nofde_focus_randstart_noamp/best.pt",
+      "encoder_checkpoint_step": 83500,
+      "label": "Reader + z: hard Stage-A reader on base z",
+      "reader_checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/interaction_contrastive_hard_relneg_dupfiltered_v1/best_stage_a.pt",
+      "reader_checkpoint_step": 2000
+    }
+  },
+  "top_k": 10,
+  "validation_manifest": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/interaction_contrastive_hybrid_soft_v2_from_hard_relneg_dupfiltered_cuda3/validation_manifest.npz"
+}

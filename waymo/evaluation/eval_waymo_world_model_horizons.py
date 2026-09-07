@@ -434,6 +434,14 @@ def main(args: argparse.Namespace) -> None:
                 "ego_action_clamp": bool(args.ego_action_clamp),
                 "agent_far_weight": float(args.agent_far_weight),
                 "agent_distance_source": args.agent_distance_source,
+                "flow_erd_cpd_enabled": bool(args.eval_flow_erd_cpd),
+                "flow_erd_cpd_type_order": list(wm.FLOW_ERD_CPD_TYPE_NAMES),
+                "flow_erd_cpd_type_ids": list(wm.FLOW_ERD_CPD_TYPE_IDS),
+                "flow_erd_cpd_type_scales": (
+                    None if args.eval_cpd_type_scales is None else list(args.eval_cpd_type_scales)
+                ),
+                "flow_erd_cpd_exclude_focus": bool(args.eval_cpd_exclude_focus),
+                "flow_erd_cpd_components_output": args.eval_cpd_components_output,
                 "metrics": results,
             }
             out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")

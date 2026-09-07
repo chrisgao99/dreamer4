@@ -1,0 +1,11 @@
+step,sample_mean_ade_m,sample_minade_m,num_rollouts,phase,source_log
+10000,1.96305,1.7467,4,baseline,/p/yufeng/tri30/dreamer4/waymo/logs/wm/waymo_direct_action_flow_v1_explicitagent_h15_b5_d256_lr2e4_control_60k.log
+20000,0.748684,0.647404,4,baseline,/p/yufeng/tri30/dreamer4/waymo/logs/wm/waymo_direct_action_flow_v1_explicitagent_h15_b5_d256_lr2e4_control_60k.log
+30000,0.350131,0.282102,4,baseline,/p/yufeng/tri30/dreamer4/waymo/logs/wm/waymo_direct_action_flow_v1_explicitagent_h15_b5_d256_lr2e4_control_60k.log
+40000,0.228954,0.168877,4,baseline,/p/yufeng/tri30/dreamer4/waymo/logs/wm/waymo_direct_action_flow_v1_explicitagent_h15_b5_d256_lr2e4_control_60k.log
+50000,0.209368,0.140999,4,tmax095,/p/yufeng/tri30/dreamer4/waymo/logs/wm/waymo_direct_action_flow_v1_h15_resume45k_tmax095.log
+60000,0.249851,0.195806,4,tmax095,/p/yufeng/tri30/dreamer4/waymo/logs/wm/waymo_direct_action_flow_v1_h15_resume45k_tmax095.log
+70000,0.296248,0.208615,4,robust_v2,/p/yufeng/tri30/dreamer4/waymo/logs/wm/waymo_direct_action_flow_v1_h15_phys5_yaw075_huber_bounded_tmax090_lr5e5_from62500_v2.log
+80000,0.289912,0.208355,4,robust_v2,/p/yufeng/tri30/dreamer4/waymo/logs/wm/waymo_direct_action_flow_v1_h15_phys5_yaw075_huber_bounded_tmax090_lr5e5_from62500_v2.log
+90000,0.276324,0.207435,4,robust_v2,/p/yufeng/tri30/dreamer4/waymo/logs/wm/waymo_direct_action_flow_v1_h15_phys5_yaw075_huber_bounded_tmax090_lr5e5_from62500_v2.log
+100000,0.278365,0.212445,4,robust_v2,/p/yufeng/tri30/dreamer4/waymo/logs/wm/waymo_direct_action_flow_v1_h15_phys5_yaw075_huber_bounded_tmax090_lr5e5_from62500_v2.log

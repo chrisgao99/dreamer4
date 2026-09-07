@@ -73,6 +73,31 @@ Outputs are written under
 - `visual_audit/index.html`: side-by-side trajectory audit across the RMS
   distribution.
 
+## Full-corpus four-stage retrieval audit
+
+The global retrieval audit keeps ten deterministic validation anchors but
+searches every pair row with the required 32-step causal history.  It excludes
+the anchor scenario and retains only the highest-scoring pair from each
+candidate scenario.  Its representation order is:
+
+1. flattened base-tokenizer raw z;
+2. the hard Stage-A pair reader applied to the same base raw z;
+3. the hard Stage-B encoder and reader;
+4. the hybrid Stage-B encoder and reader.
+
+Launch the one-GPU audit in a detached local tmux session with:
+
+```bash
+CUDA_DEVICE=0 bash \
+  waymo/interaction_contrastive_learning/latest/run_global_contrastive_retrieval_10.sh
+```
+
+The report is written to
+`waymo/eval_results/interaction_contrastive_global_retrieval_10/index.html`.
+The adjacent `retrieval_scores.npz` stores all four exact cosine score matrices,
+and `gallery_manifest.json` records the encoder and reader checkpoint used by
+each stage.
+
 ## Shared-time-axis soft pairs (v1)
 
 The current label-free experiment scans the 50k OOI-centered train and val

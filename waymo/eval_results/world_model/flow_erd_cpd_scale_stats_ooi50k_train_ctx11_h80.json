@@ -1,0 +1,37 @@
+{
+  "context_index": 10,
+  "data_dir": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k/train",
+  "definition": "sigma_c = sqrt(E_train[||p_t - p_0||_2^2])",
+  "future_steps": 80,
+  "num_files": 44998,
+  "squared_displacement_sum_m2": {
+    "cyclist": 215370025.79289484,
+    "pedestrian": 108952057.65868288,
+    "vehicle": 38529817731.99224
+  },
+  "type_ids": [
+    1,
+    2,
+    3
+  ],
+  "type_order": [
+    "vehicle",
+    "pedestrian",
+    "cyclist"
+  ],
+  "type_scales_m": {
+    "cyclist": 18.77286026475977,
+    "pedestrian": 4.925798640017075,
+    "vehicle": 25.423524547767016
+  },
+  "valid_agent_count": {
+    "cyclist": 9748,
+    "pedestrian": 78841,
+    "vehicle": 948749
+  },
+  "valid_agent_time_count": {
+    "cyclist": 611117,
+    "pedestrian": 4490370,
+    "vehicle": 59610867
+  }
+}

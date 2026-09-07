@@ -62,6 +62,9 @@ from waymo.training.world_model.rollout_physical_losses import (
     decoded_rollout_physical_losses,
 )
 from waymo.training.world_model.multisample_validation import (
+    FLOW_ERD_CPD_TYPE_IDS,
+    FLOW_ERD_CPD_TYPE_NAMES,
+    flow_erd_cpd_metrics,
     multisample_selection_score,
     multisample_trajectory_metrics,
 )
@@ -1565,6 +1568,18 @@ def evaluate(
     totals: Dict[str, float] = {}
     count = 0
     num_rollouts = max(1, int(getattr(args, "eval_num_rollouts", 1)))
+    flow_erd_cpd_enabled = bool(getattr(args, "eval_flow_erd_cpd", False))
+    cpd_type_scales = getattr(args, "eval_cpd_type_scales", None)
+    cpd_components_output = getattr(args, "eval_cpd_components_output", None)
+    cpd_component_batches: list[Dict[str, torch.Tensor]] = []
+    cpd_scenario_ids: list[str] = []
+    if flow_erd_cpd_enabled:
+        if num_rollouts < 2:
+            raise ValueError("--eval_flow_erd_cpd requires --eval_num_rollouts >= 2")
+        if cpd_type_scales is None:
+            raise ValueError("--eval_flow_erd_cpd requires --eval_cpd_type_scales VEH PED CYC")
+        if ddp and cpd_components_output:
+            raise ValueError("--eval_cpd_components_output currently requires non-distributed evaluation")
 
     # Every checkpoint sees the same scenes and the same N noise streams.
     # Restoring RNG states also prevents validation from changing later training.
@@ -1662,6 +1677,26 @@ def evaluate(
                         agent_weight_multiplier=base_agent_weight,
                     )
                 )
+                if flow_erd_cpd_enabled:
+                    cpd_metrics, cpd_components = flow_erd_cpd_metrics(
+                        continuous[..., 0:2],
+                        agents_btkf,
+                        future_start=score_start,
+                        type_scales=cpd_type_scales,
+                        exclude_focus=bool(getattr(args, "eval_cpd_exclude_focus", True)),
+                    )
+                    metrics.update(cpd_metrics)
+                    if cpd_components_output:
+                        cpd_component_batches.append(
+                            {name: value.detach().cpu() for name, value in cpd_components.items()}
+                        )
+                        scenario_ids = batch.get("scenario_id")
+                        if scenario_ids is None:
+                            cpd_scenario_ids.extend([""] * bsz)
+                        elif isinstance(scenario_ids, (list, tuple)):
+                            cpd_scenario_ids.extend(str(value) for value in scenario_ids)
+                        else:
+                            cpd_scenario_ids.extend([str(scenario_ids)] * bsz)
                 if bool(getattr(args, "eval_multisample_physical", True)):
                     _, physical_metrics = decoded_rollout_physical_losses(
                         continuous,
@@ -1692,6 +1727,37 @@ def evaluate(
         torch.random.set_rng_state(torch_rng_state)
         if cuda_rng_states is not None:
             torch.cuda.set_rng_state_all(cuda_rng_states)
+
+    if cpd_components_output and cpd_component_batches and is_rank0():
+        raw_output = str(cpd_components_output)
+        output_path = Path(raw_output.format(horizon=int(args.eval_horizon)))
+        configured_horizons = getattr(args, "horizons", None)
+        if "{horizon}" not in raw_output and configured_horizons and len(configured_horizons) > 1:
+            output_path = output_path.with_name(
+                f"{output_path.stem}_h{int(args.eval_horizon)}{output_path.suffix}"
+            )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            output_path,
+            type_mse=torch.cat([item["type_mse"] for item in cpd_component_batches], dim=0).numpy(),
+            type_count=torch.cat([item["type_count"] for item in cpd_component_batches], dim=0).numpy(),
+            type_present=torch.cat([item["type_present"] for item in cpd_component_batches], dim=0).numpy(),
+            scene_cpd=torch.cat([item["scene_cpd"] for item in cpd_component_batches], dim=0).numpy(),
+            scene_cpd_unscaled=torch.cat(
+                [item["scene_cpd_unscaled"] for item in cpd_component_batches], dim=0
+            ).numpy(),
+            scene_valid=torch.cat([item["scene_valid"] for item in cpd_component_batches], dim=0).numpy(),
+            pair_indices=cpd_component_batches[0]["pair_indices"].numpy(),
+            scenario_id=np.asarray(cpd_scenario_ids, dtype=str),
+            type_ids=np.asarray(FLOW_ERD_CPD_TYPE_IDS, dtype=np.int64),
+            type_names=np.asarray(FLOW_ERD_CPD_TYPE_NAMES, dtype=str),
+            type_scales=np.asarray(cpd_type_scales, dtype=np.float64),
+            future_start=np.asarray(int(args.eval_ctx), dtype=np.int64),
+            horizon=np.asarray(int(args.eval_horizon), dtype=np.int64),
+            exclude_focus=np.asarray(bool(getattr(args, "eval_cpd_exclude_focus", True))),
+            definition=np.asarray("Flow-ERD Eq.20-21; per-scene/pair/type mean squared position distance"),
+        )
+        print(f"wrote Flow-ERD CPD components: {output_path}", flush=True)
 
     names = metric_order(totals)
     packed = torch.tensor([float(count)] + [totals.get(name, 0.0) for name in names], device=device, dtype=torch.float64)
@@ -2529,6 +2595,32 @@ def build_argparser() -> argparse.ArgumentParser:
         help="Number of fixed-noise joint candidates per validation scene; use 8 for stochastic models.",
     )
     p.add_argument("--eval_multisample_seed", type=int, default=20260813)
+    p.add_argument(
+        "--eval_flow_erd_cpd",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Compute Flow-ERD Eq. 20--21 Cross-Pair Diversity during multi-rollout evaluation.",
+    )
+    p.add_argument(
+        "--eval_cpd_type_scales",
+        type=float,
+        nargs=3,
+        metavar=("VEH", "PED", "CYC"),
+        default=None,
+        help="Positive training-set CPD scales in Waymo type-id order 1=vehicle, 2=pedestrian, 3=cyclist.",
+    )
+    p.add_argument(
+        "--eval_cpd_exclude_focus",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Exclude slot 0 when it is the externally controlled focus/ego agent.",
+    )
+    p.add_argument(
+        "--eval_cpd_components_output",
+        type=str,
+        default=None,
+        help="Optional NPZ sidecar for per-scene/pair/type CPD MSE components; supports {horizon}.",
+    )
     p.add_argument(
         "--eval_multisample_physical",
         action=argparse.BooleanOptionalAction,

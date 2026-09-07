@@ -1,0 +1,1090 @@
+{
+  "anchors": [
+    {
+      "anchor_row": 5,
+      "metrics": {
+        "hard": {
+          "hardest_negative_cosine": 0.9534577131271362,
+          "nearest_rms_positive_cosine": 0.9778617024421692,
+          "positive_pairwise_ranking_accuracy": 0.6368421052631579,
+          "separation_margin": 0.02440398931503296
+        },
+        "hybrid": {
+          "hardest_negative_cosine": 0.9445189833641052,
+          "nearest_rms_positive_cosine": 0.8376348614692688,
+          "positive_pairwise_ranking_accuracy": 0.5368421052631579,
+          "separation_margin": -0.10688412189483643
+        },
+        "raw_z": {
+          "hardest_negative_cosine": 0.6792194843292236,
+          "nearest_rms_positive_cosine": 0.5742495656013489,
+          "positive_pairwise_ranking_accuracy": 0.45263157894736844,
+          "separation_margin": -0.10496991872787476
+        }
+      },
+      "negative_pool_size": 16,
+      "page": "anchor_01_idx00005.html",
+      "positive_pool_size": 20,
+      "query_step": 60,
+      "radius_m": 40.0,
+      "rms_examples": [
+        {
+          "role": "nearest RMS positive",
+          "row": 11616
+        },
+        {
+          "role": "furthest stored RMS positive",
+          "row": 12760
+        },
+        {
+          "role": "closest relation negative",
+          "row": 1972
+        },
+        {
+          "role": "furthest stored relation negative",
+          "row": 12328
+        }
+      ],
+      "sample_index": 5,
+      "scenario_id": "7d50948ea567e6a1",
+      "stage_examples": {
+        "hard": [
+          {
+            "role": "most similar GT positive",
+            "row": 2638
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 954
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 5822
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 7321
+          }
+        ],
+        "hybrid": [
+          {
+            "role": "most similar GT positive",
+            "row": 6360
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 3440
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 364
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 11447
+          }
+        ],
+        "raw_z": [
+          {
+            "role": "most similar GT positive",
+            "row": 12280
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 12760
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 11704
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 11441
+          }
+        ]
+      },
+      "stratum": "vehicle \u2192 vehicle \u00b7 contact",
+      "stratum_key": 110
+    },
+    {
+      "anchor_row": 60,
+      "metrics": {
+        "hard": {
+          "hardest_negative_cosine": 0.9445387125015259,
+          "nearest_rms_positive_cosine": 0.959836483001709,
+          "positive_pairwise_ranking_accuracy": 0.5810276679841897,
+          "separation_margin": 0.015297770500183105
+        },
+        "hybrid": {
+          "hardest_negative_cosine": 0.9490529298782349,
+          "nearest_rms_positive_cosine": 0.7576555013656616,
+          "positive_pairwise_ranking_accuracy": 0.4426877470355731,
+          "separation_margin": -0.19139742851257324
+        },
+        "raw_z": {
+          "hardest_negative_cosine": 0.7063477039337158,
+          "nearest_rms_positive_cosine": 0.4864541292190552,
+          "positive_pairwise_ranking_accuracy": 0.37549407114624506,
+          "separation_margin": -0.21989357471466064
+        }
+      },
+      "negative_pool_size": 16,
+      "page": "anchor_02_idx00060.html",
+      "positive_pool_size": 23,
+      "query_step": 39,
+      "radius_m": 20.0,
+      "rms_examples": [
+        {
+          "role": "nearest RMS positive",
+          "row": 12311
+        },
+        {
+          "role": "furthest stored RMS positive",
+          "row": 1766
+        },
+        {
+          "role": "closest relation negative",
+          "row": 9591
+        },
+        {
+          "role": "furthest stored relation negative",
+          "row": 5664
+        }
+      ],
+      "sample_index": 60,
+      "scenario_id": "74407b59f94a13a7",
+      "stage_examples": {
+        "hard": [
+          {
+            "role": "most similar GT positive",
+            "row": 4299
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 1766
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 7039
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 9591
+          }
+        ],
+        "hybrid": [
+          {
+            "role": "most similar GT positive",
+            "row": 1077
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 481
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 10418
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 11906
+          }
+        ],
+        "raw_z": [
+          {
+            "role": "most similar GT positive",
+            "row": 11193
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 1766
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 373
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 5679
+          }
+        ]
+      },
+      "stratum": "pedestrian \u2192 vehicle \u00b7 contact",
+      "stratum_key": 210
+    },
+    {
+      "anchor_row": 97,
+      "metrics": {
+        "hard": {
+          "hardest_negative_cosine": 0.9892864227294922,
+          "nearest_rms_positive_cosine": 0.8516701459884644,
+          "positive_pairwise_ranking_accuracy": 0.7526315789473684,
+          "separation_margin": -0.13761627674102783
+        },
+        "hybrid": {
+          "hardest_negative_cosine": 0.7257872819900513,
+          "nearest_rms_positive_cosine": 0.9333159923553467,
+          "positive_pairwise_ranking_accuracy": 0.7052631578947368,
+          "separation_margin": 0.2075287103652954
+        },
+        "raw_z": {
+          "hardest_negative_cosine": 0.621759295463562,
+          "nearest_rms_positive_cosine": 0.6826528310775757,
+          "positive_pairwise_ranking_accuracy": 0.6052631578947368,
+          "separation_margin": 0.06089353561401367
+        }
+      },
+      "negative_pool_size": 6,
+      "page": "anchor_03_idx00097.html",
+      "positive_pool_size": 20,
+      "query_step": 42,
+      "radius_m": 25.0,
+      "rms_examples": [
+        {
+          "role": "nearest RMS positive",
+          "row": 6261
+        },
+        {
+          "role": "furthest stored RMS positive",
+          "row": 10475
+        },
+        {
+          "role": "closest relation negative",
+          "row": 9670
+        },
+        {
+          "role": "furthest stored relation negative",
+          "row": 8961
+        }
+      ],
+      "sample_index": 97,
+      "scenario_id": "e8954ddd37ba52bb",
+      "stage_examples": {
+        "hard": [
+          {
+            "role": "most similar GT positive",
+            "row": 7214
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 5916
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 7600
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 8961
+          }
+        ],
+        "hybrid": [
+          {
+            "role": "most similar GT positive",
+            "row": 7621
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 12609
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 3445
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 9670
+          }
+        ],
+        "raw_z": [
+          {
+            "role": "most similar GT positive",
+            "row": 6261
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 7214
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 7600
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 3445
+          }
+        ]
+      },
+      "stratum": "cyclist \u2192 vehicle \u00b7 contact",
+      "stratum_key": 310
+    },
+    {
+      "anchor_row": 412,
+      "metrics": {
+        "hard": {
+          "hardest_negative_cosine": 0.9434306621551514,
+          "nearest_rms_positive_cosine": 0.8922439813613892,
+          "positive_pairwise_ranking_accuracy": 0.6571428571428571,
+          "separation_margin": -0.05118668079376221
+        },
+        "hybrid": {
+          "hardest_negative_cosine": 0.9015452861785889,
+          "nearest_rms_positive_cosine": 0.8218344449996948,
+          "positive_pairwise_ranking_accuracy": 0.7,
+          "separation_margin": -0.07971084117889404
+        },
+        "raw_z": {
+          "hardest_negative_cosine": 0.6188298463821411,
+          "nearest_rms_positive_cosine": 0.513871431350708,
+          "positive_pairwise_ranking_accuracy": 0.3761904761904762,
+          "separation_margin": -0.1049584150314331
+        }
+      },
+      "negative_pool_size": 16,
+      "page": "anchor_04_idx00412.html",
+      "positive_pool_size": 21,
+      "query_step": 46,
+      "radius_m": 30.0,
+      "rms_examples": [
+        {
+          "role": "nearest RMS positive",
+          "row": 4127
+        },
+        {
+          "role": "furthest stored RMS positive",
+          "row": 1594
+        },
+        {
+          "role": "closest relation negative",
+          "row": 9064
+        },
+        {
+          "role": "furthest stored relation negative",
+          "row": 2656
+        }
+      ],
+      "sample_index": 412,
+      "scenario_id": "176f8ba9c6ae11c9",
+      "stage_examples": {
+        "hard": [
+          {
+            "role": "most similar GT positive",
+            "row": 7279
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 9186
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 11268
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 9680
+          }
+        ],
+        "hybrid": [
+          {
+            "role": "most similar GT positive",
+            "row": 4133
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 12713
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 4920
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 7530
+          }
+        ],
+        "raw_z": [
+          {
+            "role": "most similar GT positive",
+            "row": 13182
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 12713
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 9680
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 6169
+          }
+        ]
+      },
+      "stratum": "vehicle \u2192 pedestrian \u00b7 contact",
+      "stratum_key": 120
+    },
+    {
+      "anchor_row": 418,
+      "metrics": {
+        "hard": {
+          "hardest_negative_cosine": 0.9900873899459839,
+          "nearest_rms_positive_cosine": 0.927613377571106,
+          "positive_pairwise_ranking_accuracy": 0.5538461538461539,
+          "separation_margin": -0.06247401237487793
+        },
+        "hybrid": {
+          "hardest_negative_cosine": 0.9978668093681335,
+          "nearest_rms_positive_cosine": 0.9682937860488892,
+          "positive_pairwise_ranking_accuracy": 0.5230769230769231,
+          "separation_margin": -0.029573023319244385
+        },
+        "raw_z": {
+          "hardest_negative_cosine": 0.7201803922653198,
+          "nearest_rms_positive_cosine": 0.5194854736328125,
+          "positive_pairwise_ranking_accuracy": 0.52,
+          "separation_margin": -0.20069491863250732
+        }
+      },
+      "negative_pool_size": 16,
+      "page": "anchor_05_idx00418.html",
+      "positive_pool_size": 26,
+      "query_step": 52,
+      "radius_m": 20.0,
+      "rms_examples": [
+        {
+          "role": "nearest RMS positive",
+          "row": 10736
+        },
+        {
+          "role": "furthest stored RMS positive",
+          "row": 1081
+        },
+        {
+          "role": "closest relation negative",
+          "row": 12209
+        },
+        {
+          "role": "furthest stored relation negative",
+          "row": 8123
+        }
+      ],
+      "sample_index": 418,
+      "scenario_id": "5630b5cc6580b322",
+      "stage_examples": {
+        "hard": [
+          {
+            "role": "most similar GT positive",
+            "row": 1081
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 5003
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 10820
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 5000
+          }
+        ],
+        "hybrid": [
+          {
+            "role": "most similar GT positive",
+            "row": 1081
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 5018
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 5000
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 784
+          }
+        ],
+        "raw_z": [
+          {
+            "role": "most similar GT positive",
+            "row": 6320
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 1295
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 8179
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 4794
+          }
+        ]
+      },
+      "stratum": "pedestrian \u2192 pedestrian \u00b7 contact",
+      "stratum_key": 220
+    },
+    {
+      "anchor_row": 567,
+      "metrics": {
+        "hard": {
+          "hardest_negative_cosine": 0.9757319688796997,
+          "nearest_rms_positive_cosine": 0.984311044216156,
+          "positive_pairwise_ranking_accuracy": 0.6166666666666667,
+          "separation_margin": 0.008579075336456299
+        },
+        "hybrid": {
+          "hardest_negative_cosine": 0.8500329256057739,
+          "nearest_rms_positive_cosine": 0.9167712330818176,
+          "positive_pairwise_ranking_accuracy": 0.475,
+          "separation_margin": 0.0667383074760437
+        },
+        "raw_z": {
+          "hardest_negative_cosine": 0.6197056770324707,
+          "nearest_rms_positive_cosine": 0.6037169694900513,
+          "positive_pairwise_ranking_accuracy": 0.65,
+          "separation_margin": -0.015988707542419434
+        }
+      },
+      "negative_pool_size": 4,
+      "page": "anchor_06_idx00567.html",
+      "positive_pool_size": 16,
+      "query_step": 34,
+      "radius_m": 35.0,
+      "rms_examples": [
+        {
+          "role": "nearest RMS positive",
+          "row": 8080
+        },
+        {
+          "role": "furthest stored RMS positive",
+          "row": 7438
+        },
+        {
+          "role": "closest relation negative",
+          "row": 9839
+        },
+        {
+          "role": "furthest stored relation negative",
+          "row": 11498
+        }
+      ],
+      "sample_index": 567,
+      "scenario_id": "c9a74770611fe43d",
+      "stage_examples": {
+        "hard": [
+          {
+            "role": "most similar GT positive",
+            "row": 4482
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 5719
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 9839
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 11498
+          }
+        ],
+        "hybrid": [
+          {
+            "role": "most similar GT positive",
+            "row": 5218
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 10923
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 9651
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 11498
+          }
+        ],
+        "raw_z": [
+          {
+            "role": "most similar GT positive",
+            "row": 1264
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 8896
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 9651
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 9839
+          }
+        ]
+      },
+      "stratum": "vehicle \u2192 vehicle \u00b7 fallback",
+      "stratum_key": 111
+    },
+    {
+      "anchor_row": 667,
+      "metrics": {
+        "hard": {
+          "hardest_negative_cosine": 0.9307217001914978,
+          "nearest_rms_positive_cosine": 0.9487296342849731,
+          "positive_pairwise_ranking_accuracy": 0.5789473684210527,
+          "separation_margin": 0.018007934093475342
+        },
+        "hybrid": {
+          "hardest_negative_cosine": 0.908330500125885,
+          "nearest_rms_positive_cosine": 0.7074220180511475,
+          "positive_pairwise_ranking_accuracy": 0.43157894736842106,
+          "separation_margin": -0.20090848207473755
+        },
+        "raw_z": {
+          "hardest_negative_cosine": 0.6147699356079102,
+          "nearest_rms_positive_cosine": 0.4304378628730774,
+          "positive_pairwise_ranking_accuracy": 0.48947368421052634,
+          "separation_margin": -0.18433207273483276
+        }
+      },
+      "negative_pool_size": 9,
+      "page": "anchor_07_idx00667.html",
+      "positive_pool_size": 20,
+      "query_step": 55,
+      "radius_m": 25.0,
+      "rms_examples": [
+        {
+          "role": "nearest RMS positive",
+          "row": 7382
+        },
+        {
+          "role": "furthest stored RMS positive",
+          "row": 7900
+        },
+        {
+          "role": "closest relation negative",
+          "row": 12490
+        },
+        {
+          "role": "furthest stored relation negative",
+          "row": 8082
+        }
+      ],
+      "sample_index": 667,
+      "scenario_id": "a9ee3eba2a87da15",
+      "stage_examples": {
+        "hard": [
+          {
+            "role": "most similar GT positive",
+            "row": 7900
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 9420
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 7656
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 12490
+          }
+        ],
+        "hybrid": [
+          {
+            "role": "most similar GT positive",
+            "row": 12756
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 9420
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 7676
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 918
+          }
+        ],
+        "raw_z": [
+          {
+            "role": "most similar GT positive",
+            "row": 3172
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 7382
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 7675
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 7659
+          }
+        ]
+      },
+      "stratum": "vehicle \u2192 cyclist \u00b7 contact",
+      "stratum_key": 130
+    },
+    {
+      "anchor_row": 4291,
+      "metrics": {
+        "hard": {
+          "hardest_negative_cosine": 0.9325302839279175,
+          "nearest_rms_positive_cosine": 0.935015082359314,
+          "positive_pairwise_ranking_accuracy": 0.5904761904761905,
+          "separation_margin": 0.0024847984313964844
+        },
+        "hybrid": {
+          "hardest_negative_cosine": 0.6984153985977173,
+          "nearest_rms_positive_cosine": 0.8955438137054443,
+          "positive_pairwise_ranking_accuracy": 0.6523809523809524,
+          "separation_margin": 0.19712841510772705
+        },
+        "raw_z": {
+          "hardest_negative_cosine": 0.6242841482162476,
+          "nearest_rms_positive_cosine": 0.5180769562721252,
+          "positive_pairwise_ranking_accuracy": 0.5190476190476191,
+          "separation_margin": -0.10620719194412231
+        }
+      },
+      "negative_pool_size": 16,
+      "page": "anchor_08_idx04291.html",
+      "positive_pool_size": 21,
+      "query_step": 54,
+      "radius_m": 30.0,
+      "rms_examples": [
+        {
+          "role": "nearest RMS positive",
+          "row": 5938
+        },
+        {
+          "role": "furthest stored RMS positive",
+          "row": 9353
+        },
+        {
+          "role": "closest relation negative",
+          "row": 10925
+        },
+        {
+          "role": "furthest stored relation negative",
+          "row": 574
+        }
+      ],
+      "sample_index": 4291,
+      "scenario_id": "9d7926cd1fc5cecb",
+      "stage_examples": {
+        "hard": [
+          {
+            "role": "most similar GT positive",
+            "row": 4982
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 2323
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 12528
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 12628
+          }
+        ],
+        "hybrid": [
+          {
+            "role": "most similar GT positive",
+            "row": 5938
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 9353
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 5669
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 11792
+          }
+        ],
+        "raw_z": [
+          {
+            "role": "most similar GT positive",
+            "row": 2860
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 9286
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 6941
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 5669
+          }
+        ]
+      },
+      "stratum": "vehicle \u2192 vehicle \u00b7 contact",
+      "stratum_key": 110
+    },
+    {
+      "anchor_row": 8771,
+      "metrics": {
+        "hard": {
+          "hardest_negative_cosine": 0.9184733629226685,
+          "nearest_rms_positive_cosine": 0.9176479578018188,
+          "positive_pairwise_ranking_accuracy": 0.5833333333333334,
+          "separation_margin": -0.0008254051208496094
+        },
+        "hybrid": {
+          "hardest_negative_cosine": 0.8963425159454346,
+          "nearest_rms_positive_cosine": 0.9174485206604004,
+          "positive_pairwise_ranking_accuracy": 0.6111111111111112,
+          "separation_margin": 0.02110600471496582
+        },
+        "raw_z": {
+          "hardest_negative_cosine": 0.6625820398330688,
+          "nearest_rms_positive_cosine": 0.43738842010498047,
+          "positive_pairwise_ranking_accuracy": 0.3888888888888889,
+          "separation_margin": -0.22519361972808838
+        }
+      },
+      "negative_pool_size": 16,
+      "page": "anchor_09_idx08771.html",
+      "positive_pool_size": 9,
+      "query_step": 44,
+      "radius_m": 30.0,
+      "rms_examples": [
+        {
+          "role": "nearest RMS positive",
+          "row": 8358
+        },
+        {
+          "role": "furthest stored RMS positive",
+          "row": 218
+        },
+        {
+          "role": "closest relation negative",
+          "row": 2173
+        },
+        {
+          "role": "furthest stored relation negative",
+          "row": 10463
+        }
+      ],
+      "sample_index": 8771,
+      "scenario_id": "f0af8d70dcade11d",
+      "stage_examples": {
+        "hard": [
+          {
+            "role": "most similar GT positive",
+            "row": 11367
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 4095
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 1001
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 12379
+          }
+        ],
+        "hybrid": [
+          {
+            "role": "most similar GT positive",
+            "row": 11367
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 5163
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 9282
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 680
+          }
+        ],
+        "raw_z": [
+          {
+            "role": "most similar GT positive",
+            "row": 5163
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 8358
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 6267
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 4483
+          }
+        ]
+      },
+      "stratum": "vehicle \u2192 vehicle \u00b7 contact",
+      "stratum_key": 110
+    },
+    {
+      "anchor_row": 13259,
+      "metrics": {
+        "hard": {
+          "hardest_negative_cosine": 0.9891178011894226,
+          "nearest_rms_positive_cosine": 0.9051886200904846,
+          "positive_pairwise_ranking_accuracy": 0.5661538461538461,
+          "separation_margin": -0.08392918109893799
+        },
+        "hybrid": {
+          "hardest_negative_cosine": 0.8440090417861938,
+          "nearest_rms_positive_cosine": 0.9807580709457397,
+          "positive_pairwise_ranking_accuracy": 0.5815384615384616,
+          "separation_margin": 0.1367490291595459
+        },
+        "raw_z": {
+          "hardest_negative_cosine": 0.7236282825469971,
+          "nearest_rms_positive_cosine": 0.6302509307861328,
+          "positive_pairwise_ranking_accuracy": 0.4584615384615385,
+          "separation_margin": -0.09337735176086426
+        }
+      },
+      "negative_pool_size": 16,
+      "page": "anchor_10_idx13259.html",
+      "positive_pool_size": 26,
+      "query_step": 48,
+      "radius_m": 30.0,
+      "rms_examples": [
+        {
+          "role": "nearest RMS positive",
+          "row": 12597
+        },
+        {
+          "role": "furthest stored RMS positive",
+          "row": 8060
+        },
+        {
+          "role": "closest relation negative",
+          "row": 1628
+        },
+        {
+          "role": "furthest stored relation negative",
+          "row": 6099
+        }
+      ],
+      "sample_index": 13259,
+      "scenario_id": "ac2001b99f2cc64f",
+      "stage_examples": {
+        "hard": [
+          {
+            "role": "most similar GT positive",
+            "row": 6251
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 5933
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 3459
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 12771
+          }
+        ],
+        "hybrid": [
+          {
+            "role": "most similar GT positive",
+            "row": 7898
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 9415
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 6099
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 1628
+          }
+        ],
+        "raw_z": [
+          {
+            "role": "most similar GT positive",
+            "row": 8060
+          },
+          {
+            "role": "least similar GT positive",
+            "row": 5181
+          },
+          {
+            "role": "hardest GT negative",
+            "row": 5459
+          },
+          {
+            "role": "easiest GT negative",
+            "row": 4985
+          }
+        ]
+      },
+      "stratum": "vehicle \u2192 vehicle \u00b7 contact",
+      "stratum_key": 110
+    }
+  ],
+  "contrastive_cache": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_contrastive_v1/val_contrastive_training.npz",
+  "definition": "Fixed RMS/relation GT pools; stages rank within those pools. Raw z is flattened and L2-normalized; learned embeddings are pair-specific.",
+  "device": "cpu",
+  "history_steps": 32,
+  "rms_features": "/p/yufeng/tri30/dreamer4/waymo/cache/interaction_full_pairs_50k_v2_no_topk_rms_v0/val_rms_features.npz",
+  "stages": {
+    "hard": {
+      "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/interaction_contrastive_hard_relneg_dupfiltered_v1/best.pt",
+      "checkpoint_step": 18500,
+      "definition": "L2-normalized pair-specific contrastive-head embedding",
+      "embedding_dimension": 128
+    },
+    "hybrid": {
+      "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/interaction_contrastive_hybrid_soft_v2_from_hard_relneg_dupfiltered_cuda3/best.pt",
+      "checkpoint_step": 40000,
+      "definition": "L2-normalized pair-specific contrastive-head embedding",
+      "embedding_dimension": 128
+    },
+    "raw_z": {
+      "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/ooi50k_lat64_b64_d256_ep200_anygpu_staticmap_v2_chunk32_raw_kinematic_nofde_focus_randstart_noamp/best.pt",
+      "checkpoint_step": 83500,
+      "definition": "flattened, L2-normalized query-time tokenizer z",
+      "embedding_dimension": 4096
+    }
+  },
+  "validation_manifest": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/interaction_contrastive_hybrid_soft_v2_from_hard_relneg_dupfiltered_cuda3/validation_manifest.npz"
+}
