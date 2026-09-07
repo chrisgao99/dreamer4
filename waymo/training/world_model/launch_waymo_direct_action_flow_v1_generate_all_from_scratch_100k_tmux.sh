@@ -48,13 +48,17 @@ ACTION_STATS="${ACTION_STATS:-$DATA_ROOT/direct_action_stats_l11_v2_phys5_yaw075
 CKPT_DIR="$REPO_ROOT/waymo/checkpoints/$RUN_NAME"
 TRAIN_LOG="$REPO_ROOT/waymo/logs/wm/$RUN_NAME.log"
 
-for required_file in "$PYTHON" "$TRAIN_SCRIPT" "$ACTION_STATS"; do
+for required_file in "$PYTHON" "$TRAIN_SCRIPT"; do
   [[ -f "$required_file" ]] || { echo "Missing required file: $required_file" >&2; exit 1; }
 done
 [[ -x "$PYTHON" ]] || { echo "Python is not executable: $PYTHON" >&2; exit 1; }
 for required_dir in "$DATA_ROOT/train" "$DATA_ROOT/val"; do
   [[ -d "$required_dir" ]] || { echo "Missing required directory: $required_dir" >&2; exit 1; }
 done
+if [[ ! -f "$ACTION_STATS" ]]; then
+  echo "Action statistics not found; they will be computed from 8192 training files:"
+  echo "$ACTION_STATS"
+fi
 
 # This experiment is intentionally from scratch. Refuse both cross-run resume
 # and accidental reuse of a partial directory from an earlier launch.
