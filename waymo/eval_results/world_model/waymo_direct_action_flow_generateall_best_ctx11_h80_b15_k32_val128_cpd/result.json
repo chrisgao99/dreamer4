@@ -1,0 +1,103 @@
+{
+  "ade_by_agent_scope": {
+    "all": {
+      "mean_ade_m": 3.321142468593358,
+      "minade_m": 2.0443425224766782,
+      "scene_count": 512,
+      "valid_agent_time_points_per_rollout": 701510
+    },
+    "focus": {
+      "mean_ade_m": 6.38366092975275,
+      "minade_m": 2.204779682838307,
+      "scene_count": 512,
+      "valid_agent_time_points_per_rollout": 40493
+    },
+    "nonfocus": {
+      "mean_ade_m": 3.0686981206312414,
+      "minade_m": 1.8311197674168116,
+      "scene_count": 512,
+      "valid_agent_time_points_per_rollout": 661017
+    }
+  },
+  "ade_definition": "Each candidate ADE averages xy error over valid all_agent agent-time points within one scene. mean_ade_m averages scenes and rollouts equally; minade_m takes the best joint rollout per scene before averaging scenes.",
+  "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_direct_action_flow_v1_h15_b5_generateall_scratch100k_phys5_yaw075_huber_bounded_tmax090_lr5e5/best.pt",
+  "checkpoint_step": 75000,
+  "condition_focus_actions": false,
+  "cpd_exclude_focus": false,
+  "details_npz": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/waymo_direct_action_flow_generateall_best_ctx11_h80_b15_k32_val128_cpd/details.npz",
+  "elapsed_seconds": 1762.9092105149757,
+  "eval_batch_size": 4,
+  "eval_batches": 128,
+  "first_rollout_ade_m": 3.3743457794189453,
+  "flow_erd_cpd": 0.34620481729507446,
+  "flow_erd_cpd_type_ids": [
+    1,
+    2,
+    3
+  ],
+  "flow_erd_cpd_type_order": [
+    "vehicle",
+    "pedestrian",
+    "cyclist"
+  ],
+  "flow_erd_cpd_type_scales_m": [
+    25.423524547767016,
+    4.925798640017075,
+    18.77286026475977
+  ],
+  "flow_erd_cpd_unscaled": 6.045239448547363,
+  "flow_erd_cpd_valid_scene_fraction": 1.0,
+  "history_context_steps": 11,
+  "mean_ade_by_rollout_m": [
+    3.37434458732605,
+    3.2906689643859863,
+    3.3399977684020996,
+    3.2558493614196777,
+    3.307241678237915,
+    3.364983558654785,
+    3.2944490909576416,
+    3.3301680088043213,
+    3.372593641281128,
+    3.354534864425659,
+    3.318814516067505,
+    3.2729439735412598,
+    3.368499279022217,
+    3.2773802280426025,
+    3.2569165229797363,
+    3.344059705734253,
+    3.320490837097168,
+    3.311993360519409,
+    3.3302154541015625,
+    3.292693853378296,
+    3.321946859359741,
+    3.3238942623138428,
+    3.3844780921936035,
+    3.32702374458313,
+    3.2956089973449707,
+    3.262740135192871,
+    3.3937692642211914,
+    3.35172700881958,
+    3.2697112560272217,
+    3.2946908473968506,
+    3.322805404663086,
+    3.3493220806121826
+  ],
+  "mean_ade_m": 3.3211424350738525,
+  "metric_scope": "generated_all_agents; focus_future_is_not_conditioned; focus_is_included",
+  "minade_m": 2.044342517852783,
+  "model_plan_horizon": 15,
+  "model_training_commitment_steps": 5,
+  "num_rollouts": 32,
+  "per_agent_minade_m": 0.7346928715705872,
+  "rollout_ade_csv": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/waymo_direct_action_flow_generateall_best_ctx11_h80_b15_k32_val128_cpd/rollout_ade.csv",
+  "rollout_commitment_steps": 15,
+  "rollout_seed_formula": "seed + batch_index * num_rollouts + rollout_index",
+  "rollout_steps": 80,
+  "scene_count": 512,
+  "scene_metrics_csv": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/waymo_direct_action_flow_generateall_best_ctx11_h80_b15_k32_val128_cpd/scene_metrics.csv",
+  "seed": 12346,
+  "solver_steps": 8,
+  "val_data_dir": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k/val",
+  "valid_all_agent_time_points_per_rollout": 701510,
+  "weights": "ema"
+}
