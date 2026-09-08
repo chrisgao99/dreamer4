@@ -14,6 +14,10 @@ The four representation stages are deliberately ordered by training depth:
 
 Raw-z and reader+z share one base-encoder pass.  Only the Stage-A reader
 weights are loaded for reader+z; the encoder comes from ``base_checkpoint``.
+
+Each page also shows exact-RMS nearest neighbours as a trajectory reference.
+Use ``--refresh_rms_reference`` to add this reference to an existing report
+on CPU, using its saved candidate rows and model retrievals.
 """
 
 from __future__ import annotations
@@ -407,6 +411,81 @@ def _safe_median(values: list[float]) -> float | None:
     return float(np.median(values)) if values else None
 
 
+def exact_rms_reference(
+    *,
+    anchor: int,
+    candidate_rows: np.ndarray,
+    cache: dict[str, np.ndarray],
+    features: dict[str, np.ndarray],
+    top_k: int = 5,
+    min_pair_overlap: float = 0.70,
+    duplicate_rms_threshold: float = 0.02,
+    relation_outcome_steps: int = 20,
+    relation_margin_m: float = 2.0,
+) -> dict[str, Any]:
+    """Exhaustively rank comparable pairs; retain each scene's minimum RMS.
+
+    Future-inclusive trajectory RMS is a reference for auditing the labels.
+    No model cosine or stored top-32 neighbour pool affects this ranking.
+    """
+    if top_k <= 0 or not 0 < min_pair_overlap <= 1 or duplicate_rms_threshold < 0:
+        raise ValueError("Invalid RMS-reference top-K, overlap, or duplicate threshold")
+    # Features are stored as float16. Restore float32 before differences and
+    # squaring, as in neighbour mining; this also avoids half-precision overflow.
+    features = {
+        **features,
+        "normalized_sequence": np.asarray(features["normalized_sequence"], dtype=np.float32),
+    }
+    rows = np.asarray(candidate_rows, dtype=np.int64)
+    same_stratum = cache["stratum_key"][rows] == cache["stratum_key"][anchor]
+    different_scene = cache["scenario_id"][rows] != cache["scenario_id"][anchor]
+    rows = rows[same_stratum & different_scene]
+    distances, _ = exact_masked_rms(
+        features["normalized_sequence"], features["aligned_mask"], anchor, rows,
+        min_pair_overlap=min_pair_overlap,
+    )
+    usable = np.isfinite(distances) & (distances > duplicate_rms_threshold)
+    eligible_rows, eligible_distances = rows[usable], distances[usable]
+    # Break equal-distance ties by cache row for reproducible reference cards.
+    order = np.lexsort((eligible_rows, eligible_distances))
+    results = []
+    seen: set[str] = set()
+    for offset in order:
+        row = int(eligible_rows[offset])
+        scenario = str(cache["scenario_id"][row])
+        if scenario in seen:
+            continue
+        seen.add(scenario)
+        results.append({"rank": len(results) + 1, "row": row, "scenario_id": scenario})
+        if len(results) == top_k:
+            break
+    annotations = annotate_rows(
+        anchor=anchor,
+        rows=np.asarray([result["row"] for result in results], dtype=np.int64),
+        cache=cache, features=features, min_pair_overlap=min_pair_overlap,
+        relation_outcome_steps=relation_outcome_steps, relation_margin_m=relation_margin_m,
+    )
+    for result in results:
+        result.update(annotations[result["row"]])
+    return {
+        "definition": "Exact masked RMS over all eligible pairs, ascending, one best pair per scenario",
+        "top_k": top_k,
+        "source_candidate_pair_rows": int(len(candidate_rows)),
+        "same_stratum": True,
+        "same_scenario_excluded": True,
+        "min_pair_overlap": min_pair_overlap,
+        "duplicate_rms_threshold": duplicate_rms_threshold,
+        "comparable_pair_rows_before_overlap_filter": int(len(rows)),
+        "eligible_pair_rows": int(len(eligible_rows)),
+        "eligible_unique_scenarios": int(len(np.unique(cache["scenario_id"][eligible_rows]))),
+        "includes_future": True,
+        "time_offsets_steps": np.asarray(features["time_offsets"]).tolist(),
+        "relation_outcome_steps": relation_outcome_steps,
+        "relation_margin_m": relation_margin_m,
+        "results": results,
+    }
+
+
 def retrieval_metrics(
     *,
     anchor: int,
@@ -475,6 +554,8 @@ a{color:#1659b7}.note,.metrics,.stage{background:white;border:1px solid #d7dee8;
 .candidate{min-width:220px;border:2px solid #d9e0e9;border-radius:10px;padding:7px;background:#f8fafc}
 .candidate svg{width:100%;height:auto;display:block}.candidate p{font-size:11px;line-height:1.4;margin:7px 3px 2px}
 .candidate.positive{border-color:#65a879}.candidate.negative{border-color:#d87979}.candidate.anchor{border-color:#7085bd}
+.stage.rms-reference{border:2px solid #168b9b}.candidate.reference{border-color:#168b9b}
+.reference-grid{grid-template-columns:repeat(6,minmax(220px,1fr))}
 .badge{font-weight:750;border-radius:10px;padding:2px 6px;margin-right:5px;background:#e2e8f0}
 table{border-collapse:collapse}th,td{border:1px solid #d6dde7;padding:6px 9px;text-align:right}th:first-child{text-align:left}
 .small,.legend{font-size:12px;color:#526174}
@@ -501,6 +582,7 @@ def _result_card(
     cache: dict[str, np.ndarray],
     features: dict[str, np.ndarray],
     radius: float,
+    reference: bool = False,
 ) -> str:
     row = int(result["row"])
     positions, mask = physical_trajectory(features, row)
@@ -508,19 +590,21 @@ def _result_card(
         positions,
         mask,
         radius=radius,
-        title=f"rank {int(result['rank'])} · row {row}",
+        title=f"{'RMS ' if reference else ''}rank {int(result['rank'])} · row {row}",
         subtitle=f"{str(result['scenario_id'])} · {stratum_label(int(cache['stratum_key'][row]))}",
     )
-    label = str(result["stored_label"])
-    card_class = label if label in ("positive", "negative") else "unlabelled"
+    label = "RMS reference" if reference else str(result["stored_label"])
+    card_class = "reference" if reference else label if label in ("positive", "negative") else "unlabelled"
     rms = "n/a" if result["exact_rms"] is None else f"{float(result['exact_rms']):.3f}"
     relation = result["relation_outcome"] or "future unavailable"
     same_stratum = "same stratum" if result["same_stratum"] else "cross stratum"
+    cosine = "" if reference else f'cosine {float(result["cosine"]):.4f} · '
+    pair_ids = f'agents {int(cache["first_agent_id"][row])}/{int(cache["second_agent_id"][row])}'
     return (
         f'<article class="candidate {card_class}">{svg}<p>'
         f'<span class="badge">{html.escape(label)}</span>'
-        f'cosine {float(result["cosine"]):.4f} · RMS {rms} · overlap {float(result["common_valid_fraction"]):.1%}<br>'
-        f'{html.escape(same_stratum)} · {html.escape(str(relation))}</p></article>'
+        f'{cosine}RMS {rms} · overlap {float(result["common_valid_fraction"]):.1%}<br>'
+        f'{pair_ids} · {html.escape(same_stratum)} · {html.escape(str(relation))}</p></article>'
     )
 
 
@@ -534,11 +618,36 @@ def write_anchor_page(
     features: dict[str, np.ndarray],
     corpus_rows: int,
     corpus_scenarios: int,
+    rms_reference: dict[str, Any] | None = None,
 ) -> None:
     displayed_rows = [anchor]
     for results in stage_results.values():
         displayed_rows.extend(int(result["row"]) for result in results)
+    if rms_reference is not None:
+        displayed_rows.extend(int(result["row"]) for result in rms_reference["results"])
     radius = _page_radius(displayed_rows, features)
+    reference_section = ""
+    if rms_reference is not None:
+        reference_cards = [_anchor_card(anchor=anchor, cache=cache, features=features, radius=radius)]
+        reference_cards.extend(
+            _result_card(result=result, cache=cache, features=features, radius=radius, reference=True)
+            for result in rms_reference["results"]
+        )
+        empty_note = "<p>No candidates satisfy these reference criteria.</p>" if not rms_reference["results"] else ""
+        reference_section = (
+            '<section class="stage rms-reference" id="rms-reference">'
+            f'<h2>Exact RMS 最佳匹配 / Top-{int(rms_reference["top_k"])} trajectory reference</h2>'
+            '<p>先看这一组是否符合你对“相似交互”的判断，再对照下方四个模型阶段。'
+            '这里按完整轨迹 RMS 从低到高排序；使用事件前 1.9 秒和后 4.0 秒的位置、速度与朝向，'
+            '并进行归一化和有效轨迹掩码处理。它是使用未来轨迹的参照。</p>'
+            '<p class="small">Exhaustive search within the saved full corpus: same ordered agent types and contact/fallback class; '
+            f'anchor scenario excluded; joint overlap ≥ {float(rms_reference["min_pair_overlap"]):.0%}; '
+            f'near-duplicates with RMS ≤ {float(rms_reference["duplicate_rms_threshold"]):g} excluded. '
+            f'{int(rms_reference["eligible_pair_rows"]):,} eligible pairs across '
+            f'{int(rms_reference["eligible_unique_scenarios"]):,} scenarios; lowest-RMS pair per scenario. '
+            'Model sections below retain their unrestricted cosine rankings. All plots on this page use the same scale.</p>'
+            f'{empty_note}<div class="grid reference-grid">{"".join(reference_cards)}</div></section>'
+        )
     metric_rows = []
     sections = []
     for stage in STAGE_ORDER:
@@ -570,6 +679,7 @@ def write_anchor_page(
         f'<div class="note"><strong>Global retrieval.</strong> Every representation searches {corpus_rows:,} causally encodable pair rows '
         f'across {corpus_scenarios:,} physical scenarios. The anchor scenario is excluded and only the best pair from each candidate scenario is kept. '
         'Green/red borders mean membership in the old stored RMS-positive/relation-negative pools; grey results were not labelled by that small cache.</div>'
+        f'{reference_section}'
         '<div class="metrics"><table><thead><tr><th>representation</th><th>RMS-positive scene recall@K</th>'
         '<th>same stratum@K</th><th>median RMS@K</th><th>relation differs@K</th></tr></thead>'
         f'<tbody>{"".join(metric_rows)}</tbody></table></div>{"".join(sections)}</body></html>'
@@ -607,10 +717,14 @@ def write_index(
         f'<style>{_page_css()} .anchors{{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}}'
         '.anchors article{background:white;border:1px solid #d7dee8;border-radius:10px;padding:10px}.anchors svg{width:100%}</style>'
         '</head><body><h1>Global interaction retrieval: raw z → reader + z → hard → hybrid</h1>'
-        f'<div class="note"><p><strong>Ten fixed anchors, full valid corpus.</strong> Each stage searches {corpus_rows:,} pair rows '
+        f'<div class="note"><p><strong>{len(reports)} fixed anchors, full valid corpus.</strong> Each stage searches {corpus_rows:,} pair rows '
         f'covering {corpus_scenarios:,} physical scenarios, then returns unique scenarios.</p>'
         '<p>Reader + z uses the hard Stage-A reader on untouched base-tokenizer z. Hard and hybrid use their respective Stage-B encoders and readers.</p></div>'
-        f'<div class="anchors">{"".join(cards)}</div></body></html>'
+        + ('<div class="note"><strong>新增：Exact RMS 最佳匹配参照。</strong> '
+           '打开任一 anchor，先看页首按完整轨迹 RMS 精确排序的最佳样本，再与四个模型阶段比较。'
+           '参照限定同类型交互并排除近重复，使用未来轨迹。</div>'
+           if any("rms_reference" in report for report in reports) else "")
+        + f'<div class="anchors">{"".join(cards)}</div></body></html>'
     )
 
 
@@ -646,7 +760,71 @@ def _write_summary_csv(path: Path, reports: list[dict[str, Any]]) -> None:
                 )
 
 
+def validate_reference_sources(
+    cache: dict[str, np.ndarray], features: dict[str, np.ndarray]
+) -> None:
+    for key in ("sample_index", "scenario_id", "source_path", "first_agent_id", "second_agent_id", "stratum_key"):
+        if not np.array_equal(cache[key], features[key]):
+            raise ValueError(f"Contrastive cache and RMS features disagree on {key}")
+    expected_offsets = np.arange(-19, 41)
+    if not np.array_equal(features["time_offsets"], expected_offsets):
+        raise ValueError("This trajectory gallery requires aligned offsets -19 through +40")
+
+
+def refresh_rms_reference(args: argparse.Namespace) -> None:
+    """Render saved model results with a new RMS reference, without inference."""
+    manifest_path = args.output_dir / "gallery_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    cache = _load_npz(Path(manifest["contrastive_cache"]))
+    features = _load_npz(Path(manifest["rms_features"]))
+    validate_reference_sources(cache, features)
+    with np.load(args.output_dir / "retrieval_scores.npz", allow_pickle=False) as saved:
+        candidate_rows = np.asarray(saved["candidate_rows"], dtype=np.int64)
+        anchor_rows = np.asarray(saved["anchor_rows"], dtype=np.int64)
+    reports = manifest["anchors"]
+    if not np.array_equal(anchor_rows, [report["anchor_row"] for report in reports]):
+        raise ValueError("Saved score anchors disagree with gallery manifest")
+    if (candidate_rows.ndim != 1 or not len(candidate_rows)
+            or np.any(candidate_rows < 0) or np.any(candidate_rows >= len(cache["scenario_id"]))
+            or len(np.unique(candidate_rows)) != len(candidate_rows)):
+        raise ValueError("Invalid saved candidate rows")
+    if len(candidate_rows) != manifest["candidate_pair_rows"]:
+        raise ValueError("Saved candidate count disagrees with gallery manifest")
+    scenario_count = len(np.unique(cache["scenario_id"][candidate_rows]))
+    if scenario_count != manifest["candidate_unique_scenarios"]:
+        raise ValueError("Saved candidate scenario count disagrees with current cache")
+    for report in reports:
+        anchor = int(report["anchor_row"])
+        if not 0 <= anchor < len(cache["scenario_id"]) or str(cache["scenario_id"][anchor]) != report["scenario_id"]:
+            raise ValueError("Saved anchor identity disagrees with current cache")
+        if Path(report["page"]).name != report["page"]:
+            raise ValueError("Anchor page must be a filename within the report directory")
+        report["rms_reference"] = exact_rms_reference(
+            anchor=anchor, candidate_rows=candidate_rows, cache=cache, features=features,
+            top_k=args.rms_top_k, min_pair_overlap=args.min_pair_overlap,
+            duplicate_rms_threshold=args.rms_duplicate_threshold,
+            relation_outcome_steps=args.relation_outcome_steps, relation_margin_m=args.relation_margin_m,
+        )
+    for report in reports:
+        write_anchor_page(
+            path=args.output_dir / report["page"], anchor=int(report["anchor_row"]),
+            stage_results=report["retrievals"], stage_metrics=report["metrics"],
+            cache=cache, features=features, corpus_rows=len(candidate_rows),
+            corpus_scenarios=scenario_count, rms_reference=report["rms_reference"],
+        )
+        print(f'updated {report["page"]}: {len(report["rms_reference"]["results"])} RMS references', flush=True)
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    write_index(
+        path=args.output_dir / "index.html", reports=reports, cache=cache, features=features,
+        corpus_rows=len(candidate_rows), corpus_scenarios=scenario_count,
+    )
+    print(f"saved {args.output_dir / 'index.html'} (CPU reference refresh; model scores reused)", flush=True)
+
+
 def build(args: argparse.Namespace) -> None:
+    if args.refresh_rms_reference:
+        refresh_rms_reference(args)
+        return
     device = torch.device(
         args.device
         if args.device != "auto"
@@ -656,8 +834,7 @@ def build(args: argparse.Namespace) -> None:
         raise ValueError("--batch_size must be positive")
     cache = _load_npz(args.cache)
     features = _load_npz(args.rms_features)
-    if len(cache["scenario_id"]) != len(features["scenario_id"]):
-        raise ValueError("Contrastive cache and RMS feature rows do not align")
+    validate_reference_sources(cache, features)
 
     if args.anchor_indices:
         anchor_rows = parse_anchor_indices(args.anchor_indices)
@@ -736,6 +913,12 @@ def build(args: argparse.Namespace) -> None:
     scenario_ids = np.asarray(cache["scenario_id"]).astype(str)
     for anchor_position, anchor_value in enumerate(anchor_rows.tolist(), start=1):
         anchor = int(anchor_value)
+        rms_reference = exact_rms_reference(
+            anchor=anchor, candidate_rows=candidate_rows, cache=cache, features=features,
+            top_k=args.rms_top_k, min_pair_overlap=args.min_pair_overlap,
+            duplicate_rms_threshold=args.rms_duplicate_threshold,
+            relation_outcome_steps=args.relation_outcome_steps, relation_margin_m=args.relation_margin_m,
+        )
         stage_results: dict[str, list[dict[str, Any]]] = {}
         selected_rows: set[int] = set()
         for stage in STAGE_ORDER:
@@ -781,6 +964,7 @@ def build(args: argparse.Namespace) -> None:
             features=features,
             corpus_rows=len(candidate_rows),
             corpus_scenarios=corpus_scenarios,
+            rms_reference=rms_reference,
         )
         reports.append(
             {
@@ -793,6 +977,7 @@ def build(args: argparse.Namespace) -> None:
                 "page": page.name,
                 "metrics": stage_metrics,
                 "retrievals": stage_results,
+                "rms_reference": rms_reference,
             }
         )
         print(f"rendered {page.name}", flush=True)
@@ -888,6 +1073,12 @@ def build_argparser() -> argparse.ArgumentParser:
         help="Optional comma-separated cache rows; overrides manifest selection.",
     )
     parser.add_argument("--top_k", type=int, default=10)
+    parser.add_argument("--rms_top_k", type=int, default=5, help="Number of exact-RMS reference scenes per anchor.")
+    parser.add_argument("--rms_duplicate_threshold", type=float, default=0.02)
+    parser.add_argument(
+        "--refresh_rms_reference", action="store_true",
+        help="CPU-only: refresh pages in output_dir from saved manifest/candidate rows; no model loading.",
+    )
     parser.add_argument("--history_steps", type=int, default=32)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--device", default="auto")

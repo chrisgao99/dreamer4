@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Evaluate K full DirectActionFlow rollouts and retain ADE/CPD details.
 
-The current DirectActionFlow checkpoint treats slot zero as a controlled focus
-agent.  Its logged future actions are supplied to the model, and all metrics in
-this evaluator consequently cover the generated non-focus agents only.
+Follow the checkpoint's focus-conditioning mode. Conditioned checkpoints use
+logged focus actions and score nonfocus agents; generate-all checkpoints receive
+no future focus actions and score all agents, including focus.
 """
 
 from __future__ import annotations
@@ -60,6 +60,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--details_npz", required=True)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", choices=("ema", "model"), default="ema")
+    parser.add_argument(
+        "--focus_mode", choices=("checkpoint", "conditioned", "generate_all"),
+        default="checkpoint",
+        help="Assert the checkpoint focus mode; checkpoint infers it automatically.",
+    )
     parser.add_argument("--eval_batch_size", type=int, default=4)
     parser.add_argument("--eval_max_batches", type=int, default=128)
     parser.add_argument("--num_workers", type=int, default=4)
@@ -142,6 +147,47 @@ def decoded_scenario_id(path: str) -> str:
     return name.split("__focus_", maxsplit=1)[0]
 
 
+def resolve_focus_conditioning(train_args: argparse.Namespace, mode: str) -> bool:
+    # Older conditioned checkpoints predate this training argument.
+    conditioned = bool(getattr(train_args, "condition_focus_actions", True))
+    if mode != "checkpoint" and conditioned != (mode == "conditioned"):
+        raise ValueError(f"Requested focus_mode={mode} conflicts with checkpoint "
+                         f"condition_focus_actions={conditioned}")
+    return conditioned
+
+
+def summarize_agent_scopes(
+    candidate_agent_ade: np.ndarray, valid_steps: np.ndarray,
+) -> dict[str, dict[str, Any]]:
+    """Aggregate each scope with valid-point weights, then equal scene weights.
+
+    Best joint rollout is selected independently for each scope. Scenes without
+    any valid points in a scope are omitted, not assigned zero error.
+    """
+    result = {}
+    for scope in ("all", "nonfocus", "focus"):
+        weights = valid_steps.copy()
+        if scope == "nonfocus":
+            weights[:, 0] = 0
+        elif scope == "focus":
+            weights[:, 1:] = 0
+        denominator = weights.sum(axis=1)
+        scene_valid = denominator > 0
+        if not scene_valid.any():
+            result[scope] = {"scene_count": 0, "mean_ade_m": None, "minade_m": None}
+            continue
+        candidate = (
+            np.nan_to_num(candidate_agent_ade, nan=0.0) * weights[:, None]
+        ).sum(axis=2)[scene_valid] / denominator[scene_valid, None]
+        result[scope] = {
+            "scene_count": int(scene_valid.sum()),
+            "valid_agent_time_points_per_rollout": int(weights.sum()),
+            "mean_ade_m": float(candidate.mean()),
+            "minade_m": float(candidate.min(axis=1).mean()),
+        }
+    return result
+
+
 @torch.inference_mode()
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     for name in (
@@ -197,6 +243,16 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         device,
         args.weights,
     )
+    condition_focus_actions = resolve_focus_conditioning(train_args, args.focus_mode)
+    scope = "nonfocus" if condition_focus_actions else "all_agent"
+    scene_ade_column = f"{scope}_scene_ade_m"
+    valid_points_column = (
+        "valid_nonfocus_agent_time_points" if condition_focus_actions
+        else "valid_all_agent_time_points"
+    )
+    valid_agents_column = "valid_nonfocus_agents" if condition_focus_actions else "valid_all_agents"
+    print(f"checkpoint_step={checkpoint_step} condition_focus_actions={condition_focus_actions} "
+          f"metric_scope={scope}", flush=True)
     if int(train_args.history_length) != 11:
         raise ValueError(
             "This evaluation requires an 11-frame context, but the checkpoint "
@@ -259,8 +315,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 "npz_path",
                 "rollout_index",
                 "rollout_seed",
-                "nonfocus_scene_ade_m",
-                "valid_nonfocus_agent_time_points",
+                scene_ade_column,
+                valid_points_column,
             ),
         )
         scene_writer = csv.DictWriter(
@@ -276,8 +332,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 "per_agent_minade_m",
                 "flow_erd_cpd",
                 "flow_erd_cpd_unscaled",
-                "valid_nonfocus_agents",
-                "valid_nonfocus_agent_time_points",
+                valid_agents_column,
+                valid_points_column,
             ),
         )
         rollout_writer.writeheader()
@@ -340,8 +396,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                         current_light_mask_sequence=batch["light_mask"][
                             :, anchor : anchor + int(args.rollout_steps)
                         ],
-                        focus_action_sequence=targets.actions[:, 0],
-                        focus_action_valid=targets.valid[:, 0],
+                        focus_action_sequence=(targets.actions[:, 0] if condition_focus_actions else None),
+                        focus_action_valid=(targets.valid[:, 0] if condition_focus_actions else None),
                         rollout_steps=int(args.rollout_steps),
                         commitment=commitment_steps,
                         solver_steps=int(args.solver_steps),
@@ -352,7 +408,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             poses = torch.stack(candidate_poses, dim=1)
 
             valid = targets.valid.clone()
-            valid[:, 0] = False
+            if condition_focus_actions:
+                valid[:, 0] = False
             distance = torch.linalg.vector_norm(
                 poses[..., 0:2] - targets.future_pose[:, None, ..., 0:2],
                 dim=-1,
@@ -401,7 +458,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 cpd_metadata,
                 future_start=1,
                 type_scales=args.cpd_type_scales,
-                exclude_focus=True,
+                exclude_focus=condition_focus_actions,
             )
             scene_cpd = cpd_components["scene_cpd"]
             scene_cpd_unscaled = cpd_components["scene_cpd_unscaled"]
@@ -425,10 +482,10 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                             **common,
                             "rollout_index": rollout_index,
                             "rollout_seed": rollout_seed,
-                            "nonfocus_scene_ade_m": float(
+                            scene_ade_column: float(
                                 candidate_scene_ade[scene_in_batch, rollout_index]
                             ),
-                            "valid_nonfocus_agent_time_points": int(
+                            valid_points_column: int(
                                 per_scene_valid_points[scene_in_batch]
                             ),
                         }
@@ -443,8 +500,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                         "flow_erd_cpd_unscaled": float(
                             scene_cpd_unscaled[scene_in_batch]
                         ),
-                        "valid_nonfocus_agents": int(valid_agents[scene_in_batch].sum()),
-                        "valid_nonfocus_agent_time_points": int(
+                        valid_agents_column: int(valid_agents[scene_in_batch].sum()),
+                        valid_points_column: int(
                             per_scene_valid_points[scene_in_batch]
                         ),
                     }
@@ -499,9 +556,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             f"Requested {args.eval_max_batches} batches, but only {batches} were available"
         )
     if valid_point_count == 0:
-        raise RuntimeError("No valid non-focus trajectory points were evaluated")
+        raise RuntimeError("No valid generated-agent trajectory points were evaluated")
     if cpd_valid_scenes == 0:
-        raise RuntimeError("No scenes contained a valid non-focus CPD roster")
+        raise RuntimeError("No scenes contained a valid generated-agent CPD roster")
     assert pair_indices is not None
 
     candidate_scene_ade_all = np.concatenate(candidate_scene_ade_parts, axis=0)
@@ -520,9 +577,15 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     mean_ade_by_rollout = candidate_scene_ade_all.mean(axis=0)
     elapsed = time.monotonic() - started
     result = {
-        "metric_scope": "generated_nonfocus_agents; focus_future_is_conditioned_and_excluded",
+        "metric_scope": (
+            "generated_nonfocus_agents; focus_future_is_conditioned_and_excluded"
+            if condition_focus_actions else
+            "generated_all_agents; focus_future_is_not_conditioned; focus_is_included"
+        ),
+        "condition_focus_actions": condition_focus_actions,
+        "cpd_exclude_focus": condition_focus_actions,
         "ade_definition": (
-            "Each candidate ADE averages xy error over valid nonfocus agent-time points "
+            f"Each candidate ADE averages xy error over valid {scope} agent-time points "
             "within one scene. mean_ade_m averages scenes and rollouts equally; minade_m "
             "takes the best joint rollout per scene before averaging scenes."
         ),
@@ -555,12 +618,16 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "eval_batches": batches,
         "eval_batch_size": int(args.eval_batch_size),
         "scene_count": scene_count,
-        "valid_nonfocus_agent_time_points_per_rollout": valid_point_count,
+        f"{valid_points_column}_per_rollout": valid_point_count,
         "rollout_ade_csv": str(rollout_ade_csv),
         "scene_metrics_csv": str(scene_metrics_csv),
         "details_npz": str(details_npz),
         "elapsed_seconds": elapsed,
     }
+    if not condition_focus_actions:
+        result["ade_by_agent_scope"] = summarize_agent_scopes(
+            candidate_agent_ade_all, agent_valid_steps_all,
+        )
 
     atomic_write_npz(
         details_npz,
@@ -581,6 +648,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         cpd_type_ids=np.asarray(FLOW_ERD_CPD_TYPE_IDS, dtype=np.int64),
         cpd_type_names=np.asarray(FLOW_ERD_CPD_TYPE_NAMES, dtype=str),
         cpd_type_scales_m=np.asarray(args.cpd_type_scales, dtype=np.float64),
+        condition_focus_actions=np.asarray(condition_focus_actions),
+        cpd_exclude_focus=np.asarray(condition_focus_actions),
     )
     atomic_write_json(output_json, result)
     return result

@@ -98,6 +98,24 @@ The adjacent `retrieval_scores.npz` stores all four exact cosine score matrices,
 and `gallery_manifest.json` records the encoder and reader checkpoint used by
 each stage.
 
+Each anchor page starts with an exact-RMS Top-5 trajectory reference. It searches
+the saved full candidate corpus, keeping the same ordered agent types and
+contact/fallback class, excluding the anchor scenario, requiring at least 70%
+joint overlap, and removing near-duplicates with RMS <= 0.02. Each scene is
+represented by its minimum-RMS pair. This reference uses the complete normalized
+60-step trajectory (including the 4-second future); the four model sections
+continue to rank by their saved cosine scores.
+
+To add/update this reference in an existing report without running GPU inference,
+run from the repository root:
+
+```bash
+/p/yufeng/.conda/envs/dreamer4/bin/python \
+  waymo/interaction_contrastive_learning/latest/visualize_global_contrastive_retrieval.py \
+  --refresh_rms_reference \
+  --output_dir waymo/eval_results/interaction_contrastive_global_retrieval_10
+```
+
 ## Shared-time-axis soft pairs (v1)
 
 The current label-free experiment scans the 50k OOI-centered train and val
