@@ -1,45 +1,43 @@
-#!/bin/bash
-# Controlled tokenizer comparison using the same q-free standard world-model
-# method as checkpoints/n8_motion_h30_21k_h90_27k:
-#   1) shortcut Stage 1 (300k), then H30 selection of its 50k checkpoints;
-#   2) H30 rollout MoN N=8 + full-motion + physical proxies (30k);
-#   3) H90 with the same objective, initialized from H30's selected best (30k).
-
-#SBATCH --job-name=wm_hybrid_n8mot
-#SBATCH --account=lia-lab-members
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
-#SBATCH --constraint="h200|a100|a40|a6000"
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=256G
-#SBATCH --time=3-00:00:00
-#SBATCH --signal=B:USR1@600
-#SBATCH --requeue
-#SBATCH --open-mode=append
-#SBATCH --output=/scratch/baz7dy/tri30/dreamer4/waymo/logs/wm/slurm-%x-%j.out
-#SBATCH --error=/scratch/baz7dy/tri30/dreamer4/waymo/logs/wm/slurm-%x-%j.err
+#!/usr/bin/env bash
+# Local single-GPU tmux launcher for the q-free hybrid-tokenizer comparison:
+#   Stage 1: shortcut 300k + H30 selection over checkpoints every 50k
+#   Stage 2: H30 rollout MoN N=8 + full motion + physical proxies, 30k
+#   Stage 3: H90 with the same objective from H30 selected best, 30k
 
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-/scratch/baz7dy/tri30/dreamer4}"
-PYTHON="${PYTHON:-/home/baz7dy/.conda/envs/dreamer4/bin/python}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd -- "$SCRIPT_DIR/../../.." && pwd)}"
+
+if [[ -z "${PYTHON:-}" ]]; then
+  if [[ -x "$HOME/.conda/envs/dreamer4/bin/python" ]]; then
+    PYTHON="$HOME/.conda/envs/dreamer4/bin/python"
+  elif [[ -n "${CONDA_PREFIX:-}" && -x "$CONDA_PREFIX/bin/python" ]]; then
+    PYTHON="$CONDA_PREFIX/bin/python"
+  else
+    PYTHON="$(command -v python3 || command -v python || true)"
+  fi
+fi
+
 TRAIN_SCRIPT="$REPO_ROOT/waymo/training/world_model/train_waymo_world_model.py"
 EVAL_SCRIPT="$REPO_ROOT/waymo/evaluation/eval_waymo_world_model_horizons.py"
 TOKENIZER_CKPT="${TOKENIZER_CKPT:-$REPO_ROOT/waymo/checkpoints/interaction_contrastive_hybrid_soft_v2_from_hard_relneg_dupfiltered_cuda3/best.pt}"
 DATA_ROOT="${DATA_ROOT:-$REPO_ROOT/data/waymo_vector_dataset_ooi_centered_50k}"
 
+CUDA_DEVICE="${CUDA_DEVICE:-0}"
+NUM_WORKERS="${NUM_WORKERS:-4}"
+WANDB_MODE="${WANDB_MODE:-offline}"
+OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 STAGE1_STEPS=300000
 H30_STEPS=30000
 H90_STEPS=30000
 STAGE1_SELECTION_BATCHES=32
-NUM_WORKERS=4
 
 PREFIX="waymo_wm_hybridtok_n8_fullmotion_physproxy"
 STAGE1_RUN="${PREFIX}_stage1_shortcut_b8_${STAGE1_STEPS}"
 H30_RUN="${PREFIX}_stage1best_ctx1_h30_d1_chunk32s30_b1_${H30_STEPS}"
 H90_RUN="${PREFIX}_h30best_ctx1_h90_d1_chunk32s30_b1_${H90_STEPS}"
+SESSION_NAME="${SESSION_NAME:-wm_hybridtok_n8_motion_three_stage_gpu${CUDA_DEVICE}}"
 
 STAGE1_DIR="$REPO_ROOT/waymo/checkpoints/$STAGE1_RUN"
 H30_DIR="$REPO_ROOT/waymo/checkpoints/$H30_RUN"
@@ -56,6 +54,7 @@ SELECTION_TSV="$SELECTION_DIR/selection_summary.tsv"
 LOG_DIR="$REPO_ROOT/waymo/logs/wm"
 EVAL_LOG_DIR="$REPO_ROOT/waymo/logs/evaluation"
 PIPELINE_LOG="$LOG_DIR/${PREFIX}_three_stage_pipeline.log"
+TMUX_LOG="$LOG_DIR/${PREFIX}_tmux_console.log"
 STAGE1_LOG="$LOG_DIR/$STAGE1_RUN.log"
 SELECTION_LOG="$EVAL_LOG_DIR/${STAGE1_RUN}_select_upto300k_h30.log"
 H30_LOG="$LOG_DIR/$H30_RUN.log"
@@ -69,7 +68,10 @@ require_dir() {
   [[ -d "$1" ]] || { echo "Missing required directory: $1" >&2; exit 1; }
 }
 
-[[ -x "$PYTHON" ]] || { echo "Python is not executable: $PYTHON" >&2; exit 1; }
+[[ -n "$PYTHON" && -x "$PYTHON" ]] || {
+  echo "Could not find an executable Python. Activate dreamer4 or set PYTHON=/path/to/python." >&2
+  exit 1
+}
 require_file "$TRAIN_SCRIPT"
 require_file "$EVAL_SCRIPT"
 require_file "$TOKENIZER_CKPT"
@@ -80,14 +82,55 @@ mkdir -p \
   "$STAGE1_DIR" "$H30_DIR" "$H90_DIR" "$SELECTION_DIR" \
   "$LOG_DIR" "$EVAL_LOG_DIR" "$REPO_ROOT/waymo/wandb"
 
+if [[ "${RUN_INSIDE_TMUX:-0}" != "1" ]]; then
+  command -v tmux >/dev/null 2>&1 || { echo "tmux is not installed or not on PATH" >&2; exit 1; }
+  if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    echo "tmux session already exists: $SESSION_NAME" >&2
+    echo "Attach with: tmux attach -t $SESSION_NAME" >&2
+    exit 1
+  fi
+
+  SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+  printf -v tmux_command '%q ' env \
+    RUN_INSIDE_TMUX=1 REPO_ROOT="$REPO_ROOT" PYTHON="$PYTHON" \
+    TOKENIZER_CKPT="$TOKENIZER_CKPT" DATA_ROOT="$DATA_ROOT" \
+    CUDA_DEVICE="$CUDA_DEVICE" NUM_WORKERS="$NUM_WORKERS" \
+    WANDB_MODE="$WANDB_MODE" OMP_NUM_THREADS="$OMP_NUM_THREADS" \
+    SESSION_NAME="$SESSION_NAME" bash "$SCRIPT_PATH"
+  tmux new-session -d -s "$SESSION_NAME" -c "$REPO_ROOT" "$tmux_command"
+  tmux set-option -t "$SESSION_NAME" remain-on-exit on
+
+  echo "Started tmux session: $SESSION_NAME"
+  echo "GPU: $CUDA_DEVICE"
+  echo "Attach: tmux attach -t $SESSION_NAME"
+  echo "Console log: $TMUX_LOG"
+  echo "Pipeline log: $PIPELINE_LOG"
+  exit 0
+fi
+
 cd "$REPO_ROOT"
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
-export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
+export CUDA_VISIBLE_DEVICES="$CUDA_DEVICE"
+export OMP_NUM_THREADS
 export PYTHONUNBUFFERED=1
-export WANDB_MODE="${WANDB_MODE:-offline}"
+export WANDB_MODE
 export WANDB_DIR="$REPO_ROOT/waymo/wandb"
 
-# Abort early if best.pt is not the intended hybrid tokenizer checkpoint.
+# Capture everything visible in the tmux pane in addition to per-stage logs.
+exec > >(tee -a "$TMUX_LOG") 2>&1
+
+run_logged() {
+  local log_path="$1"
+  shift
+  set +e
+  "$@" 2>&1 | tee -a "$log_path" &
+  local pipeline_pid=$!
+  wait "$pipeline_pid"
+  local status=$?
+  set -e
+  return "$status"
+}
+
+# Abort before expensive training if this is not the intended hybrid checkpoint.
 "$PYTHON" - "$TOKENIZER_CKPT" <<'PY'
 import sys
 import torch
@@ -104,33 +147,11 @@ assert args.get("contrastive_mode") == "hybrid", args.get("contrastive_mode")
 print(f"Validated hybrid tokenizer: {path} (step={checkpoint['step']})", flush=True)
 PY
 
-on_requeue_signal() {
-  trap - USR1
-  echo "===== $(date) received USR1; requeueing Slurm job ${SLURM_JOB_ID:-unknown} =====" | tee -a "$PIPELINE_LOG"
-  if [[ -n "${SLURM_JOB_ID:-}" ]] && command -v scontrol >/dev/null 2>&1; then
-    scontrol requeue "$SLURM_JOB_ID"
-    exit 0
-  fi
-  echo "Automatic requeue failed; submit this same file again to resume from latest.pt." | tee -a "$PIPELINE_LOG" >&2
-  exit 99
-}
-trap on_requeue_signal USR1
-
-run_logged() {
-  local log_path="$1"
-  shift
-  set +e
-  "$@" 2>&1 | tee -a "$log_path" &
-  local pipeline_pid=$!
-  wait "$pipeline_pid"
-  local status=$?
-  set -e
-  return "$status"
-}
-
 {
-  echo "===== $(date) hybrid-tokenizer q-free N8-motion pipeline start/resume ====="
-  echo "slurm_job_id=${SLURM_JOB_ID:-none} restart_count=${SLURM_RESTART_COUNT:-0} host=$(hostname)"
+  echo "===== $(date) local hybrid-tokenizer q-free N8-motion pipeline start/resume ====="
+  echo "session=$SESSION_NAME host=$(hostname) physical_cuda=$CUDA_DEVICE visible_cuda=$CUDA_VISIBLE_DEVICES"
+  echo "repo=$REPO_ROOT"
+  echo "python=$PYTHON"
   echo "tokenizer=$TOKENIZER_CKPT"
   echo "data=$DATA_ROOT"
   echo "stage1=shortcut/300000; selection=H30 focus-FDE over 50k checkpoints"
