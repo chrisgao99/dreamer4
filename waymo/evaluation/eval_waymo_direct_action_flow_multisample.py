@@ -58,6 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rollout_ade_csv", required=True)
     parser.add_argument("--scene_metrics_csv", required=True)
     parser.add_argument("--details_npz", required=True)
+    parser.add_argument("--start_batch", type=int, default=0, help="Skip completed batches, retaining original dataset indices and seeds.")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", choices=("ema", "model"), default="ema")
     parser.add_argument(
@@ -214,6 +215,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     if any((not np.isfinite(scale)) or scale <= 0.0 for scale in args.cpd_type_scales):
         raise ValueError("--cpd_type_scales values must be finite and positive")
 
+    if not 0 <= args.start_batch < args.eval_max_batches:
+        raise ValueError("start_batch must be in [0, eval_max_batches)")
+
     checkpoint_path = Path(args.checkpoint).resolve()
     val_data_dir = Path(args.val_data_dir).resolve()
     output_json = Path(args.output_json).resolve()
@@ -342,6 +346,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         for batch_index, raw_batch in enumerate(loader):
             if batch_index >= int(args.eval_max_batches):
                 break
+            if batch_index < args.start_batch:
+                continue
             batch = move_batch(raw_batch, device)
             agents = agents_to_bntf(batch["agents"], batch["agent_mask"])
             batch_size = int(agents.shape[0])
@@ -464,7 +470,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             scene_cpd_unscaled = cpd_components["scene_cpd_unscaled"]
             scene_cpd_valid = cpd_components["scene_valid"]
 
-            start_index = scene_count
+            start_index = batch_index * int(args.eval_batch_size)
             batch_paths = dataset.paths[start_index : start_index + batch_size]
             for scene_in_batch, npz_path in enumerate(batch_paths):
                 dataset_index = start_index + scene_in_batch
@@ -540,7 +546,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             if batches % int(args.log_every) == 0 or batches == int(args.eval_max_batches):
                 elapsed = time.monotonic() - started
                 print(
-                    f"progress batches={batches}/{args.eval_max_batches} "
+                    f"progress batches={batches + args.start_batch}/{args.eval_max_batches} "
+                    f"resumed_prefix_batches={args.start_batch} "
                     f"scenes={scene_count} rollouts_per_scene={args.num_rollouts} "
                     f"mean_ade_m={scene_ade_sum / max(1, scene_count):.6f} "
                     f"minade_m={scene_minade_sum / max(1, scene_count):.6f} "
@@ -551,7 +558,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
 
     if batches == 0 or scene_count == 0:
         raise RuntimeError("Validation loader produced no evaluation batches")
-    if batches != int(args.eval_max_batches):
+    if batches != int(args.eval_max_batches) - args.start_batch:
         raise RuntimeError(
             f"Requested {args.eval_max_batches} batches, but only {batches} were available"
         )
@@ -616,6 +623,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "seed": int(args.seed),
         "rollout_seed_formula": "seed + batch_index * num_rollouts + rollout_index",
         "eval_batches": batches,
+        "start_batch": args.start_batch,
         "eval_batch_size": int(args.eval_batch_size),
         "scene_count": scene_count,
         f"{valid_points_column}_per_rollout": valid_point_count,
