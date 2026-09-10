@@ -1,0 +1,7 @@
+step	focus_fde_m	focus_ade_m	latent_mse	checkpoint
+250000	0.73131106	0.50790262	0.09529600	/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/waymo_wm_hybridtok_n8_fullmotion_physproxy_stage1_shortcut_b8_300000/step_00250000.pt
+300000	1.07384017	0.71470197	0.08238057	/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/waymo_wm_hybridtok_n8_fullmotion_physproxy_stage1_shortcut_b8_300000/step_00300000.pt
+200000	1.49440409	1.42727347	0.09901711	/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/waymo_wm_hybridtok_n8_fullmotion_physproxy_stage1_shortcut_b8_300000/step_00200000.pt
+50000	1.71535452	1.23318671	0.09763664	/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/waymo_wm_hybridtok_n8_fullmotion_physproxy_stage1_shortcut_b8_300000/step_00050000.pt
+100000	1.81474288	1.27782451	0.08584735	/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/waymo_wm_hybridtok_n8_fullmotion_physproxy_stage1_shortcut_b8_300000/step_00100000.pt
+150000	3.17711094	1.76537866	0.09081717	/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/waymo_wm_hybridtok_n8_fullmotion_physproxy_stage1_shortcut_b8_300000/step_00150000.pt

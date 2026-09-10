@@ -1,0 +1,64 @@
+{
+  "agent_distance_source": "focus",
+  "agent_far_weight": 0.25,
+  "checkpoint_format": "legacy",
+  "ckpt_epoch": 26,
+  "ckpt_step": 150000,
+  "ego_action_clamp": false,
+  "ego_action_normalization": "raw",
+  "ego_action_source": "focus",
+  "eval_batch_size": 4,
+  "eval_ckpt": "/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/waymo_wm_hybridtok_n8_fullmotion_physproxy_stage1_shortcut_b8_300000/step_00150000.pt",
+  "eval_ctx": 1,
+  "eval_max_batches": 32,
+  "eval_seq_len": 31,
+  "flow_erd_cpd_components_output": null,
+  "flow_erd_cpd_enabled": false,
+  "flow_erd_cpd_exclude_focus": true,
+  "flow_erd_cpd_type_ids": [
+    1,
+    2,
+    3
+  ],
+  "flow_erd_cpd_type_order": [
+    "vehicle",
+    "pedestrian",
+    "cyclist"
+  ],
+  "flow_erd_cpd_type_scales": null,
+  "horizons": [
+    30
+  ],
+  "metrics": {
+    "h30": {
+      "agent_delta_xy_mae_m": 0.26043178932741284,
+      "agent_fde_mae_m": 8.861447632312775,
+      "agent_kinematic_xy_mae_m": 0.17173400591127574,
+      "agent_speed_mae_mps": 1.1068599745631218,
+      "agent_speed_yaw_kinematic_mae_m": 0.1765847667120397,
+      "agent_valid_acc": 0.8861202672123909,
+      "agent_vxvy_mae_mps": 1.3374661123380065,
+      "agent_xy_mae_m": 5.867198668420315,
+      "agent_yaw_mae_deg": 22.084820836782455,
+      "focus_agent_fde_m": 3.1771109364926815,
+      "focus_agent_xy_mae_m": 1.7653786577284336,
+      "latent_mse_future": 0.09081716736545786,
+      "light_state_acc": 0.6408808156847954,
+      "light_valid_acc": 0.978092473000288,
+      "loss_agent_delta_xy": 0.046458324053674005,
+      "loss_agent_fde_xy": 4.7616483345627785,
+      "loss_agent_kinematic_xy": 0.025015237253683154,
+      "loss_agent_speed_yaw_kinematic": 0.025613172292651143,
+      "loss_agent_valid": 1.5059774965047836,
+      "loss_agent_vel": 0.7054217499680817,
+      "loss_agent_xy": 3.012612195685506,
+      "loss_agent_yaw": 0.0680639595084358,
+      "loss_light_state": 3.662842545371192,
+      "loss_light_valid": 0.16624267346878696,
+      "loss_total": 5.548596017062664
+    }
+  },
+  "rollout_mode": "legacy_flow",
+  "use_ego_actions": true,
+  "val_size": 5002
+}
