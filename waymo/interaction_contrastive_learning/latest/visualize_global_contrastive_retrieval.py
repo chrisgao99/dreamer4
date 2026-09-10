@@ -636,10 +636,10 @@ def write_anchor_page(
         empty_note = "<p>No candidates satisfy these reference criteria.</p>" if not rms_reference["results"] else ""
         reference_section = (
             '<section class="stage rms-reference" id="rms-reference">'
-            f'<h2>Exact RMS 最佳匹配 / Top-{int(rms_reference["top_k"])} trajectory reference</h2>'
-            '<p>先看这一组是否符合你对“相似交互”的判断，再对照下方四个模型阶段。'
-            '这里按完整轨迹 RMS 从低到高排序；使用事件前 1.9 秒和后 4.0 秒的位置、速度与朝向，'
-            '并进行归一化和有效轨迹掩码处理。它是使用未来轨迹的参照。</p>'
+            f'<h2>Exact RMS best matches / Top-{int(rms_reference["top_k"])} trajectory reference</h2>'
+            '<p>First assess whether these examples match your idea of similar interactions, then compare them with the four model stages below. '
+            'Results are ranked by full-trajectory RMS in ascending order, using normalized positions, velocities, and headings '
+            'from 1.9 seconds before to 4.0 seconds after the event, with valid-trajectory masking. This reference uses future trajectories.</p>'
             '<p class="small">Exhaustive search within the saved full corpus: same ordered agent types and contact/fallback class; '
             f'anchor scenario excluded; joint overlap ≥ {float(rms_reference["min_pair_overlap"]):.0%}; '
             f'near-duplicates with RMS ≤ {float(rms_reference["duplicate_rms_threshold"]):g} excluded. '
@@ -720,9 +720,9 @@ def write_index(
         f'<div class="note"><p><strong>{len(reports)} fixed anchors, full valid corpus.</strong> Each stage searches {corpus_rows:,} pair rows '
         f'covering {corpus_scenarios:,} physical scenarios, then returns unique scenarios.</p>'
         '<p>Reader + z uses the hard Stage-A reader on untouched base-tokenizer z. Hard and hybrid use their respective Stage-B encoders and readers.</p></div>'
-        + ('<div class="note"><strong>新增：Exact RMS 最佳匹配参照。</strong> '
-           '打开任一 anchor，先看页首按完整轨迹 RMS 精确排序的最佳样本，再与四个模型阶段比较。'
-           '参照限定同类型交互并排除近重复，使用未来轨迹。</div>'
+        + ('<div class="note"><strong>New: Exact RMS best-match reference.</strong> '
+           'Open any anchor to see the best matches ranked by exact full-trajectory RMS at the top of the page, then compare them with the four model stages. '
+           'The reference is restricted to the same interaction stratum, excludes near-duplicates, and uses future trajectories.</div>'
            if any("rms_reference" in report for report in reports) else "")
         + f'<div class="anchors">{"".join(cards)}</div></body></html>'
     )

@@ -172,6 +172,8 @@ class GlobalContrastiveRetrievalTest(unittest.TestCase):
             self.assertLess(page.index('id="rms-reference"'), page.index("Raw z: base tokenizer</h2>"))
             self.assertEqual(page.count('class="candidate reference"'), 3)
             self.assertIn("Exact RMS", (directory / "index.html").read_text())
+            for page in directory.glob("*.html"):
+                self.assertNotRegex(page.read_text(), r"[\u3400-\u4dbf\u4e00-\u9fff]")
 
 
 if __name__ == "__main__":

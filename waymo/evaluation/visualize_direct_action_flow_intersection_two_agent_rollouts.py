@@ -10,6 +10,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.utils.data import Subset
@@ -23,11 +27,16 @@ for path in (REPO_ROOT, WAYMO_ROOT / "core"):
 from waymo.core.waymo_vector_dataset import WaymoVectorDataset  # noqa: E402
 from waymo.evaluation.eval_waymo_direct_action_flow_multisample import (  # noqa: E402
     load_model_and_normalizer,
+    resolve_focus_conditioning,
 )
 from waymo.evaluation.visualize_h90_intersection_two_agent_rollouts import (  # noqa: E402
     _make_contact_sheet,
     _plot_scene,
+    _rollout_metrics,
     _square_bounds,
+)
+from waymo.evaluation.visualize_vector_tokenizer_reconstruction import (  # noqa: E402
+    _draw_map,
 )
 from waymo.training.world_model.direct_action_flow import (  # noqa: E402
     agents_to_bntf,
@@ -94,6 +103,161 @@ def _outside_fraction(
     return float(outside.mean()) if outside.size else 0.0
 
 
+def _plot_generate_all_scene(
+    *,
+    args: argparse.Namespace,
+    record: dict[str, Any],
+    gt_tkf: np.ndarray,
+    pred_xy: np.ndarray,
+    map_polylines: np.ndarray,
+    map_mask: np.ndarray,
+    agent_ids: np.ndarray,
+    output_path: Path,
+    bounds_override: tuple[float, float, float, float] | None = None,
+) -> dict[str, Any]:
+    """Plot paired ego and target trajectories from each generate-all rollout."""
+    context_frames = int(args.eval_ctx)
+    target_slot = int(record["target_slot"])
+    future_slice = slice(context_frames - 1, context_frames + int(args.horizon))
+    ego_valid = gt_tkf[future_slice, 0, 5] > 0.5
+    target_valid = gt_tkf[future_slice, target_slot, 5] > 0.5
+    ego_gt_xy = gt_tkf[future_slice, 0, 0:2]
+    target_gt_xy = gt_tkf[future_slice, target_slot, 0:2]
+    ego_pred_xy = pred_xy[:, future_slice, 0]
+    target_pred_xy = pred_xy[:, future_slice, target_slot]
+
+    bounds = bounds_override or _square_bounds(
+        [
+            ego_gt_xy[ego_valid],
+            target_gt_xy[target_valid],
+            ego_pred_xy[:, ego_valid],
+            target_pred_xy[:, target_valid],
+        ],
+        margin=float(args.margin_m),
+    )
+    fig, ax = plt.subplots(figsize=(9.2, 9.2), dpi=int(args.dpi))
+    fig.patch.set_facecolor("#111111")
+    ax.set_facecolor("#202020")
+    _draw_map(ax, map_polylines, map_mask)
+
+    ax.plot(
+        ego_gt_xy[ego_valid, 0],
+        ego_gt_xy[ego_valid, 1],
+        color="#ff4d4d",
+        linewidth=3.1,
+        linestyle="--",
+        label="ego GT",
+        zorder=10,
+    )
+    ax.plot(
+        target_gt_xy[target_valid, 0],
+        target_gt_xy[target_valid, 1],
+        color="#ffffff",
+        linewidth=2.8,
+        linestyle="--",
+        label=f"target GT (id={int(agent_ids[target_slot])})",
+        zorder=10,
+    )
+    colors = plt.cm.turbo(np.linspace(0.05, 0.95, int(pred_xy.shape[0])))
+    for rollout_index, color in enumerate(colors):
+        ego_curve = ego_pred_xy[rollout_index]
+        target_curve = target_pred_xy[rollout_index]
+        ax.plot(
+            ego_curve[ego_valid, 0],
+            ego_curve[ego_valid, 1],
+            color=color,
+            linewidth=1.8,
+            alpha=0.86,
+            label="10 generated ego rollouts" if rollout_index == 0 else None,
+            zorder=7,
+        )
+        ax.plot(
+            target_curve[target_valid, 0],
+            target_curve[target_valid, 1],
+            color=color,
+            linewidth=1.65,
+            linestyle=":",
+            alpha=0.86,
+            label="10 generated target rollouts" if rollout_index == 0 else None,
+            zorder=6,
+        )
+
+    ax.scatter(
+        ego_gt_xy[0, 0],
+        ego_gt_xy[0, 1],
+        s=70,
+        color="#ff4d4d",
+        edgecolors="black",
+        linewidths=0.8,
+        zorder=12,
+    )
+    ax.scatter(
+        target_gt_xy[0, 0],
+        target_gt_xy[0, 1],
+        s=70,
+        color="#ffffff",
+        edgecolors="black",
+        linewidths=0.8,
+        zorder=12,
+    )
+    ax.text(
+        ego_gt_xy[0, 0] + 1.2,
+        ego_gt_xy[0, 1] + 1.2,
+        "ego @ context",
+        color="#ff9a9a",
+        fontsize=8,
+        zorder=13,
+    )
+    ax.text(
+        target_gt_xy[0, 0] + 1.2,
+        target_gt_xy[0, 1] + 1.2,
+        f"target k{target_slot}",
+        color="white",
+        fontsize=8,
+        zorder=13,
+    )
+
+    xmin, xmax, ymin, ymax = bounds
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(color="#555555", alpha=0.28, linewidth=0.5)
+    ax.tick_params(colors="#dddddd", labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_color("#888888")
+    ax.set_xlabel("local x (m)", color="#dddddd")
+    ax.set_ylabel("local y (m)", color="#dddddd")
+    model_label = str(getattr(args, "model_label", "")).strip()
+    title_prefix = f"{model_label}\n" if model_label else ""
+    ax.set_title(
+        title_prefix
+        + f"scenario {record['scenario_id']} | {record['ego_maneuver_label']} | "
+        f"crossing={record['num_crossing_close_agents']}\n"
+        f"{pred_xy.shape[0]} paired stochastic H{args.horizon} rollouts: ego (solid) + target (dotted)",
+        color="white",
+        fontsize=11,
+    )
+    legend = ax.legend(loc="best", facecolor="#161616", edgecolor="#777777", fontsize=8)
+    for text_item in legend.get_texts():
+        text_item.set_color("white")
+
+    ego_metrics = _rollout_metrics(ego_gt_xy, ego_pred_xy, ego_valid)
+    target_metrics = _rollout_metrics(target_gt_xy, target_pred_xy, target_valid)
+    fig.text(
+        0.02,
+        0.012,
+        f"ego mean/min ADE={ego_metrics['mean_ade_m']:.2f}/{ego_metrics['min_ade_m']:.2f} m | "
+        f"target id={int(agent_ids[target_slot])} mean/min ADE="
+        f"{target_metrics['mean_ade_m']:.2f}/{target_metrics['min_ade_m']:.2f} m",
+        color="#eeeeee",
+        fontsize=8,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, facecolor=fig.get_facecolor(), bbox_inches="tight")
+    plt.close(fig)
+    return {"ego_metrics": ego_metrics, "target_metrics": target_metrics}
+
+
 @torch.inference_mode()
 def visualize(args: argparse.Namespace) -> None:
     if int(args.num_rollouts) != 10:
@@ -136,6 +300,7 @@ def visualize(args: argparse.Namespace) -> None:
         device,
         args.weights,
     )
+    condition_focus_actions = resolve_focus_conditioning(train_args, args.focus_mode)
     if int(train_args.history_length) != 11:
         raise ValueError(
             f"Expected history_length=11, checkpoint has {train_args.history_length}"
@@ -206,24 +371,34 @@ def visualize(args: argparse.Namespace) -> None:
                 batch["light_mask"][:, anchor : anchor + int(args.rollout_steps)],
                 repeats,
             ),
-            focus_action_sequence=_repeat_batch(targets.actions[:, 0], repeats),
-            focus_action_valid=_repeat_batch(targets.valid[:, 0], repeats),
+            focus_action_sequence=(
+                _repeat_batch(targets.actions[:, 0], repeats)
+                if condition_focus_actions
+                else None
+            ),
+            focus_action_valid=(
+                _repeat_batch(targets.valid[:, 0], repeats)
+                if condition_focus_actions
+                else None
+            ),
             rollout_steps=int(args.rollout_steps),
             commitment=commitment,
             solver_steps=int(args.solver_steps),
             generator=generator,
         )
-        focus_gt_xy = targets.future_pose[0, 0, :, 0:2]
-        focus_replay_error = torch.linalg.vector_norm(
-            poses[:, 0, :, 0:2] - focus_gt_xy[None],
-            dim=-1,
-        )
-        focus_replay_max_error_m = float(focus_replay_error.max())
-        if focus_replay_max_error_m > 1e-3:
-            raise RuntimeError(
-                f"Controlled focus failed to replay its recorded plan in {record['scenario_id']}: "
-                f"max error={focus_replay_max_error_m:.6f}m"
+        focus_replay_max_error_m: float | None = None
+        if condition_focus_actions:
+            focus_gt_xy = targets.future_pose[0, 0, :, 0:2]
+            focus_replay_error = torch.linalg.vector_norm(
+                poses[:, 0, :, 0:2] - focus_gt_xy[None],
+                dim=-1,
             )
+            focus_replay_max_error_m = float(focus_replay_error.max())
+            if focus_replay_max_error_m > 1e-3:
+                raise RuntimeError(
+                    f"Controlled focus failed to replay its recorded plan in {record['scenario_id']}: "
+                    f"max error={focus_replay_max_error_m:.6f}m"
+                )
         gt_tkf = agents[0].permute(1, 0, 2).detach().float().cpu().numpy()
         context_xy = gt_tkf[: int(train_args.history_length), :, 0:2]
         future_xy = poses[..., 0:2].permute(0, 2, 1, 3).detach().float().cpu().numpy()
@@ -242,6 +417,11 @@ def visualize(args: argparse.Namespace) -> None:
                 f"Target mismatch in {record['scenario_id']}: expected "
                 f"{record['target_track_id']}, loaded {actual_target_id}"
             )
+        if str(record["target_type"]) != "vehicle":
+            raise RuntimeError(
+                f"Selected target in {record['scenario_id']} is not a car: "
+                f"{record['target_type']}"
+            )
         bounds = _reference_bounds(
             reference_dir,
             record,
@@ -250,11 +430,17 @@ def visualize(args: argparse.Namespace) -> None:
             horizon=int(args.rollout_steps),
             margin_m=float(args.margin_m),
         )
-        valid = gt_tkf[anchor:, target_slot, 5] > 0.5
+        ego_valid = gt_tkf[anchor:, 0, 5] > 0.5
+        target_valid = gt_tkf[anchor:, target_slot, 5] > 0.5
+        ego_prediction = pred_xy[:, anchor:, 0]
         target_prediction = pred_xy[:, anchor:, target_slot]
-        outside_fraction = _outside_fraction(target_prediction, valid, bounds)
+        ego_outside_fraction = _outside_fraction(ego_prediction, ego_valid, bounds)
+        target_outside_fraction = _outside_fraction(
+            target_prediction, target_valid, bounds
+        )
         image_path = output_dir / f"scene_{scene_index:02d}_{record['scenario_id']}.png"
-        metrics = _plot_scene(
+        plot_scene = _plot_scene if condition_focus_actions else _plot_generate_all_scene
+        metrics = plot_scene(
             args=args,
             record=record,
             gt_tkf=gt_tkf,
@@ -268,7 +454,7 @@ def visualize(args: argparse.Namespace) -> None:
         full_bounds_image_path = output_dir / "full_bounds" / (
             f"scene_{scene_index:02d}_{record['scenario_id']}.png"
         )
-        full_bounds_metrics = _plot_scene(
+        full_bounds_metrics = plot_scene(
             args=args,
             record=record,
             gt_tkf=gt_tkf,
@@ -278,14 +464,10 @@ def visualize(args: argparse.Namespace) -> None:
             agent_ids=agent_ids,
             output_path=full_bounds_image_path,
         )
-        for key, value in metrics.items():
-            if not np.allclose(
-                np.asarray(value),
-                np.asarray(full_bounds_metrics[key]),
-                rtol=0.0,
-                atol=1e-7,
-            ):
-                raise RuntimeError(f"Plot bounds unexpectedly changed metric {key}")
+        if json.dumps(metrics, sort_keys=True) != json.dumps(
+            full_bounds_metrics, sort_keys=True
+        ):
+            raise RuntimeError("Plot bounds unexpectedly changed rollout metrics")
         trajectory_path = output_dir / (
             f"scene_{scene_index:02d}_{record['scenario_id']}_trajectories.npz"
         )
@@ -295,6 +477,7 @@ def visualize(args: argparse.Namespace) -> None:
             ego_gt_valid=gt_tkf[:, 0, 5] > 0.5,
             target_gt_xy=gt_tkf[:, target_slot, 0:2],
             target_gt_valid=gt_tkf[:, target_slot, 5] > 0.5,
+            ego_rollout_xy=pred_xy[:, :, 0],
             target_rollout_xy=pred_xy[:, :, target_slot],
             context_frames=np.asarray(int(train_args.history_length)),
             rollout_steps=np.asarray(int(args.rollout_steps)),
@@ -313,19 +496,31 @@ def visualize(args: argparse.Namespace) -> None:
             "same_h90_bounds_image": str(image_path),
             "trajectory_npz": str(trajectory_path),
             "focus_replay_max_error_m": focus_replay_max_error_m,
-            "fraction_target_rollout_points_outside_h90_plot_bounds": outside_fraction,
+            "fraction_ego_rollout_points_outside_h90_plot_bounds": ego_outside_fraction,
+            "fraction_target_rollout_points_outside_h90_plot_bounds": target_outside_fraction,
             **metrics,
         }
         result_rows.append(row)
         reference_bounds_image_paths.append(image_path)
         full_bounds_image_paths.append(full_bounds_image_path)
-        print(
-            f"generated {scene_index + 1}/{len(records)} scenario={record['scenario_id']} "
-            f"target={actual_target_id} mean_ADE={metrics['mean_ade_m']:.3f}m "
-            f"pairwise={metrics['mean_pairwise_trajectory_distance_m']:.3f}m "
-            f"outside_reference_bounds={outside_fraction:.4f}",
-            flush=True,
-        )
+        if condition_focus_actions:
+            print(
+                f"generated {scene_index + 1}/{len(records)} scenario={record['scenario_id']} "
+                f"target={actual_target_id} target_mean_ADE={metrics['mean_ade_m']:.3f}m "
+                f"target_pairwise={metrics['mean_pairwise_trajectory_distance_m']:.3f}m "
+                f"target_outside_reference_bounds={target_outside_fraction:.4f}",
+                flush=True,
+            )
+        else:
+            print(
+                f"generated {scene_index + 1}/{len(records)} scenario={record['scenario_id']} "
+                f"target={actual_target_id} "
+                f"ego_mean_ADE={metrics['ego_metrics']['mean_ade_m']:.3f}m "
+                f"target_mean_ADE={metrics['target_metrics']['mean_ade_m']:.3f}m "
+                f"outside_reference_bounds="
+                f"ego:{ego_outside_fraction:.4f},target:{target_outside_fraction:.4f}",
+                flush=True,
+            )
 
     reference_bounds_contact_sheet = output_dir / "contact_sheet_intersection10_n10.png"
     full_bounds_contact_sheet = output_dir / "contact_sheet_intersection10_n10_full_bounds.png"
@@ -336,12 +531,24 @@ def visualize(args: argparse.Namespace) -> None:
         "checkpoint_step": checkpoint_step,
         "weights": str(args.weights),
         "model_label": str(args.model_label),
+        "condition_focus_actions": condition_focus_actions,
+        "focus_mode": str(args.focus_mode),
         "protocol": (
             f"ctx11_native_h15_commit{commitment}_receding_h80_"
-            f"solver{int(args.solver_steps)}_recorded_focus_plan_target_agent_n10"
+            f"solver{int(args.solver_steps)}_"
+            + (
+                "recorded_focus_plan_target_agent_n10"
+                if condition_focus_actions
+                else "generated_all_agents_paired_ego_target_n10"
+            )
         ),
-        "provided_ego_plan": "recorded ground-truth focus trajectory",
-        "ego_draw_count_per_figure": 1,
+        "provided_ego_plan": (
+            "recorded ground-truth focus trajectory"
+            if condition_focus_actions
+            else None
+        ),
+        "ego_ground_truth_draw_count_per_figure": 1,
+        "ego_rollout_count_per_figure": 0 if condition_focus_actions else repeats,
         "target_ground_truth_draw_count_per_figure": 1,
         "target_rollout_count_per_figure": repeats,
         "other_agent_trajectories_drawn": 0,
@@ -372,6 +579,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", choices=("ema", "model"), default="ema")
+    parser.add_argument(
+        "--focus_mode",
+        choices=("checkpoint", "conditioned", "generate_all"),
+        default="checkpoint",
+    )
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--num_scenes", type=int, default=10)
     parser.add_argument("--num_rollouts", type=int, default=10)
