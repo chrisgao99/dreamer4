@@ -12,11 +12,15 @@ from waymo.training.world_model import train_waymo_direct_action_flow as base
 from waymo.adaptations.map_dataset import MapAdaptationDataset
 
 
-def training_args(cache_dir,run_name):
+def training_args(cache_dir,run_name,data_root=None):
     if not re.fullmatch(r'[A-Za-z0-9_.-]+',run_name):raise ValueError('Invalid run name')
     payload=json.loads(Path(__file__).with_name('baseline_launch_config.json').read_text())
     argv=payload['train_argv'][:]
-    replacements={'--ckpt_dir':str(ROOT/'waymo/checkpoints'/run_name),'--wandb_run_name':run_name}
+    data_root=Path(data_root).resolve() if data_root else ROOT/'data/waymo_vector_dataset_ooi_centered_50k_with_lengths'
+    replacements={'--ckpt_dir':str(ROOT/'waymo/checkpoints'/run_name),'--wandb_run_name':run_name,
+                  '--data_dir':str(data_root/'train'),'--val_data_dir':str(data_root/'val')}
+    for flag in ['--action_stats_path','--kinematics_calibration']:
+        replacements[flag]=str(data_root/Path(argv[argv.index(flag)+1]).name)
     for flag,value in replacements.items():argv[argv.index(flag)+1]=value
     argv += ['--map_adaptation','--map_cache_dir',str(Path(cache_dir).resolve()),
              '--map_neighbors','32','--agent_map_neighbors','64',
@@ -62,9 +66,10 @@ def preflight(args,report_path=None,paths=None):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--map_cache_dir',required=True)
+    p.add_argument('--data_root',default=None)
     p.add_argument('--run_name',default='waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_scratch100k_20261006')
     p.add_argument('--preflight_only',action='store_true');p.add_argument('--skip_preflight',action='store_true')
-    args=p.parse_args();train_args=training_args(args.map_cache_dir,args.run_name)
+    args=p.parse_args();train_args=training_args(args.map_cache_dir,args.run_name,args.data_root)
     ckpt=Path(train_args.ckpt_dir)
     if ckpt.exists() and any(ckpt.iterdir()):raise FileExistsError(f'Fresh-run checkpoint directory exists: {ckpt}')
     summary=json.loads((Path(args.map_cache_dir)/'summary.json').read_text())

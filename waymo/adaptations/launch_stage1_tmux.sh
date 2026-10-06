@@ -2,7 +2,21 @@
 # Invoke this script on the GPU training host; preparation runs on CPU first.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-export PYTHON="${PYTHON:-/p/yufeng/.conda/envs/dreamer4/bin/python}"
+if [[ -z "${PYTHON:-}" ]]; then
+  owner_root="$(cd "$REPO_ROOT/../.." && pwd)"
+  candidates=("${CONDA_PREFIX:-/nonexistent}/bin/python"
+              "$owner_root/.conda/envs/dreamer4/bin/python"
+              "${HOME}/.conda/envs/dreamer4/bin/python"
+              "$(command -v python || true)")
+  for candidate in "${candidates[@]}"; do
+    if [[ -x "$candidate" ]] && "$candidate" -c 'import torch, numpy, google.protobuf' >/dev/null 2>&1; then
+      PYTHON="$candidate"; break
+    fi
+  done
+  [[ -n "${PYTHON:-}" ]] || { echo 'Activate the dreamer4 environment or set PYTHON=/path/to/python' >&2; exit 1; }
+fi
+export PYTHON
+export DATA_ROOT="${DATA_ROOT:-$REPO_ROOT/data/waymo_vector_dataset_ooi_centered_50k_with_lengths}"
 export CUDA_DEVICE="${CUDA_DEVICE:-0}"
 export RUN_NAME="${RUN_NAME:-waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_scratch100k_20261006}"
 export SESSION_NAME="${SESSION_NAME:-daf_map_stage1_cuda${CUDA_DEVICE}}"
@@ -24,7 +38,7 @@ if [[ "${1:-}" != "--worker" ]]; then
   printf -v logfile '%q' "$REPO_ROOT/waymo/logs/wm/$RUN_NAME.log"
   # Explicit exports survive even when the tmux server predates this invocation.
   prefix=''
-  for name in PYTHON CUDA_DEVICE RUN_NAME SESSION_NAME MAP_CACHE_DIR SCENARIO_ROOT INDEX_DIR PREP_WORKERS; do
+  for name in PYTHON DATA_ROOT CUDA_DEVICE RUN_NAME SESSION_NAME MAP_CACHE_DIR SCENARIO_ROOT INDEX_DIR PREP_WORKERS; do
     printf -v entry '%q=%q ' "$name" "${!name}"; prefix+="$entry"
   done
   tmux new-session -d -s "$SESSION_NAME" "env $prefix bash -c $(printf '%q' "set -o pipefail; $worker_cmd 2>&1 | tee $logfile")"
@@ -33,7 +47,6 @@ if [[ "${1:-}" != "--worker" ]]; then
   exit 0
 fi
 CUDA_VISIBLE_DEVICES="$CUDA_DEVICE" "$PYTHON" -c 'import torch; assert torch.cuda.is_available(), "CUDA unavailable on this host/device"'
-DATA_ROOT="$REPO_ROOT/data/waymo_vector_dataset_ooi_centered_50k_with_lengths"
 "$PYTHON" waymo/adaptations/index_scenarios.py --scenario_root "$SCENARIO_ROOT" --output_dir "$INDEX_DIR" --workers "$PREP_WORKERS"
 "$PYTHON" waymo/adaptations/prepare_map_cache.py --data_root "$DATA_ROOT" --scenario_root "$SCENARIO_ROOT" --index_dir "$INDEX_DIR" --output_dir "$MAP_CACHE_DIR" --workers "$PREP_WORKERS"
-CUDA_VISIBLE_DEVICES="$CUDA_DEVICE" "$PYTHON" waymo/adaptations/run_stage1.py --map_cache_dir "$MAP_CACHE_DIR" --run_name "$RUN_NAME"
+CUDA_VISIBLE_DEVICES="$CUDA_DEVICE" "$PYTHON" waymo/adaptations/run_stage1.py --map_cache_dir "$MAP_CACHE_DIR" --data_root "$DATA_ROOT" --run_name "$RUN_NAME"

@@ -14,6 +14,13 @@ cd /p/yufeng/tri30/dreamer4
 CUDA_DEVICE=0 bash waymo/adaptations/launch_stage1_tmux.sh
 ```
 
+On the other server, use `cd /scratch/baz7dy/tri30/dreamer4` and run the same
+launcher command. Repository/data paths follow the script location. The original
+manifest can retain `/p/yufeng/...` NPZ paths: preparation resolves each filename
+under the current `DATA_ROOT/{train,val}` in memory, without rewriting the file.
+Training/statistics/calibration paths are also resolved under the current data
+root. Activate the dreamer4 environment before launching, or set `PYTHON`.
+
 Change `CUDA_DEVICE` to your selected GPU. The script creates the detached tmux
 session; you do not need to wrap it in another `tmux new-session` command.
 It checks CUDA, builds a reusable Scenario ID index, prepares **all 50,000** map
@@ -29,14 +36,15 @@ tail -f waymo/logs/wm/waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_scratch100k_2
 
 Defaults:
 
-- Python: `/p/yufeng/.conda/envs/dreamer4/bin/python`
+- Python: automatically selected from the active conda environment, owner/home
+  dreamer4 environment, or current `python`; must import torch/numpy/protobuf
 - Source data: `data/waymo_vector_dataset_ooi_centered_50k_with_lengths`
 - Raw Scenario: `/p/liverobotics/waymo_open_dataset_motion/scenario/training`
 - Index: `data/waymo_scenario_index_v1`
 - Map cache: `data/waymo_map_smarttrajtok_5m_v2`
 - Output: `waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_scratch100k_20261006`
 
-`PYTHON`, `SCENARIO_ROOT`, `INDEX_DIR`, `MAP_CACHE_DIR`, `PREP_WORKERS`,
+`PYTHON`, `DATA_ROOT`, `SCENARIO_ROOT`, `INDEX_DIR`, `MAP_CACHE_DIR`, `PREP_WORKERS`,
 `RUN_NAME`, `SESSION_NAME`, and `CUDA_DEVICE` can be set as environment variables.
 `SCENARIO_ROOT` must contain a `training` directory of **Scenario protobuf**
 TFRecords, not tf.Example TFRecords.
@@ -102,7 +110,7 @@ Missing source scenes or identity mismatches fail loudly.
 Individual preparation commands (CPU only):
 
 ```bash
-PYTHON=/p/yufeng/.conda/envs/dreamer4/bin/python
+PYTHON="$(command -v python)"  # activate the dreamer4 environment first
 "$PYTHON" waymo/adaptations/index_scenarios.py \
   --scenario_root /p/liverobotics/waymo_open_dataset_motion/scenario \
   --output_dir data/waymo_scenario_index_v1 --workers 4
@@ -118,7 +126,7 @@ The map cache is versioned and stale settings are rejected. An incomplete
 ## Verification and evaluation
 
 ```bash
-/p/yufeng/.conda/envs/dreamer4/bin/python waymo/adaptations/verify.py
+python waymo/adaptations/verify.py  # in the dreamer4 environment
 ```
 
 This runs adaptation and existing action-flow/velocity regression functions
@@ -137,3 +145,7 @@ For direct `rollout_receding_horizon` calls, pass `map_ids`, `map_is_lane`,
 `map_stop_sign`, `map_stop_point`, and `light_id_sequence`. Legacy evaluator
 loaders using only the old NPZ fields require this integration before they can
 run the new checkpoints; legacy checkpoints retain their original architecture.
+
+Indexes and map sidecars are generated separately on each server. If moving a
+previously generated index/cache as well as the source data, their stored
+absolute-path identity checks may reject them; regenerate them at the new path.

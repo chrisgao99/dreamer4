@@ -185,3 +185,32 @@ def test_raw_scenario_crop_uses_track_ids_not_source_slot_order():
             map_ids=np.array([-1]),map_mask=np.zeros((1,6),bool))
         cached=build_cache(scene,source,5.,6)
         assert cached['map_ids'].tolist()==[100]
+
+
+def test_training_paths_follow_relocated_repository():
+    from pathlib import Path
+    from unittest.mock import patch
+    from waymo.adaptations import run_stage1
+    relocated=Path('/scratch/baz7dy/tri30/dreamer4')
+    with patch.object(run_stage1,'ROOT',relocated):
+        args=run_stage1.training_args(relocated/'data/cache','relocated_run')
+    dataset=relocated/'data/waymo_vector_dataset_ooi_centered_50k_with_lengths'
+    assert args.data_dir==str(dataset/'train')
+    assert args.val_data_dir==str(dataset/'val')
+    assert Path(args.action_stats_path).parent==dataset
+    assert Path(args.kinematics_calibration).parent==dataset
+    assert args.ckpt_dir==str(relocated/'waymo/checkpoints/relocated_run')
+    assert args.horizon==40 and args.batch_size==4 and args.max_steps==100000
+
+
+def test_manifest_rebases_old_paths_without_modifying_file():
+    import tempfile
+    from pathlib import Path
+    from waymo.adaptations.prepare_map_cache import rebase_manifest_rows
+    with tempfile.TemporaryDirectory() as folder:
+        root=Path(folder);(root/'train').mkdir();source=root/'train/example.npz';source.touch()
+        row=dict(split='train',npz_path='/p/yufeng/tri30/dreamer4/data/old/train/example.npz',
+                 tfrecord_path='/old/raw.tfrecord',scenario_id='example')
+        rows=rebase_manifest_rows([row],root)
+        assert rows[0]['npz_path']==str(source.resolve())
+        assert rows[0]['tfrecord_path']=='/old/raw.tfrecord'

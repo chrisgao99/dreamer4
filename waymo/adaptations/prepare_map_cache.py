@@ -188,6 +188,17 @@ def process_shard(job):
     return dict(shard=str(shard),files=count,max_segments=max_segments)
 
 
+def rebase_manifest_rows(rows, data_root):
+    """Resolve NPZs in the current dataset without rewriting its manifest."""
+    root=Path(data_root).resolve()
+    for row in rows:
+        if row['split'] not in ('train','val'):raise ValueError('Unexpected dataset split')
+        source=root/row['split']/Path(row['npz_path']).name
+        if not source.is_file():raise FileNotFoundError(source)
+        row['npz_path']=str(source)
+    return rows
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--data_root',required=True);p.add_argument('--output_dir',required=True)
@@ -199,6 +210,7 @@ def main():
     if args.segment_length_m<=0 or args.points_per_segment<2: raise ValueError('Invalid segment geometry settings')
     with (Path(args.data_root)/'manifest.csv').open() as stream: rows=list(csv.DictReader(stream))
     if args.max_files: rows=rows[:args.max_files]
+    rows=rebase_manifest_rows(rows,args.data_root)
     wanted={row['scenario_id'] for row in rows}
     locations={}
     for index in sorted(Path(args.index_dir).glob('*.jsonl')):
