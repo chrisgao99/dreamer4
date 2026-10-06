@@ -1,0 +1,21 @@
+{
+  "baseline_step": 95000,
+  "original_parameter_differences": {
+    "ckpt_dir": {
+      "baseline": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_scratch100k_20260925",
+      "adapted": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_scratch100k_20261006"
+    },
+    "wandb_run_name": {
+      "baseline": "waymo_daf_h40_b5_typeaware_vxvy_scratch100k_20260925",
+      "adapted": "waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_scratch100k_20261006"
+    }
+  },
+  "new_parameters": {
+    "map_adaptation": true,
+    "map_cache_dir": "/p/yufeng/tri30/dreamer4/data/waymo_map_smarttrajtok_5m_v2",
+    "map_neighbors": 32,
+    "agent_map_neighbors": 64,
+    "map_radius_m": 30.0,
+    "agent_map_radius_m": 100.0
+  }
+}

@@ -19,7 +19,7 @@ class MapAdaptationDataset(WaymoVectorDataset):
         with np.load(sidecar,allow_pickle=False) as d:
             if str(d['scenario_id']) != item['scenario_id'] or str(d['source_npz']) != str(source.resolve()):
                 raise ValueError(f'Map cache source identity mismatch: {sidecar}')
-            if int(d['cache_version']) != 1: raise ValueError('Unsupported map cache version')
+            if int(d['cache_version']) != 2: raise ValueError('Unsupported map cache version')
             for key in FIELDS: item[key]=torch.from_numpy(d[key].copy())
         item['map_adaptation']=torch.tensor(True)
         return item

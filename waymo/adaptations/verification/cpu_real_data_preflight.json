@@ -24,17 +24,17 @@
       "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/94550c4076a29727_focus_8_src3.npz"
     ],
     "map_segments": [
-      4425,
-      4425
+      4524,
+      4524
     ],
     "stop_sign_segments": [
-      0,
-      0
+      3,
+      3
     ],
     "observed_signals": [
       947,
       947
     ],
-    "flow_loss": 0.7604101896286011
+    "flow_loss": 0.7382211089134216
   }
 }

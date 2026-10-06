@@ -154,3 +154,34 @@ def test_padded_map_tokens_do_not_change_local_context():
         b[key]=torch.cat((value,value.new_full(shape,fill)),1)
     torch.testing.assert_close(original,model.encode_scene(**base.scene_kwargs(b,prepared)).agent_tokens,
                                rtol=1e-5,atol=1e-6)
+
+
+def test_raw_scenario_crop_uses_track_ids_not_source_slot_order():
+    import json
+    import tempfile
+    from pathlib import Path
+    from waymo.adaptations.scenario_reader import scenario_class
+    from waymo.adaptations.prepare_map_cache import build_cache
+    scene=scenario_class()();scene.scenario_id='reordered';scene.current_time_index=10
+    scene.timestamps_seconds.extend([i*.1 for i in range(91)])
+    for i in range(91):scene.dynamic_map_states.add()
+    # Scenario order is the reverse of the tf.Example source slot order.
+    for tid,x in [(20,1000.),(10,0.)]:
+        track=scene.tracks.add();track.id=tid
+        for t in range(91):
+            state=track.states.add();state.center_x=x;state.center_y=0.;state.valid=True
+    for fid,x in [(100,0.),(200,1000.)]:
+        feature=scene.map_features.add();feature.id=fid;feature.lane.type=2
+        for offset in [0.,5.]:
+            point=feature.lane.polyline.add();point.x=x+offset;point.y=0.
+    agents=np.zeros((2,91,8),np.float32);agents[1,:,0]=1000.;agents[...,5]=1.
+    with tempfile.TemporaryDirectory() as folder:
+        source=Path(folder)/'sample.npz'
+        np.savez(source,scenario_id='reordered',config_json=json.dumps(dict(normalize_to_ego=True,map_distance_threshold=100.)),
+            ego_origin_xy=np.zeros(2,np.float32),ego_heading=0.,agents=agents,agent_mask=np.ones(2,bool),
+            agent_ids=np.array([10,20]),agent_src_indices=np.array([0,1]),
+            ooi_src_indices=np.array([0]),ooi_track_ids=np.array([10]),
+            original_sdc_src_index=0,original_sdc_track_id=10,map_crop_src_indices=np.array([0]),
+            map_ids=np.array([-1]),map_mask=np.zeros((1,6),bool))
+        cached=build_cache(scene,source,5.,6)
+        assert cached['map_ids'].tolist()==[100]

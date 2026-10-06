@@ -19,7 +19,7 @@ from waymo.adaptations.scenario_reader import scenario_class
 import struct
 from waymo.core.waymo_vector_filter import _rotate_xy
 
-VERSION = 1
+VERSION = 2
 
 
 def metric_segments(xy, map_type, length=5., points=6):
@@ -79,10 +79,12 @@ def build_cache(scene, source, length, points):
             raise ValueError('Scenario/NPZ temporal alignment differs')
         # Verify track IDs and world positions at the original current frame.
         tracks = {t.id:t for t in scene.tracks}
-        source_indices=d['agent_src_indices']
-        for slot in np.flatnonzero(mask):
-            if scene.tracks[int(source_indices[slot])].id != int(ids[slot]):
-                raise ValueError('Scenario/NPZ source track ordering differs')
+        # tf.Example state slot order also differs from Scenario.tracks order.
+        # Resolve original crop source slots to track IDs using NPZ metadata.
+        source_to_id = {int(src):int(tid) for src,tid,valid in
+                        zip(d['agent_src_indices'],ids,mask) if valid}
+        source_to_id.update(zip(map(int,d['ooi_src_indices']),map(int,d['ooi_track_ids'])))
+        source_to_id[int(d['original_sdc_src_index'])]=int(d['original_sdc_track_id'])
         for slot in np.flatnonzero(mask & (agents[:,10,5] > .5)):
             state = tracks[int(ids[slot])].states[10]
             expected = _rotate_xy(np.array([[state.center_x,state.center_y]])-origin,heading)[0]
@@ -93,7 +95,7 @@ def build_cache(scene, source, length, points):
         crop_indices = d['map_crop_src_indices'].tolist()
         crop = []
         for idx in crop_indices:
-            track = scene.tracks[idx]
+            track = tracks[source_to_id[int(idx)]]
             crop.extend([[s.center_x,s.center_y] for s in track.states if s.valid])
         crop = np.asarray(crop).reshape(-1,2)
         if not len(crop): raise ValueError('Empty map crop trajectory')
