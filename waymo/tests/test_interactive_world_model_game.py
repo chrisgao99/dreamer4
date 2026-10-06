@@ -1,3 +1,4 @@
+import concurrent.futures
 import math
 import random
 import unittest
@@ -193,6 +194,110 @@ class CheckpointProfileTest(unittest.TestCase):
         )
         self.assertEqual(path, Path("/tmp/custom-interactive.pt"))
         self.assertEqual(label, "custom")
+
+    def test_direct_action_flow_options_select_h40_b5_protocol(self):
+        args = build_parser().parse_args(
+            [
+                "--direct-action-flow-ckpt",
+                "/tmp/h40.pt",
+                "--direct-action-flow-commitment",
+                "5",
+                "--direct-action-flow-solver-steps",
+                "8",
+            ]
+        )
+        self.assertEqual(args.direct_action_flow_ckpt, "/tmp/h40.pt")
+        self.assertEqual(args.direct_action_flow_commitment, 5)
+        self.assertEqual(args.direct_action_flow_solver_steps, 8)
+        self.assertEqual(args.direct_action_flow_weights, "ema")
+
+
+class DirectActionFlowGameTest(unittest.TestCase):
+    def make_server_and_state(self):
+        server = WaymoInteractiveServer.__new__(WaymoInteractiveServer)
+        server.control = ControlConfig(dt=0.1)
+        server.model_args = SimpleNamespace(history_length=11)
+        server.args = SimpleNamespace(max_steps=20)
+        server.daf_commitment = 5
+        sample_calls = []
+
+        def sample_plan(state):
+            sample_calls.append(state.step)
+            poses = torch.zeros(2, 40, 3)
+            poses[1, :, 0] = torch.arange(1, 41, dtype=torch.float32)
+            state.daf_plan_poses = poses
+            state.daf_plan_valid = torch.ones(2, 40, dtype=torch.bool)
+            state.daf_plan_index = 0
+            state.daf_plan_anchor = state.step
+            state.daf_commit_end = state.step + 5
+
+        server._sample_direct_action_flow_plan = sample_plan
+        server._launch_direct_action_flow_prefetch = lambda *_args: None
+        history = torch.zeros(1, 2, 11, 8)
+        history[..., 5] = 1.0
+        history[..., 7] = 1.0
+        state = SimpleNamespace(
+            focus=FocusState(x=0.0, y=0.0, speed=1.0, yaw=0.0),
+            keys_down=set(),
+            step=0,
+            daf_history=history,
+            daf_generator=torch.Generator(),
+            daf_plan_poses=None,
+            daf_plan_valid=None,
+            daf_plan_index=0,
+            daf_plan_anchor=0,
+            daf_commit_end=0,
+            daf_prefetch=None,
+            daf_prefetch_anchor=0,
+            world_history=[],
+            yaw_history=[],
+            velocity_history=[],
+            valid_history=[],
+        )
+        return server, state, sample_calls
+
+    def test_human_advances_each_tick_and_late_prefetch_uses_h40_tail(self):
+        server, state, sample_calls = self.make_server_and_state()
+        for expected_step in range(1, 7):
+            server._advance_direct_action_flow(state, AnalogControl())
+            self.assertEqual(state.step, expected_step)
+            self.assertAlmostEqual(state.focus.x, expected_step * 0.1, places=6)
+            self.assertAlmostEqual(
+                float(state.world_history[-1][1, 0]),
+                float(expected_step),
+            )
+        self.assertEqual(sample_calls, [0])
+        self.assertAlmostEqual(state.focus.x, 0.6, places=6)
+
+    def test_ready_prefetch_is_swapped_at_five_step_boundary(self):
+        server, state, _sample_calls = self.make_server_and_state()
+        server._advance_direct_action_flow(state, AnalogControl())
+        poses = torch.zeros(2, 40, 3)
+        poses[1, :, 0] = torch.arange(100, 140, dtype=torch.float32)
+        future = concurrent.futures.Future()
+        future.set_result((poses, torch.ones(2, 40, dtype=torch.bool)))
+        state.daf_prefetch = future
+        state.daf_prefetch_anchor = 5
+        for _ in range(4):
+            server._advance_direct_action_flow(state, AnalogControl())
+        self.assertEqual(state.step, 5)
+
+        server._advance_direct_action_flow(state, AnalogControl())
+        self.assertEqual(state.daf_plan_anchor, 5)
+        self.assertEqual(state.step, 6)
+        self.assertAlmostEqual(float(state.world_history[-1][1, 0]), 100.0)
+
+    def test_human_pose_replaces_generated_focus_pose(self):
+        server, state, _sample_calls = self.make_server_and_state()
+        server._advance_direct_action_flow(
+            state,
+            AnalogControl(steering=1.0, throttle=1.0),
+        )
+        rendered_focus_xy = state.world_history[-1][0]
+        self.assertAlmostEqual(rendered_focus_xy[0], state.focus.x, places=6)
+        self.assertAlmostEqual(rendered_focus_xy[1], state.focus.y, places=6)
+        self.assertNotEqual(state.focus.yaw, 0.0)
+        self.assertTrue(state.valid_history[-1][0])
 
 
 class ContextRolloutProtocolTest(unittest.TestCase):

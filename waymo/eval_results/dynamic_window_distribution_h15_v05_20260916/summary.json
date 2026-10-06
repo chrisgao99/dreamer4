@@ -1,0 +1,112 @@
+{
+  "horizon": 15,
+  "history": 11,
+  "speed_threshold_mps": 0.5,
+  "dt": 0.1,
+  "ratio_definition": "dynamic agents / agents with >=1 valid contiguous transition; robust version requires >=10",
+  "sampling": "uniform files, uniform complete focus windows; longest prefix fallback if none",
+  "splits": {
+    "train": {
+      "files": 44998,
+      "selected_windows": 2939042,
+      "fallback_files": 15,
+      "window_dynamic_ratio_histogram_edges": [
+        0.0,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5,
+        0.6000000000000001,
+        0.7000000000000001,
+        0.8,
+        0.9,
+        1.0
+      ],
+      "window_histogram_counts": [
+        46104,
+        237832,
+        401245,
+        438488,
+        391578,
+        397967,
+        312868,
+        183844,
+        178374,
+        350742
+      ],
+      "scene_uniform_mean_dynamic_ratio": 0.5143711931099123,
+      "scene_mean_dynamic_ratio_quantiles": [
+        0.029325511306524277,
+        0.2104526549577713,
+        0.3218865990638733,
+        0.47866764664649963,
+        0.6888526380062103,
+        0.9023303806781774,
+        1.0
+      ],
+      "within_scene_ratio_range_quantiles": [
+        0.0,
+        0.06451612710952759,
+        0.11515151895582676,
+        0.1875,
+        0.2976190149784088,
+        0.4375,
+        1.0
+      ],
+      "fraction_scenes_ratio_range_lt_005": 0.07633672607671452,
+      "scene_uniform_mean_robust_dynamic_ratio": 0.5233461900105346
+    },
+    "val": {
+      "files": 5002,
+      "selected_windows": 327246,
+      "fallback_files": 2,
+      "window_dynamic_ratio_histogram_edges": [
+        0.0,
+        0.1,
+        0.2,
+        0.30000000000000004,
+        0.4,
+        0.5,
+        0.6000000000000001,
+        0.7000000000000001,
+        0.8,
+        0.9,
+        1.0
+      ],
+      "window_histogram_counts": [
+        5373,
+        25980,
+        45258,
+        47244,
+        42842,
+        43627,
+        35335,
+        20000,
+        18366,
+        43221
+      ],
+      "scene_uniform_mean_dynamic_ratio": 0.5189961229221243,
+      "scene_mean_dynamic_ratio_quantiles": [
+        0.05998969078063965,
+        0.21156908571720123,
+        0.3170918598771095,
+        0.4794433265924454,
+        0.6997353434562683,
+        0.9250873327255255,
+        1.0
+      ],
+      "within_scene_ratio_range_quantiles": [
+        0.0,
+        0.06000667586922646,
+        0.11666665971279144,
+        0.18551382422447205,
+        0.2970755100250244,
+        0.4294069200754167,
+        0.9666666388511658
+      ],
+      "fraction_scenes_ratio_range_lt_005": 0.08676529388244703,
+      "scene_uniform_mean_robust_dynamic_ratio": 0.5286994089768297
+    }
+  }
+}

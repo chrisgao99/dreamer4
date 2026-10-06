@@ -50,9 +50,7 @@ from waymo.interactive_world_model_game import (  # noqa: E402
 
 DEFAULT_LOCAL_MANIFEST = WAYMO_ROOT / "cache/pufferdrive_static_smoke/manifest.csv"
 DEFAULT_PRIORITY_SCENE_QUEUE = (3155, 3445, 331, 2121, 4188)
-DEFAULT_AUTO_CENTER_SCRIPT = Path(
-    "/p/liverobotics/yf_metadrive/code/auto_center.py"
-)
+DEFAULT_AUTO_CENTER_SCRIPT = REPO_ROOT.parent / "driving-rig" / "auto_center.py"
 
 
 def _clamp(value: float, low: float, high: float) -> float:

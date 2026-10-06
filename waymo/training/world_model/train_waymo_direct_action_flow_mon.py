@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT));sys.path.insert(0,str(ROOT/'waymo/core'))
+from waymo.training.world_model.action_kinematics import execute_model_actions, inverse_model_actions
 from waymo.training.world_model import train_waymo_direct_action_flow_erd as erd
 from waymo.training.world_model.direct_action_flow_mon_losses import motion_distances,physical_losses,reliable_road_mask
 from waymo.training.world_model.direct_action_flow import execute_holonomic_actions,agents_to_bntf,gather_agent_window,inverse_holonomic_actions,rollout_receding_horizon
@@ -26,7 +27,8 @@ def candidate(model,normalizer,prepared,batch,seed,solver_steps):
         torch.manual_seed(seed)
         actions,mask=erd.generate_committed(model,normalizer,prepared.history,batch,prepared.anchors,solver_steps,5)
         metric=normalizer.denormalize(actions,prepared.targets.agent_type)
-        return execute_holonomic_actions(prepared.targets.current_pose,metric,mask)
+        return execute_model_actions(model,prepared.targets.current_pose,metric,mask,
+            agent_type=prepared.targets.agent_type,agent_lengths=batch.get("agent_lengths"))
 
 
 def backward_mon(model,normalizer,prepared,batch,step,cfg):
@@ -82,10 +84,10 @@ def validate(model,normalizer,loader,ta,cfg):
         b=base.move_batch(raw,device);agents=agents_to_bntf(b['agents'],b['agent_mask'])
         anchors=torch.full((agents.shape[0],),10,device=device,dtype=torch.long)
         h,f=gather_agent_window(agents,anchors,history_length=11,horizon=80)
-        t=inverse_holonomic_actions(h,f,b['agent_mask'],max_displacement_m=ta.physical_max_displacement_m,max_yaw_delta_rad=ta.physical_max_yaw_delta_rad)
+        t=inverse_model_actions(model,h,f,b['agent_mask'],agent_lengths=b.get('agent_lengths'),max_displacement_m=ta.physical_max_displacement_m,max_yaw_delta_rad=ta.physical_max_yaw_delta_rad)
         support=reliable_road_mask(t.future_pose,t.current_pose,t.valid,t.agent_type,b['map_polylines'],b['map_mask'])
         for k in range(cfg.eval_rollouts):
-            poses=rollout_receding_horizon(model,normalizer,initial_history=h,agent_mask=b['agent_mask'],
+            poses=rollout_receding_horizon(model,normalizer,initial_history=h,agent_lengths=b.get('agent_lengths'),agent_mask=b['agent_mask'],
                 map_polylines=b['map_polylines'],map_mask=b['map_mask'],current_light_sequence=b['lights'][:,10:90],
                 current_light_mask_sequence=b['light_mask'][:,10:90],focus_action_sequence=None,focus_action_valid=None,
                 rollout_steps=80,commitment=5,solver_steps=cfg.solver_steps,

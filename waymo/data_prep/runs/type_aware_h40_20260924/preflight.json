@@ -1,0 +1,24 @@
+{
+  "action_kinematics": {
+    "cyclist_rho": 0.03462184965610504,
+    "max_reexecution_error_m": 0.25,
+    "mode": "type_aware",
+    "vehicle_rho": 0.22283996641635895
+  },
+  "splits": {
+    "train": {
+      "max_reexecution_error_m": 0.24968568980693817,
+      "padded_target_slots": 40960,
+      "sampled_files": 32,
+      "valid_fraction_of_padded_slots": 0.4909912109375,
+      "valid_target_points": 20111
+    },
+    "val": {
+      "max_reexecution_error_m": 0.2499719262123108,
+      "padded_target_slots": 40960,
+      "sampled_files": 32,
+      "valid_fraction_of_padded_slots": 0.541162109375,
+      "valid_target_points": 22166
+    }
+  }
+}

@@ -25,6 +25,7 @@ from torch.utils.checkpoint import checkpoint as activation_checkpoint
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'waymo/core'))
+from waymo.training.world_model.action_kinematics import execute_model_actions, inverse_model_actions
 from waymo.training.world_model import train_waymo_direct_action_flow as base
 from waymo.training.world_model.direct_action_flow import (
     agents_to_bntf, gather_agent_window, execute_holonomic_actions,
@@ -81,7 +82,8 @@ def generate_committed(model, normalizer, history, batch, anchors, solver_steps=
         masks.append(mask)
         metric = normalizer.denormalize(actions, types)
         pose = torch.cat((history[:, :, -1, :2], history[:, :, -1, 6:7]), dim=-1)
-        poses = execute_holonomic_actions(pose, metric, mask)
+        poses = execute_model_actions(model, pose, metric, mask,
+            agent_type=types, agent_lengths=batch.get("agent_lengths"))
         # Match the existing rollout's generated-frame feature layout exactly.
         zeros = history.new_zeros((*poses.shape[:-1], 3))
         frames = torch.cat((poses[..., :2], zeros, mask[..., None].to(history.dtype),
@@ -138,13 +140,14 @@ def validate(model, normalizer, loader, ta, device, cfg):
         anchor = ta.history_length-1
         anchors = torch.full((agents.shape[0],), anchor, device=device, dtype=torch.long)
         history, future = gather_agent_window(agents, anchors, history_length=ta.history_length, horizon=80)
-        targets = inverse_holonomic_actions(history, future, b['agent_mask'],
+        targets = inverse_model_actions(model, history, future, b['agent_mask'],
+            agent_lengths=b.get('agent_lengths'),
             max_displacement_m=ta.physical_max_displacement_m,
             max_yaw_delta_rad=ta.physical_max_yaw_delta_rad)
         poses = []
         for k in range(cfg.eval_rollouts):
             gen = torch.Generator(device=device).manual_seed(12346 + bi*cfg.eval_rollouts+k)
-            poses.append(rollout_receding_horizon(model, normalizer, initial_history=history,
+            poses.append(rollout_receding_horizon(model, normalizer, initial_history=history, agent_lengths=b.get('agent_lengths'),
                 agent_mask=b['agent_mask'], map_polylines=b['map_polylines'], map_mask=b['map_mask'],
                 current_light_sequence=b['lights'][:, anchor:anchor+80],
                 current_light_mask_sequence=b['light_mask'][:, anchor:anchor+80],

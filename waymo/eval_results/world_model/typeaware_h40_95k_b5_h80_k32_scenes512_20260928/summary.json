@@ -1,0 +1,28 @@
+{
+  "typeaware": {
+    "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_scratch100k_20260924/step_000095000.pt",
+    "checkpoint_step": 95000,
+    "first40_mean_ade_m": 1.0030899047851562,
+    "flow_erd_cpd": 0.25742873549461365,
+    "mean_ade_m": 2.764986515045166,
+    "metric_validity": "holonomic",
+    "minade_m": 1.851656436920166,
+    "num_rollouts": 32,
+    "rollout_commitment_steps": 5,
+    "rollout_steps": 80,
+    "scene_count": 512
+  },
+  "typeaware_vxvy": {
+    "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_scratch100k_20260925/step_000095000.pt",
+    "checkpoint_step": 95000,
+    "first40_mean_ade_m": 0.7947975397109985,
+    "flow_erd_cpd": 0.2593761682510376,
+    "mean_ade_m": 2.6866185665130615,
+    "metric_validity": "holonomic",
+    "minade_m": 1.63206946849823,
+    "num_rollouts": 32,
+    "rollout_commitment_steps": 5,
+    "rollout_steps": 80,
+    "scene_count": 512
+  }
+}

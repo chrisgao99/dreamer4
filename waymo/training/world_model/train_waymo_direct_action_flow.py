@@ -30,6 +30,7 @@ for path in (REPO_ROOT, WAYMO_ROOT / "core"):
 
 from waymo.core.waymo_vector_dataset import WaymoVectorDataset
 from waymo.training.world_model.direct_action_flow import (
+    dynamic_agent_mask,
     ActionNormalizer,
     ActionTargets,
     DirectActionFlowModel,
@@ -42,6 +43,10 @@ from waymo.training.world_model.direct_action_flow import (
     rollout_receding_horizon,
     select_window_anchors,
     wrap_angle_rad,
+)
+
+from waymo.training.world_model.action_kinematics import (
+    KinematicsConfig, inverse_actions, inverse_model_actions, execute_model_actions,
 )
 
 
@@ -67,6 +72,9 @@ def move_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
 
 def collate_vector_batch(items: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
     """Stack tensor fields; paths and scenario strings are not training inputs."""
+    if "map_adaptation" in items[0]:
+        from waymo.adaptations.map_dataset import collate_maps
+        return collate_maps(items)
     return {
         key: torch.stack([item[key] for item in items], dim=0)
         for key, value in items[0].items()
@@ -215,23 +223,51 @@ def compute_action_statistics(
     }
 
 
+def resolve_kinematics_args(args):
+    """Embed calibration in checkpoint args; inference never needs the JSON path."""
+    mode = getattr(args, 'action_execution', 'holonomic')
+    if mode == 'type_aware':
+        path = getattr(args, 'kinematics_calibration', None)
+        if not path:
+            raise ValueError('--action_execution type_aware requires --kinematics_calibration')
+        payload = json.loads(Path(path).read_text())
+        config = KinematicsConfig(mode=mode, vehicle_rho=payload['vehicle_rho'],
+            cyclist_rho=payload['cyclist_rho'],
+            max_reexecution_error_m=args.max_reexecution_error_m)
+    else:
+        config = KinematicsConfig()
+    args.action_kinematics = config.to_dict()
+
+
 def load_or_compute_action_statistics(args: argparse.Namespace) -> dict[str, Any]:
+    config = KinematicsConfig.from_args(args)
     path = Path(args.action_stats_path)
     if path.is_file():
         payload = json.loads(path.read_text())
+        if KinematicsConfig(**payload.get('action_kinematics', {})) != config:
+            raise ValueError('Action statistics use different kinematics; select a new statistics path')
+        if config.mode == 'type_aware' and (payload.get('horizon') != args.horizon
+                or payload.get('history_length') != args.history_length
+                or payload.get('physical_max_displacement_m') != args.physical_max_displacement_m
+                or payload.get('physical_max_yaw_delta_rad') != args.physical_max_yaw_delta_rad):
+            raise ValueError('Type-aware statistics window/filter configuration differs')
         print(f"Loaded action statistics: {path}", flush=True)
         return payload
     print(f"Computing action statistics from {args.data_dir}", flush=True)
-    payload = compute_action_statistics(
-        args.data_dir,
-        history_length=args.history_length,
-        num_types=args.num_agent_types,
-        batch_size=args.stats_batch_size,
-        num_workers=args.num_workers,
-        max_files=args.stats_max_files,
-        max_displacement_m=args.physical_max_displacement_m,
-        max_yaw_delta_rad=args.physical_max_yaw_delta_rad,
-    )
+    if config.mode == 'type_aware':
+        from waymo.training.world_model.prepare_action_kinematics import compute_type_aware_statistics
+        payload = compute_type_aware_statistics(args, config)
+    else:
+        payload = compute_action_statistics(
+            args.data_dir,
+            history_length=args.history_length,
+            num_types=args.num_agent_types,
+            batch_size=args.stats_batch_size,
+            num_workers=args.num_workers,
+            max_files=args.stats_max_files,
+            max_displacement_m=args.physical_max_displacement_m,
+            max_yaw_delta_rad=args.physical_max_yaw_delta_rad,
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
@@ -287,10 +323,11 @@ def prepare_batch(
         history_length=args.history_length,
         horizon=args.horizon,
     )
-    targets = inverse_holonomic_actions(
+    targets = inverse_actions(
         history,
         future,
         batch["agent_mask"],
+        config=KinematicsConfig.from_args(args), agent_lengths=batch.get("agent_lengths"),
         max_displacement_m=args.physical_max_displacement_m,
         max_yaw_delta_rad=args.physical_max_yaw_delta_rad,
     )
@@ -317,7 +354,20 @@ def scene_kwargs(batch: dict[str, Any], prepared: PreparedBatch) -> dict[str, to
         "map_mask": batch["map_mask"],
         "current_lights": prepared.current_lights,
         "current_light_mask": prepared.current_light_mask,
+        **(dict(map_ids=batch["map_ids"], map_is_lane=batch["map_is_lane"],
+                map_stop_sign=batch["map_stop_sign"], map_stop_point=batch["map_stop_point"],
+                current_light_ids=batch["light_ids"][torch.arange(len(prepared.anchors),
+                                    device=prepared.anchors.device), prepared.anchors])
+           if "map_adaptation" in batch else {}),
     }
+
+
+def balance_kwargs(prepared, args):
+    if not getattr(args, "balance_dynamic_loss", False):
+        return {}
+    return dict(dynamic_mask=dynamic_agent_mask(prepared.targets.actions,
+                prepared.targets.valid, args.dynamic_speed_threshold),
+                dynamic_weight=args.dynamic_loss_weight)
 
 
 class ModelEMA:
@@ -340,7 +390,7 @@ class ModelEMA:
 
 
 def create_model(args: argparse.Namespace) -> DirectActionFlowModel:
-    return DirectActionFlowModel(
+    model = DirectActionFlowModel(
         d_model=args.d_model,
         n_heads=args.n_heads,
         history_length=args.history_length,
@@ -355,9 +405,18 @@ def create_model(args: argparse.Namespace) -> DirectActionFlowModel:
         dropout=args.dropout,
         mlp_ratio=args.mlp_ratio,
         position_scale_m=args.position_scale_m,
+        include_agent_velocity=getattr(args, "include_agent_velocity", False),
+        velocity_scale_mps=getattr(args, "velocity_scale_mps", 10.0),
+        map_adaptation=getattr(args, "map_adaptation", False),
+        map_neighbors=getattr(args, "map_neighbors", 32),
+        agent_map_neighbors=getattr(args, "agent_map_neighbors", 64),
+        map_radius_m=getattr(args, "map_radius_m", 30.0),
+        agent_map_radius_m=getattr(args, "agent_map_radius_m", 100.0),
         modulation_scale_limit=args.modulation_scale_limit,
         modulation_shift_limit=args.modulation_shift_limit,
     )
+    model.kinematics = KinematicsConfig.from_args(args)
+    return model
 
 
 def lr_multiplier(step: int, args: argparse.Namespace) -> float:
@@ -375,6 +434,23 @@ def lr_multiplier(step: int, args: argparse.Namespace) -> float:
     )
     cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
     return args.min_lr_ratio + (1.0 - args.min_lr_ratio) * cosine
+
+
+def append_metrics(path: Path, record: dict[str, Any]) -> None:
+    """Recover logging if the run directory disappears during training."""
+    line = json.dumps(record, sort_keys=True) + "\n"
+    try:
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(line)
+    except FileNotFoundError:
+        print(
+            f"WARNING: metrics directory missing; recreating {path.parent}. "
+            "Previously removed metrics/checkpoints cannot be recovered.",
+            flush=True,
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(line)
 
 
 def save_checkpoint(
@@ -417,6 +493,9 @@ def load_checkpoint(
     load_optimizer: bool = True,
 ) -> tuple[int, int, float]:
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    saved_config = KinematicsConfig(**checkpoint["args"].get("action_kinematics", {}))
+    if saved_config != model.kinematics:
+        raise ValueError("Cannot resume checkpoint with different action kinematics; use a fresh run")
     model.load_state_dict(checkpoint["model"], strict=True)
     ema.model.load_state_dict(checkpoint.get("ema_model", checkpoint["model"]), strict=True)
     if load_optimizer:
@@ -455,11 +534,13 @@ def evaluate_flow(
             loss_type=args.flow_loss_type,
             huber_beta=args.flow_huber_beta,
             condition_focus_actions=args.condition_focus_actions,
+            **balance_kwargs(prepared, args),
         )
-        predicted_pose = execute_holonomic_actions(
-            prepared.targets.current_pose,
+        predicted_pose = execute_model_actions(
+            model, prepared.targets.current_pose,
             prepared.targets.actions,
             prepared.targets.valid,
+            agent_type=prepared.targets.agent_type, agent_lengths=batch.get("agent_lengths"),
         )
         pose_xy_error = torch.linalg.vector_norm(
             predicted_pose[..., 0:2] - prepared.targets.future_pose[..., 0:2], dim=-1
@@ -471,6 +552,10 @@ def evaluate_flow(
             "val_normalized_endpoint_mae": metrics["normalized_endpoint_mae"],
             "val_inverse_execute_xy_error_m": roundtrip,
         }
+        if getattr(args, "balance_dynamic_loss", False):
+            values.update({"val_" + k: v for k, v in metrics.items()
+                           if k in ("dynamic_flow_loss", "static_flow_loss", "unbalanced_flow_loss",
+                                    "dynamic_agent_count", "static_agent_count")})
         for name, value in values.items():
             totals[name] = totals.get(name, 0.0) + float(value)
         batches += 1
@@ -520,8 +605,9 @@ def evaluate_samples(
             )
             metric = normalizer.denormalize(normalized, prepared.targets.agent_type)
             candidate_poses.append(
-                execute_holonomic_actions(
-                    prepared.targets.current_pose, metric, model_mask
+                execute_model_actions(
+                    model, prepared.targets.current_pose, metric, model_mask,
+                    agent_type=prepared.targets.agent_type, agent_lengths=batch.get("agent_lengths"),
                 )
             )
         poses = torch.stack(candidate_poses, dim=1)  # (B,R,N,H,3)
@@ -602,10 +688,11 @@ def evaluate_receding_rollout(
             history_length=args.history_length,
             horizon=available,
         )
-        targets = inverse_holonomic_actions(
-            history,
+        targets = inverse_model_actions(
+            model, history,
             future,
             batch["agent_mask"],
+            agent_lengths=batch.get("agent_lengths"),
             max_displacement_m=args.physical_max_displacement_m,
             max_yaw_delta_rad=args.physical_max_yaw_delta_rad,
         )
@@ -615,11 +702,16 @@ def evaluate_receding_rollout(
             model,
             normalizer,
             initial_history=history,
+            agent_lengths=batch.get("agent_lengths"),
             agent_mask=batch["agent_mask"],
             map_polylines=batch["map_polylines"],
             map_mask=batch["map_mask"],
             current_light_sequence=light_sequence,
             current_light_mask_sequence=light_mask_sequence,
+            **(dict(map_ids=batch["map_ids"], map_is_lane=batch["map_is_lane"],
+                    map_stop_sign=batch["map_stop_sign"], map_stop_point=batch["map_stop_point"],
+                    light_id_sequence=batch["light_ids"][:, anchor : anchor + available])
+               if "map_adaptation" in batch else {}),
             focus_action_sequence=(
                 targets.actions[:, 0] if args.condition_focus_actions else None
             ),
@@ -673,6 +765,8 @@ def make_loader(
 
 
 def train(args: argparse.Namespace) -> None:
+    if not 0 < args.dynamic_loss_weight < 1 or args.dynamic_speed_threshold < 0:
+        raise ValueError("Invalid dynamic balance settings")
     if args.horizon % args.commitment:
         raise ValueError("--horizon must be divisible by --commitment")
     if not 0.0 < args.train_flow_time_max <= 1.0:
@@ -693,10 +787,23 @@ def train(args: argparse.Namespace) -> None:
     torch.set_float32_matmul_precision("high")
     seed_everything(args.seed)
 
+    resolve_kinematics_args(args)
+    if args.resume:
+        saved = torch.load(args.resume, map_location='cpu', weights_only=False, mmap=True)
+        if KinematicsConfig(**saved['args'].get('action_kinematics', {})) != KinematicsConfig.from_args(args):
+            raise ValueError('Action kinematics changed: cannot resume a holonomic checkpoint as type-aware')
+        del saved
     stats = load_or_compute_action_statistics(args)
     normalizer = build_normalizer(stats, device)
-    train_dataset = WaymoVectorDataset(args.data_dir)
-    val_dataset = WaymoVectorDataset(args.val_data_dir)
+    if getattr(args, "map_adaptation", False):
+        if not args.map_cache_dir:
+            raise ValueError("--map_adaptation requires --map_cache_dir generated from raw Scenarios")
+        from waymo.adaptations.map_dataset import MapAdaptationDataset
+        train_dataset = MapAdaptationDataset(args.data_dir, args.map_cache_dir)
+        val_dataset = MapAdaptationDataset(args.val_data_dir, args.map_cache_dir)
+    else:
+        train_dataset = WaymoVectorDataset(args.data_dir)
+        val_dataset = WaymoVectorDataset(args.val_data_dir)
     train_loader = make_loader(
         train_dataset,
         batch_size=args.batch_size,
@@ -821,6 +928,7 @@ def train(args: argparse.Namespace) -> None:
                     loss_type=args.flow_loss_type,
                     huber_beta=args.flow_huber_beta,
                     condition_focus_actions=args.condition_focus_actions,
+                    **balance_kwargs(prepared, args),
                 )
                 scaled_loss = loss / float(args.grad_accum_steps)
             if args.fail_on_nonfinite and not bool(torch.isfinite(loss).item()):
@@ -865,8 +973,7 @@ def train(args: argparse.Namespace) -> None:
                     },
                 }
                 print(" ".join(f"{k}={v:.6g}" for k, v in record.items()), flush=True)
-                with metrics_path.open("a", encoding="utf-8") as handle:
-                    handle.write(json.dumps(record, sort_keys=True) + "\n")
+                append_metrics(metrics_path, record)
                 if wandb_run is not None:
                     wandb_run.log(record, step=step)
                 rolling.clear()
@@ -903,8 +1010,7 @@ def train(args: argparse.Namespace) -> None:
                     )
                 record = {"step": step, "epoch": epoch, **validation}
                 print("validation " + " ".join(f"{k}={v:.6g}" for k, v in record.items()), flush=True)
-                with metrics_path.open("a", encoding="utf-8") as handle:
-                    handle.write(json.dumps(record, sort_keys=True) + "\n")
+                append_metrics(metrics_path, record)
                 if wandb_run is not None:
                     wandb_run.log(validation, step=step)
                 model.train()
@@ -969,6 +1075,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--val_data_dir", required=True)
     parser.add_argument("--ckpt_dir", required=True)
     parser.add_argument("--action_stats_path", required=True)
+    parser.add_argument("--action_execution", choices=("holonomic", "type_aware"), default="holonomic")
+    parser.add_argument("--kinematics_calibration", help="Training-data calibration JSON containing vehicle_rho/cyclist_rho")
+    parser.add_argument("--max_reexecution_error_m", type=float, default=.25,
+                        help="Explicit reproduction choice; paper does not specify the threshold")
     parser.add_argument("--resume", default=None)
     parser.add_argument(
         "--reset_optimizer_on_resume",
@@ -977,6 +1087,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Load model/EMA and step metadata but initialize a fresh optimizer/scaler.",
     )
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--balance_dynamic_loss", action="store_true")
+    parser.add_argument("--dynamic_speed_threshold", type=float, default=0.5)
+    parser.add_argument("--dynamic_loss_weight", type=float, default=0.7)
     parser.add_argument("--seed", type=int, default=0)
 
     parser.add_argument("--history_length", type=int, default=11)
@@ -992,12 +1105,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--position_scale_m", type=float, default=100.0)
+    parser.add_argument("--include_agent_velocity", action=argparse.BooleanOptionalAction, default=False,
+                        help="Append scene-frame vx, vy to each history state")
+    parser.add_argument("--velocity_scale_mps", type=float, default=10.0)
     parser.add_argument("--num_agent_types", type=int, default=16)
     parser.add_argument("--d_model", type=int, default=256)
     parser.add_argument("--n_heads", type=int, default=8)
     parser.add_argument("--hidden_dim", type=int, default=128)
     parser.add_argument("--history_depth", type=int, default=2)
     parser.add_argument("--map_depth", type=int, default=2)
+    parser.add_argument("--map_adaptation", action="store_true")
+    parser.add_argument("--map_cache_dir", default=None)
+    parser.add_argument("--map_neighbors", type=int, default=32)
+    parser.add_argument("--agent_map_neighbors", type=int, default=64)
+    parser.add_argument("--map_radius_m", type=float, default=30.0)
+    parser.add_argument("--agent_map_radius_m", type=float, default=100.0)
     parser.add_argument("--scene_depth", type=int, default=4)
     parser.add_argument("--action_depth", type=int, default=8)
     parser.add_argument("--step_refiner_depth", type=int, default=2)

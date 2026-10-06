@@ -4,7 +4,7 @@ This module intentionally has no tokenizer or learned scene bottleneck.  Each
 selected track owns one agent token, and the stochastic variable is the joint
 H-step local action tensor ``(a_longitudinal, a_lateral, delta_yaw)``.
 
-The first version uses a holonomic executor for every agent.  Agent type is a
+The default uses a holonomic executor; type-aware execution is opt-in.  Agent type is a
 static conditioning feature; validity is always a mask and is never generated
 by the continuous flow.
 """
@@ -441,12 +441,18 @@ class AgentHistoryEncoder(nn.Module):
         mlp_ratio: float,
         position_scale_m: float,
         max_agent_type: int,
+        include_agent_velocity: bool = False,
+        velocity_scale_mps: float = 10.0,
     ) -> None:
         super().__init__()
         self.history_length = int(history_length)
         self.position_scale_m = float(position_scale_m)
+        self.include_agent_velocity = bool(include_agent_velocity)
+        self.velocity_scale_mps = float(velocity_scale_mps)
+        if not math.isfinite(self.velocity_scale_mps) or self.velocity_scale_mps <= 0:
+            raise ValueError("velocity_scale_mps must be finite and positive")
         self.state_mlp = nn.Sequential(
-            nn.Linear(4, d_model), nn.SiLU(), nn.Linear(d_model, d_model)
+            nn.Linear(6 if self.include_agent_velocity else 4, d_model), nn.SiLU(), nn.Linear(d_model, d_model)
         )
         self.type_embed = nn.Embedding(max_agent_type, d_model)
         self.time_embed = nn.Parameter(torch.empty(history_length, d_model))
@@ -473,10 +479,15 @@ class AgentHistoryEncoder(nn.Module):
             ),
             dim=-1,
         )
+        if self.include_agent_velocity:
+            state = torch.cat((state, history[..., 3:5] / self.velocity_scale_mps), dim=-1)
         agent_type = history[:, :, -1, 7].round().long().clamp(
             min=0, max=self.type_embed.num_embeddings - 1
         )
         valid = (history[..., 5] > 0.5) & agent_mask[:, :, None].bool()
+        if self.include_agent_velocity:
+            # Invalid observations must not introduce NaNs through masked tokens.
+            state = torch.where(valid[..., None], state, torch.zeros_like(state))
         x = self.state_mlp(state)
         x = x + self.type_embed(agent_type)[:, :, None]
         x = x + self.time_embed[None, None]
@@ -644,6 +655,9 @@ class SceneEncoding:
     memory: torch.Tensor
     memory_mask: torch.Tensor
     relative_bias: torch.Tensor
+    agent_memory: Optional[torch.Tensor] = None
+    agent_memory_mask: Optional[torch.Tensor] = None
+    agent_memory_bias: Optional[torch.Tensor] = None
 
 
 class DirectActionSceneEncoder(nn.Module):
@@ -663,6 +677,8 @@ class DirectActionSceneEncoder(nn.Module):
         max_agent_type: int = 16,
         max_map_type: int = 64,
         max_light_state: int = 16,
+        include_agent_velocity: bool = False,
+        velocity_scale_mps: float = 10.0,
     ) -> None:
         super().__init__()
         self.agent_encoder = AgentHistoryEncoder(
@@ -674,6 +690,8 @@ class DirectActionSceneEncoder(nn.Module):
             mlp_ratio,
             position_scale_m,
             max_agent_type,
+            include_agent_velocity=include_agent_velocity,
+            velocity_scale_mps=velocity_scale_mps,
         )
         self.map_encoder = PolylineEncoder(
             d_model, hidden_dim, max_map_type, position_scale_m
@@ -867,12 +885,24 @@ class JointActionDiTBlock(nn.Module):
         normed, gate = _modulate(
             self.norm_cross(flat), self.mod_cross(condition), **modulation_kwargs
         )
-        cross = self.scene_cross(
-            normed,
-            key_value=self.norm_memory(scene.memory),
-            query_mask=flat_mask,
-            key_mask=scene.memory_mask,
-        )
+        if scene.agent_memory is None:
+            cross = self.scene_cross(
+                normed,
+                key_value=self.norm_memory(scene.memory),
+                query_mask=flat_mask,
+                key_mask=scene.memory_mask,
+            )
+        else:
+            # Sparse per-agent map memory shared across its H/B action chunks.
+            local_memory = scene.agent_memory
+            keys = local_memory.shape[2]
+            cross = self.scene_cross(
+                normed.reshape(bsz * num_agents, num_chunks, dim),
+                key_value=self.norm_memory(local_memory).reshape(bsz * num_agents, keys, dim),
+                query_mask=flat_mask.reshape(bsz * num_agents, num_chunks),
+                key_mask=scene.agent_memory_mask.reshape(bsz * num_agents, keys),
+                bias=scene.agent_memory_bias.reshape(bsz * num_agents, -1, 1, keys),
+            ).reshape(bsz, num_agents * num_chunks, dim)
         flat = flat + gate * cross
 
         normed, gate = _modulate(
@@ -904,17 +934,33 @@ class DirectActionFlowModel(nn.Module):
         dropout: float = 0.05,
         mlp_ratio: float = 4.0,
         position_scale_m: float = 100.0,
+        include_agent_velocity: bool = False,
+        velocity_scale_mps: float = 10.0,
+        map_adaptation: bool = False,
+        map_neighbors: int = 32,
+        agent_map_neighbors: int = 64,
+        map_radius_m: float = 30.0,
+        agent_map_radius_m: float = 100.0,
         modulation_scale_limit: float = 0.0,
         modulation_shift_limit: float = 0.0,
     ) -> None:
         super().__init__()
         if horizon % chunk_size:
             raise ValueError(f"horizon={horizon} must be divisible by chunk_size={chunk_size}")
+        self.include_agent_velocity = bool(include_agent_velocity)
         self.d_model = int(d_model)
         self.horizon = int(horizon)
         self.chunk_size = int(chunk_size)
         self.num_chunks = self.horizon // self.chunk_size
-        self.scene_encoder = DirectActionSceneEncoder(
+        scene_class = DirectActionSceneEncoder
+        scene_options = {}
+        self.map_adaptation = bool(map_adaptation)
+        if self.map_adaptation:
+            from waymo.adaptations.local_map_encoder import AdaptiveSceneEncoder
+            scene_class = AdaptiveSceneEncoder
+            scene_options = dict(map_neighbors=map_neighbors, agent_map_neighbors=agent_map_neighbors,
+                                 map_radius_m=map_radius_m, agent_map_radius_m=agent_map_radius_m)
+        self.scene_encoder = scene_class(
             d_model=d_model,
             n_heads=n_heads,
             history_depth=history_depth,
@@ -925,6 +971,9 @@ class DirectActionFlowModel(nn.Module):
             dropout=dropout,
             mlp_ratio=mlp_ratio,
             position_scale_m=position_scale_m,
+            include_agent_velocity=include_agent_velocity,
+            velocity_scale_mps=velocity_scale_mps,
+            **scene_options,
         )
         self.action_chunk_embed = nn.Sequential(
             nn.Linear(chunk_size * 3, d_model),
@@ -1053,6 +1102,7 @@ class DirectActionFlowModel(nn.Module):
         solver_steps: int = 8,
         focus_index: int = 0,
         generator: Optional[torch.Generator] = None,
+        initial_noise: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         if solver_steps < 1:
             raise ValueError("solver_steps must be >= 1")
@@ -1061,7 +1111,11 @@ class DirectActionFlowModel(nn.Module):
             device=scene.agent_tokens.device,
             dtype=scene.agent_tokens.dtype,
             generator=generator,
-        )
+        ) if initial_noise is None else initial_noise.to(
+            device=scene.agent_tokens.device, dtype=scene.agent_tokens.dtype
+        ).clone()
+        if x.shape != (*action_mask.shape, 3):
+            raise ValueError("initial_noise must have shape (*action_mask.shape, 3)")
         generated_mask = action_mask.clone().bool()
         if focus_actions is not None:
             if focus_actions.shape != (int(x.shape[0]), self.horizon, 3):
@@ -1096,6 +1150,33 @@ class DirectActionFlowModel(nn.Module):
         return x
 
 
+def dynamic_agent_mask(actions, valid, speed_threshold=0.5, dt=0.1):
+    """Classify using unclipped metric GT local displacements, never predictions."""
+    distance = actions[..., :2].float().norm(dim=-1)
+    speed = torch.where(valid, distance, 0.0).sum(-1) / (valid.sum(-1).clamp_min(1) * dt)
+    return speed > speed_threshold
+
+
+def balanced_agent_flow_loss(per_element_loss, valid, dynamic, dynamic_weight=0.7):
+    """Time/coordinate mean per agent, then group means across the microbatch.
+
+    Empty groups are omitted and remaining group weights renormalized.
+    """
+    counts = valid.sum(-1)
+    agent_loss = torch.where(valid[..., None], per_element_loss, 0.0).sum((-1, -2))
+    agent_loss = agent_loss / (counts.clamp_min(1) * per_element_loss.shape[-1])
+    moving = (counts > 0) & dynamic
+    static = (counts > 0) & ~dynamic
+    dm = (agent_loss * moving).sum() / moving.sum().clamp_min(1)
+    sm = (agent_loss * static).sum() / static.sum().clamp_min(1)
+    dw = dynamic_weight * moving.any().to(agent_loss.dtype)
+    sw = (1 - dynamic_weight) * static.any().to(agent_loss.dtype)
+    loss = (dw * dm + sw * sm) / (dw + sw).clamp_min(1e-8)
+    return loss, {"dynamic_flow_loss": dm.detach(), "static_flow_loss": sm.detach(),
+                  "dynamic_agent_count": moving.sum().detach(),
+                  "static_agent_count": static.sum().detach()}
+
+
 def flow_matching_loss(
     model: DirectActionFlowModel,
     scene: SceneEncoding,
@@ -1107,6 +1188,8 @@ def flow_matching_loss(
     flow_time_max: float = 1.0,
     loss_type: str = "mse",
     huber_beta: float = 1.0,
+    dynamic_mask: Optional[torch.Tensor] = None,
+    dynamic_weight: float = 0.7,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """Standard affine-path conditional flow-matching objective."""
     if not 0.0 < float(flow_time_max) <= 1.0:
@@ -1158,11 +1241,18 @@ def flow_matching_loss(
             beta=float(huber_beta),
         )
     loss = (per_element_loss * weight.float()).sum() / denom.float()
+    group_metrics = {}
+    if dynamic_mask is not None:
+        unbalanced = loss.detach()
+        loss, group_metrics = balanced_agent_flow_loss(
+            per_element_loss, generated_valid, dynamic_mask, dynamic_weight)
+        group_metrics["unbalanced_flow_loss"] = unbalanced
     endpoint = x_lambda.float() + (1.0 - lam.float()) * pred_velocity.float()
     endpoint_mae = (
         (endpoint - normalized_actions.float()).abs() * weight.float()
     ).sum() / denom.float()
     return loss, {
+        **group_metrics,
         "flow_loss": loss.detach(),
         "normalized_endpoint_mae": endpoint_mae.detach(),
         "flow_time_mean": flow_time.mean().detach(),
@@ -1188,6 +1278,13 @@ def rollout_receding_horizon(
     solver_steps: int,
     focus_index: int = 0,
     generator: Optional[torch.Generator] = None,
+    agent_lengths: Optional[torch.Tensor] = None,
+    noise_sequence: Optional[torch.Tensor] = None,
+    map_ids: Optional[torch.Tensor] = None,
+    map_is_lane: Optional[torch.Tensor] = None,
+    map_stop_sign: Optional[torch.Tensor] = None,
+    map_stop_point: Optional[torch.Tensor] = None,
+    light_id_sequence: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """Run closed-loop generate-H/execute-B simulation.
 
@@ -1205,6 +1302,11 @@ def rollout_receding_horizon(
             f"commitment must be in [1,{model.horizon}], got {commitment}"
         )
     bsz, num_agents, history_length, feature_dim = initial_history.shape
+    if noise_sequence is not None:
+        expected = (bsz, (int(rollout_steps) + commitment - 1) // commitment,
+                    num_agents, model.horizon, 3)
+        if tuple(noise_sequence.shape) != expected:
+            raise ValueError(f"noise_sequence shape must be {expected}")
     if feature_dim < 8:
         raise ValueError("initial_history must use the raw >=8 feature layout")
     if int(current_light_sequence.shape[1]) < int(rollout_steps):
@@ -1254,6 +1356,9 @@ def rollout_receding_horizon(
             map_mask=map_mask,
             current_lights=current_light_sequence[:, elapsed],
             current_light_mask=current_light_mask_sequence[:, elapsed],
+            **(dict(map_ids=map_ids, map_is_lane=map_is_lane, map_stop_sign=map_stop_sign,
+                    map_stop_point=map_stop_point, current_light_ids=light_id_sequence[:, elapsed])
+               if getattr(model, "map_adaptation", False) else {}),
         )
         action_mask = scene.agent_mask[:, :, None].expand(
             -1, -1, model.horizon
@@ -1267,6 +1372,8 @@ def rollout_receding_horizon(
             solver_steps=solver_steps,
             focus_index=focus_index,
             generator=generator,
+            **({"initial_noise": noise_sequence[:, elapsed // commitment]}
+               if noise_sequence is not None else {}),
         )
         metric_actions = normalizer.denormalize(normalized, static_type)
         execute_steps = min(int(commitment), int(rollout_steps) - elapsed)
@@ -1275,15 +1382,24 @@ def rollout_receding_horizon(
             dim=-1,
         )
         committed_valid = action_mask[:, :, :execute_steps]
-        poses = execute_holonomic_actions(
-            current_pose,
+        from .action_kinematics import execute_model_actions
+        poses = execute_model_actions(
+            model, current_pose,
             metric_actions[:, :, :execute_steps],
             committed_valid,
+            agent_type=static_type, agent_lengths=agent_lengths,
         )
         executed_parts.append(poses)
 
         new_frames = history.new_zeros((bsz, num_agents, execute_steps, feature_dim))
         new_frames[..., 0:2] = poses[..., 0:2]
+        if getattr(model, "include_agent_velocity", False):
+            # Waymo observations are sampled at 10 Hz in the fixed scene frame.
+            previous_xy = torch.cat((current_pose[:, :, None, :2], poses[:, :, :-1, :2]), dim=2)
+            velocity = (poses[..., :2] - previous_xy) / 0.1
+            velocity = torch.where(committed_valid[..., None], velocity, torch.zeros_like(velocity))
+            new_frames[..., 3:5] = velocity
+            new_frames[..., 2] = torch.linalg.vector_norm(velocity, dim=-1)
         new_frames[..., 5] = committed_valid.to(new_frames.dtype)
         new_frames[..., 6] = poses[..., 2]
         new_frames[..., 7] = static_type[:, :, None].to(new_frames.dtype)

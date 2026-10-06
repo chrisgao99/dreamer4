@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import concurrent.futures
 import gc
 import io
 import json
@@ -423,6 +424,15 @@ class SessionState:
     renderer_name: str = "2d"
     renderer_error: str | None = None
     puffer_disabled: bool = False
+    daf_history: torch.Tensor | None = None
+    daf_plan_poses: torch.Tensor | None = None
+    daf_plan_valid: torch.Tensor | None = None
+    daf_plan_index: int = 0
+    daf_plan_anchor: int = 0
+    daf_commit_end: int = 0
+    daf_generator: torch.Generator | None = None
+    daf_prefetch: concurrent.futures.Future | None = None
+    daf_prefetch_anchor: int = 0
 
 
 def scene_identity(state: SessionState) -> dict[str, Any]:
@@ -472,83 +482,10 @@ class WaymoInteractiveServer:
         if int(args.max_steps) < 1:
             raise ValueError(f"max-steps must be positive, got {args.max_steps}")
 
-        checkpoint_path, checkpoint_profile = resolve_world_model_checkpoint(
-            args.checkpoint_profile,
-            args.world_model_ckpt,
-        )
-        if not checkpoint_path.is_file():
-            raise FileNotFoundError(
-                f"World-model checkpoint for profile {checkpoint_profile!r} not found: "
-                f"{checkpoint_path}"
-            )
-        self.checkpoint_profile = checkpoint_profile
-        self.checkpoint_path = checkpoint_path
-        print(
-            f"[load] world model profile={checkpoint_profile}: {checkpoint_path}",
-            flush=True,
-        )
-        checkpoint = torch.load(checkpoint_path, map_location="cpu", mmap=True)
-        self.checkpoint = checkpoint
-        self.model_args = _model_args_from_checkpoint(checkpoint)
-        self._validate_checkpoint_contract()
-        self.model_rollout_window = int(self.model_args.max_rollout_window)
-        self.model_context_frames = (
-            self.context_frames
-            if self.model_rollout_window <= 0
-            else min(self.context_frames, max(1, self.model_rollout_window - 1))
-        )
-
-        tokenizer_path = args.tokenizer_ckpt or _first_path(self.model_args.tokenizer_ckpt)
-        if not tokenizer_path:
-            raise ValueError("No tokenizer checkpoint was provided or recorded in the world-model checkpoint")
-        tokenizer_path = str(Path(tokenizer_path).expanduser().resolve())
-        print(f"[load] tokenizer: {tokenizer_path}", flush=True)
-        self.tokenizer, tok_args = wm.load_frozen_waymo_vector_tokenizer(tokenizer_path, self.device)
-        if isinstance(self.tokenizer, wm.FrozenWaymoFocusTokenizer):
-            raise ValueError("The interactive Waymo game requires the vector tokenizer")
-
-        n_latents = int(tok_args.get("n_latents", self.tokenizer.decoder.n_latents))
-        d_bottleneck = int(tok_args.get("d_bottleneck", self.tokenizer.decoder.up_proj.in_features))
-        packing_factor = int(self.model_args.packing_factor)
-        if n_latents % packing_factor:
-            raise ValueError(f"n_latents={n_latents} is not divisible by packing_factor={packing_factor}")
-        self.model_args.n_spatial = n_latents // packing_factor
-        self.model_args.d_spatial = d_bottleneck * packing_factor
-        self.d_bottleneck = d_bottleneck
-
-        self.dynamics = base_eval.build_dynamics(
-            self.model_args,
-            d_bottleneck,
-            self.device,
-            map_memory_dim=(
-                wm.tokenizer_map_memory_dim(self.tokenizer)
-                if self.model_args.dynamics_attend_map
-                else None
-            ),
-        )
-        base_eval.load_dynamics_state(self.dynamics, str(checkpoint_path), ckpt=checkpoint)
-        self.dynamics.eval()
-        # Training checkpoints also contain a large optimizer state.  Retain
-        # only small metadata after loading the dynamics weights so the game
-        # does not keep the optimizer/state-dict mapping resident in CPU RAM.
-        self.checkpoint = {
-            key: checkpoint.get(key)
-            for key in ("format", "step", "epoch")
-            if key in checkpoint
-        }
-        del checkpoint
-        gc.collect()
-        self.schedule = wm.make_tau_schedule(
-            k_max=int(self.model_args.k_max),
-            schedule="shortcut",
-            d=float(args.eval_d),
-        )
-        if int(self.schedule["K"]) != 1:
-            print(
-                f"[warning] eval_d={args.eval_d:g} uses {self.schedule['K']} solver passes per frame; "
-                "D1 (--eval-d 1) is recommended for interactive speed.",
-                flush=True,
-            )
+        if getattr(args, "direct_action_flow_ckpt", None):
+            self._initialize_direct_action_flow(args)
+        else:
+            self._initialize_latent_world_model(args)
 
         data_dir = args.data_dir or _first_path(self.model_args.val_data_dir)
         if not data_dir:
@@ -669,9 +606,184 @@ class WaymoInteractiveServer:
             f"[ready] checkpoint step={int(self.checkpoint.get('step', -1))} "
             f"profile={self.checkpoint_profile} "
             f"dataset scenes={len(self.dataset)} device={self.device} "
-            f"dtype={next(self.dynamics.parameters()).dtype} renderer={args.renderer} "
+            f"dtype={next(self.inference_model.parameters()).dtype} renderer={args.renderer} "
             f"replay={self.context_frames} model_context={self.model_context_frames} "
             f"rollout={int(args.max_steps)}",
+            flush=True,
+        )
+
+    def _initialize_latent_world_model(self, args: argparse.Namespace) -> None:
+        self.model_backend = "latent_world_model"
+        checkpoint_path, checkpoint_profile = resolve_world_model_checkpoint(
+            args.checkpoint_profile,
+            args.world_model_ckpt,
+        )
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError(
+                f"World-model checkpoint for profile {checkpoint_profile!r} not found: "
+                f"{checkpoint_path}"
+            )
+        self.checkpoint_profile = checkpoint_profile
+        self.checkpoint_path = checkpoint_path
+        print(
+            f"[load] world model profile={checkpoint_profile}: {checkpoint_path}",
+            flush=True,
+        )
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", mmap=True)
+        self.checkpoint = checkpoint
+        self.model_args = _model_args_from_checkpoint(checkpoint)
+        self._validate_checkpoint_contract()
+        self.model_rollout_window = int(self.model_args.max_rollout_window)
+        self.model_context_frames = (
+            self.context_frames
+            if self.model_rollout_window <= 0
+            else min(self.context_frames, max(1, self.model_rollout_window - 1))
+        )
+
+        tokenizer_path = args.tokenizer_ckpt or _first_path(self.model_args.tokenizer_ckpt)
+        if not tokenizer_path:
+            raise ValueError("No tokenizer checkpoint was provided or recorded in the world-model checkpoint")
+        tokenizer_path = str(Path(tokenizer_path).expanduser().resolve())
+        print(f"[load] tokenizer: {tokenizer_path}", flush=True)
+        self.tokenizer, tok_args = wm.load_frozen_waymo_vector_tokenizer(tokenizer_path, self.device)
+        if isinstance(self.tokenizer, wm.FrozenWaymoFocusTokenizer):
+            raise ValueError("The interactive Waymo game requires the vector tokenizer")
+
+        n_latents = int(tok_args.get("n_latents", self.tokenizer.decoder.n_latents))
+        d_bottleneck = int(tok_args.get("d_bottleneck", self.tokenizer.decoder.up_proj.in_features))
+        packing_factor = int(self.model_args.packing_factor)
+        if n_latents % packing_factor:
+            raise ValueError(f"n_latents={n_latents} is not divisible by packing_factor={packing_factor}")
+        self.model_args.n_spatial = n_latents // packing_factor
+        self.model_args.d_spatial = d_bottleneck * packing_factor
+        self.d_bottleneck = d_bottleneck
+
+        self.dynamics = base_eval.build_dynamics(
+            self.model_args,
+            d_bottleneck,
+            self.device,
+            map_memory_dim=(
+                wm.tokenizer_map_memory_dim(self.tokenizer)
+                if self.model_args.dynamics_attend_map
+                else None
+            ),
+        )
+        base_eval.load_dynamics_state(self.dynamics, str(checkpoint_path), ckpt=checkpoint)
+        self.dynamics.eval()
+        self.inference_model = self.dynamics
+        # Training checkpoints also contain a large optimizer state.  Retain
+        # only small metadata after loading the dynamics weights so the game
+        # does not keep the optimizer/state-dict mapping resident in CPU RAM.
+        self.checkpoint = {
+            key: checkpoint.get(key)
+            for key in ("format", "step", "epoch")
+            if key in checkpoint
+        }
+        del checkpoint
+        gc.collect()
+        self.schedule = wm.make_tau_schedule(
+            k_max=int(self.model_args.k_max),
+            schedule="shortcut",
+            d=float(args.eval_d),
+        )
+        if int(self.schedule["K"]) != 1:
+            print(
+                f"[warning] eval_d={args.eval_d:g} uses {self.schedule['K']} solver passes per frame; "
+                "D1 (--eval-d 1) is recommended for interactive speed.",
+                flush=True,
+            )
+
+    def _initialize_direct_action_flow(self, args: argparse.Namespace) -> None:
+        from waymo.training.world_model.train_waymo_direct_action_flow import (
+            build_normalizer,
+            create_model,
+        )
+
+        self.model_backend = "direct_action_flow"
+        checkpoint_path = Path(args.direct_action_flow_ckpt).expanduser().resolve()
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError(
+                f"DirectActionFlow checkpoint not found: {checkpoint_path}"
+            )
+        print(f"[load] DirectActionFlow: {checkpoint_path}", flush=True)
+        checkpoint = torch.load(
+            checkpoint_path,
+            map_location="cpu",
+            mmap=True,
+            weights_only=False,
+        )
+        if "args" not in checkpoint or "action_stats" not in checkpoint:
+            raise KeyError(
+                "DirectActionFlow checkpoint must contain args and action_stats"
+            )
+        self.model_args = SimpleNamespace(
+            **_checkpoint_arg_dict(checkpoint["args"])
+        )
+        model = create_model(self.model_args).to(self.device)
+        weights = str(args.direct_action_flow_weights)
+        state_key = "ema_model" if weights == "ema" else "model"
+        if state_key not in checkpoint:
+            if weights == "ema" and "model" in checkpoint:
+                state_key = "model"
+                print(
+                    "[warning] DirectActionFlow checkpoint has no EMA weights; "
+                    "using model weights",
+                    flush=True,
+                )
+            else:
+                raise KeyError(
+                    f"DirectActionFlow checkpoint has no {state_key!r} state dict"
+                )
+        model.load_state_dict(checkpoint[state_key], strict=True)
+        model.eval()
+        self.direct_action_model = model
+        self.inference_model = model
+        self.direct_action_normalizer = build_normalizer(
+            checkpoint["action_stats"], self.device
+        )
+        self.checkpoint_path = checkpoint_path
+        self.daf_commitment = (
+            int(args.direct_action_flow_commitment)
+            if int(args.direct_action_flow_commitment) > 0
+            else int(self.model_args.commitment)
+        )
+        self.daf_solver_steps = int(args.direct_action_flow_solver_steps)
+        history_length = int(self.model_args.history_length)
+        horizon = int(self.model_args.horizon)
+        if self.context_frames != history_length:
+            raise ValueError(
+                "DirectActionFlow context mismatch: "
+                f"--context-frames={self.context_frames}, checkpoint history_length={history_length}"
+            )
+        if not 1 <= self.daf_commitment <= horizon:
+            raise ValueError(
+                f"DirectActionFlow commitment must be in [1, {horizon}], "
+                f"got {self.daf_commitment}"
+            )
+        if self.daf_solver_steps < 1:
+            raise ValueError("DirectActionFlow solver steps must be positive")
+        self.daf_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="direct-action-flow",
+        )
+        self.daf_cuda_stream = (
+            torch.cuda.Stream(device=self.device)
+            if self.device.type == "cuda"
+            else None
+        )
+        self.model_rollout_window = history_length + 1
+        self.model_context_frames = history_length
+        self.checkpoint_profile = f"daf-h{horizon}-b{self.daf_commitment}"
+        self.checkpoint = {
+            "step": int(checkpoint.get("step", -1)),
+            "weights": state_key,
+        }
+        del checkpoint
+        gc.collect()
+        print(
+            f"[load] DirectActionFlow horizon={horizon} "
+            f"commitment={self.daf_commitment} solver_steps={self.daf_solver_steps} "
+            f"weights={state_key} human_ego_override=true",
             flush=True,
         )
 
@@ -749,7 +861,141 @@ class WaymoInteractiveServer:
         return candidate
 
     @torch.inference_mode()
+    def _load_direct_action_flow_scene(self, scene_index: int) -> SessionState:
+        from waymo.training.world_model.direct_action_flow import agents_to_bntf
+
+        item = self.dataset[int(scene_index)]
+        batch = wm.move_batch(wm._collate([item]), self.device)
+        agents = agents_to_bntf(batch["agents"], batch["agent_mask"])
+        total_steps = int(agents.shape[2])
+        start_frame, context_end = context_frame_bounds(
+            self.args.start_frame,
+            total_steps,
+            self.context_frames,
+        )
+        history = agents[:, :, start_frame:context_end].detach().clone()
+        context_agents = _to_cpu_numpy(history[0].permute(1, 0, 2)).copy()
+        agent_mask = batch["agent_mask"][0].detach().cpu().numpy().astype(bool)
+        context_valid = (context_agents[..., 5] > 0.5) & agent_mask[None, :]
+        if not context_valid[-1, 0]:
+            raise ValueError(
+                f"Focus slot is invalid at the frame-{context_end} control handoff"
+            )
+        valid_focus_frames = np.flatnonzero(context_valid[:, 0])
+        context_focus = []
+        for frame_index in range(self.context_frames):
+            source_index = frame_index
+            if not context_valid[frame_index, 0]:
+                source_index = int(
+                    valid_focus_frames[
+                        np.argmin(np.abs(valid_focus_frames - frame_index))
+                    ]
+                )
+            focus_row = context_agents[source_index, 0]
+            context_focus.append(
+                FocusState(
+                    x=float(focus_row[0]),
+                    y=float(focus_row[1]),
+                    speed=max(0.0, float(focus_row[2])),
+                    yaw=float(focus_row[6]),
+                )
+            )
+
+        context_world = context_agents[..., 0:2].copy()
+        context_yaw = context_agents[..., 6].copy()
+        context_velocity = context_agents[..., 3:5].copy()
+        agent_types = np.rint(context_agents[-1, :, 7]).astype(np.int64)
+        if not agent_mask[0]:
+            raise ValueError("Focus slot 0 is not selected by agent_mask")
+
+        scene_path = str(item.get("path", self.dataset.paths[int(scene_index)]))
+        scenario_id = _scenario_id(item, scene_path)
+        agent_ids = batch["agent_ids"][0].detach().cpu().numpy()
+        focus_track_id = int(agent_ids[0])
+        if "focus_track_id" in item:
+            recorded_focus_id = int(torch.as_tensor(item["focus_track_id"]).item())
+            if recorded_focus_id != focus_track_id:
+                raise ValueError(
+                    f"Focus track mismatch for {scene_path}: slot 0={focus_track_id}, "
+                    f"metadata={recorded_focus_id}"
+                )
+
+        puffer_scene = None
+        renderer_error = None
+        if self.puffer_manifest is not None:
+            try:
+                puffer_scene = self.puffer_manifest.resolve(
+                    scenario_id=scenario_id,
+                    npz_path=scene_path,
+                    focus_track_id=focus_track_id,
+                )
+            except (FileNotFoundError, KeyError, ValueError) as error:
+                if self.args.puffer_strict:
+                    raise
+                renderer_error = str(error)
+
+        generator = torch.Generator(device=self.device)
+        generator.manual_seed(int(self.args.seed) + int(scene_index))
+        state = SessionState(
+            scene_index=int(scene_index),
+            scenario_id=scenario_id,
+            scene_path=scene_path,
+            puffer_scene=puffer_scene,
+            base_batch=batch,
+            map_tokens=None,
+            map_mask=None,
+            map_polylines=_to_cpu_numpy(batch["map_polylines"][0]),
+            map_point_mask=batch["map_mask"][0].detach().cpu().numpy().astype(bool),
+            agent_mask=agent_mask,
+            agent_ids=agent_ids,
+            agent_types=agent_types,
+            ego_origin_xy=_to_cpu_numpy(batch["ego_origin_xy"][0]),
+            ego_heading=float(batch["ego_heading"][0].detach().cpu()),
+            context_start_frame=start_frame,
+            focus=context_focus[0],
+            z_history=[],
+            action_history=[],
+            action_mask_history=[],
+            context_focus=context_focus,
+            context_world=context_world,
+            context_valid=context_valid,
+            context_yaw=context_yaw,
+            context_velocity=context_velocity,
+            world_history=[context_world[0].copy()],
+            valid_history=[context_valid[0].copy()],
+            yaw_history=[context_yaw[0].copy()],
+            velocity_history=[context_velocity[0].copy()],
+            paused=not self.args.autoplay,
+            renderer_error=renderer_error,
+            daf_history=history,
+            daf_generator=generator,
+        )
+        # Hide the first H40 solve behind the recorded context replay. By the
+        # time control reaches the player, the initial traffic block is usually
+        # already ready as well.
+        initial_light_index = min(
+            start_frame + self.context_frames - 1,
+            int(batch["lights"].shape[1]) - 1,
+        )
+        state.daf_prefetch_anchor = 0
+        state.daf_prefetch = self.daf_executor.submit(
+            self._generate_direct_action_flow_plan,
+            history,
+            batch,
+            initial_light_index,
+            generator,
+        )
+        identity = scene_identity(state)
+        print(
+            f"[scene] {identity['scene_label']} | npz {identity['scene_file']}",
+            flush=True,
+        )
+        return state
+
+    @torch.inference_mode()
     def _load_scene(self, scene_index: int) -> SessionState:
+        if self.model_backend == "direct_action_flow":
+            return self._load_direct_action_flow_scene(scene_index)
         item = self.dataset[int(scene_index)]
         batch = wm.move_batch(wm._collate([item]), self.device)
         total_steps = int(batch["lights"].shape[1])
@@ -959,11 +1205,339 @@ class WaymoInteractiveServer:
         }
 
     @torch.inference_mode()
+    def _generate_direct_action_flow_plan(
+        self,
+        history: torch.Tensor,
+        batch: dict[str, Any],
+        light_index: int,
+        generator: torch.Generator,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        from waymo.training.world_model.action_kinematics import (
+            execute_model_actions,
+        )
+
+        def generate() -> tuple[torch.Tensor, torch.Tensor]:
+            scene = self.direct_action_model.encode_scene(
+                history=history,
+                agent_mask=batch["agent_mask"],
+                map_polylines=batch["map_polylines"],
+                map_mask=batch["map_mask"],
+                current_lights=batch["lights"][:, light_index],
+                current_light_mask=batch["light_mask"][:, light_index],
+            )
+            action_mask = scene.agent_mask[:, :, None].expand(
+                -1, -1, int(self.model_args.horizon)
+            )
+            normalized_actions = self.direct_action_model.sample_normalized_actions(
+                scene,
+                action_mask,
+                focus_actions=None,
+                solver_steps=self.daf_solver_steps,
+                generator=generator,
+            )
+            metric_actions = self.direct_action_normalizer.denormalize(
+                normalized_actions,
+                scene.agent_type,
+            )
+            poses = execute_model_actions(
+                self.direct_action_model,
+                scene.agent_pose,
+                metric_actions,
+                action_mask,
+                agent_type=scene.agent_type,
+                agent_lengths=batch.get("agent_lengths"),
+            )
+            return poses[0].detach(), action_mask[0].detach()
+
+        if self.daf_cuda_stream is None:
+            return generate()
+        with torch.cuda.stream(self.daf_cuda_stream):
+            self.daf_cuda_stream.wait_stream(torch.cuda.default_stream(self.device))
+            result = generate()
+        # A Future is considered ready only after its CUDA work is complete;
+        # consuming a prefetched plan can therefore never stall the game tick.
+        self.daf_cuda_stream.synchronize()
+        return result
+
+    def _direct_action_flow_light_index(
+        self,
+        state: SessionState,
+        rollout_step: int,
+    ) -> int:
+        return min(
+            int(state.context_start_frame) + self.context_frames - 1 + int(rollout_step),
+            int(state.base_batch["lights"].shape[1]) - 1,
+        )
+
+    def _install_direct_action_flow_plan(
+        self,
+        state: SessionState,
+        poses: torch.Tensor,
+        valid: torch.Tensor,
+        *,
+        anchor_step: int,
+    ) -> None:
+        elapsed = int(state.step) - int(anchor_step)
+        if elapsed < 0 or elapsed >= int(poses.shape[1]):
+            raise ValueError(
+                f"Cannot install DirectActionFlow plan anchored at {anchor_step} "
+                f"during rollout step {state.step}"
+            )
+        poses = poses.clone()
+        if elapsed > 0 and state.daf_history is not None:
+            # If prefetch completed after its anchor, align the unused suffix to
+            # the world actually displayed while the old H40 tail was used.
+            actual = state.daf_history[0, :, -1]
+            predicted = poses[:, elapsed - 1]
+            poses[:, elapsed:, 0:2] += (
+                actual[:, 0:2] - predicted[:, 0:2]
+            )[:, None]
+            yaw_offset = torch.atan2(
+                torch.sin(actual[:, 6] - predicted[:, 2]),
+                torch.cos(actual[:, 6] - predicted[:, 2]),
+            )
+            shifted_yaw = poses[:, elapsed:, 2] + yaw_offset[:, None]
+            poses[:, elapsed:, 2] = torch.atan2(
+                torch.sin(shifted_yaw),
+                torch.cos(shifted_yaw),
+            )
+        state.daf_plan_poses = poses
+        state.daf_plan_valid = valid
+        state.daf_plan_index = elapsed
+        state.daf_plan_anchor = int(anchor_step)
+        state.daf_commit_end = min(
+            int(anchor_step) + self.daf_commitment,
+            int(self.args.max_steps),
+        )
+
+    @staticmethod
+    def _direct_action_flow_history_step(
+        history: torch.Tensor,
+        pose: torch.Tensor,
+        valid: torch.Tensor,
+        focus: FocusState,
+        *,
+        dt: float,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        previous = history[0, :, -1]
+        pose = pose.clone()
+        valid = valid.clone().bool()
+        xy = pose[:, 0:2]
+        yaw = pose[:, 2]
+        velocity = (xy - previous[:, 0:2]) / float(dt)
+        velocity = torch.where(valid[:, None], velocity, torch.zeros_like(velocity))
+        xy[0] = xy.new_tensor((focus.x, focus.y))
+        yaw[0] = float(focus.yaw)
+        velocity[0] = velocity.new_tensor(focus.velocity)
+        valid[0] = True
+
+        new_frame = previous.clone()
+        new_frame[:, 0:2] = xy
+        new_frame[:, 2] = torch.linalg.vector_norm(velocity, dim=-1)
+        new_frame[:, 3:5] = velocity
+        new_frame[:, 5] = valid.to(new_frame.dtype)
+        new_frame[:, 6] = yaw
+        new_frame[:, 7] = previous[:, 7]
+        next_history = torch.cat(
+            (history, new_frame[None, :, None]),
+            dim=2,
+        )[:, :, -int(history.shape[2]) :]
+        return next_history, xy, yaw, velocity, valid
+
+    def _forecast_direct_action_flow_history(
+        self,
+        state: SessionState,
+        analog_control: AnalogControl | None,
+        target_step: int,
+    ) -> torch.Tensor:
+        if (
+            state.daf_history is None
+            or state.daf_plan_poses is None
+            or state.daf_plan_valid is None
+        ):
+            raise RuntimeError("DirectActionFlow plan cannot be forecast")
+        history = state.daf_history.clone()
+        focus = state.focus
+        plan_index = int(state.daf_plan_index)
+        for _rollout_step in range(int(state.step), int(target_step)):
+            if plan_index >= int(state.daf_plan_poses.shape[1]):
+                raise RuntimeError("DirectActionFlow H40 tail is exhausted")
+            if analog_control is None:
+                focus, _action = integrate_focus_control(
+                    focus, set(state.keys_down), self.control
+                )
+            else:
+                focus, _action = integrate_focus_analog_control(
+                    focus, analog_control, self.control
+                )
+            history, _xy, _yaw, _velocity, _valid = (
+                self._direct_action_flow_history_step(
+                    history,
+                    state.daf_plan_poses[:, plan_index],
+                    state.daf_plan_valid[:, plan_index],
+                    focus,
+                    dt=self.control.dt,
+                )
+            )
+            plan_index += 1
+        return history
+
+    def _launch_direct_action_flow_prefetch(
+        self,
+        state: SessionState,
+        analog_control: AnalogControl | None,
+    ) -> None:
+        if state.daf_prefetch is not None:
+            return
+        anchor_step = int(state.daf_commit_end)
+        if anchor_step >= int(self.args.max_steps):
+            return
+        history = self._forecast_direct_action_flow_history(
+            state,
+            analog_control,
+            anchor_step,
+        )
+        if state.daf_generator is None:
+            raise RuntimeError("DirectActionFlow generator is unavailable")
+        light_index = self._direct_action_flow_light_index(state, anchor_step)
+        state.daf_prefetch_anchor = anchor_step
+        state.daf_prefetch = self.daf_executor.submit(
+            self._generate_direct_action_flow_plan,
+            history,
+            state.base_batch,
+            light_index,
+            state.daf_generator,
+        )
+
+    def _activate_direct_action_flow_prefetch(self, state: SessionState) -> bool:
+        future = state.daf_prefetch
+        if future is None or not future.done():
+            return False
+        anchor_step = int(state.daf_prefetch_anchor)
+        poses, valid = future.result()
+        state.daf_prefetch = None
+        elapsed = int(state.step) - anchor_step
+        if elapsed >= self.daf_commitment:
+            # The old H40 tail kept the display moving for a complete block.
+            # Drop this stale result and pipeline a fresh block instead.
+            state.daf_commit_end = min(
+                int(state.step) + self.daf_commitment,
+                int(self.args.max_steps),
+            )
+            return False
+        self._install_direct_action_flow_plan(
+            state,
+            poses,
+            valid,
+            anchor_step=anchor_step,
+        )
+        return True
+
+    @torch.inference_mode()
+    def _sample_direct_action_flow_plan(self, state: SessionState) -> None:
+        if state.daf_history is None or state.daf_generator is None:
+            raise RuntimeError("DirectActionFlow session state is not initialized")
+        light_index = self._direct_action_flow_light_index(state, state.step)
+        future = self.daf_executor.submit(
+            self._generate_direct_action_flow_plan,
+            state.daf_history,
+            state.base_batch,
+            light_index,
+            state.daf_generator,
+        )
+        poses, valid = future.result()
+        self._install_direct_action_flow_plan(
+            state,
+            poses,
+            valid,
+            anchor_step=state.step,
+        )
+
+    @torch.inference_mode()
+    def _advance_direct_action_flow(
+        self,
+        state: SessionState,
+        analog_control: AnalogControl | None,
+    ) -> None:
+        if analog_control is None:
+            next_focus, _action = integrate_focus_control(
+                state.focus, set(state.keys_down), self.control
+            )
+        else:
+            next_focus, _action = integrate_focus_analog_control(
+                state.focus, analog_control, self.control
+            )
+
+        if state.daf_plan_poses is None or state.daf_plan_valid is None:
+            if state.daf_prefetch is not None:
+                poses, valid = state.daf_prefetch.result()
+                anchor_step = int(state.daf_prefetch_anchor)
+                state.daf_prefetch = None
+                self._install_direct_action_flow_plan(
+                    state,
+                    poses,
+                    valid,
+                    anchor_step=anchor_step,
+                )
+            else:
+                self._sample_direct_action_flow_plan(state)
+            self._launch_direct_action_flow_prefetch(state, analog_control)
+        elif int(state.step) >= int(state.daf_commit_end):
+            activated = self._activate_direct_action_flow_prefetch(state)
+            if activated:
+                self._launch_direct_action_flow_prefetch(state, analog_control)
+            elif state.daf_prefetch is None:
+                # A stale prefetch was dropped. Continue smoothly on the unused
+                # H40 tail while preparing a new plan one block ahead.
+                self._launch_direct_action_flow_prefetch(state, analog_control)
+        if state.daf_plan_poses is None or state.daf_plan_valid is None:
+            raise RuntimeError("DirectActionFlow failed to produce a committed plan")
+        if state.daf_history is None:
+            raise RuntimeError("DirectActionFlow history is unavailable")
+        if state.daf_plan_index >= int(state.daf_plan_poses.shape[1]):
+            # Forty steps of fallback is far longer than a normal prefetch. If
+            # it happens, wait for the queued plan rather than indexing past H40.
+            if state.daf_prefetch is None:
+                self._sample_direct_action_flow_plan(state)
+            else:
+                poses, valid = state.daf_prefetch.result()
+                anchor_step = int(state.daf_prefetch_anchor)
+                state.daf_prefetch = None
+                self._install_direct_action_flow_plan(
+                    state,
+                    poses,
+                    valid,
+                    anchor_step=anchor_step,
+                )
+
+        plan_index = int(state.daf_plan_index)
+        state.daf_history, xy, yaw, velocity, valid = (
+            self._direct_action_flow_history_step(
+                state.daf_history,
+                state.daf_plan_poses[:, plan_index],
+                state.daf_plan_valid[:, plan_index],
+                next_focus,
+                dt=self.control.dt,
+            )
+        )
+
+        state.focus = next_focus
+        state.step += 1
+        state.daf_plan_index += 1
+        state.world_history.append(_to_cpu_numpy(xy))
+        state.yaw_history.append(_to_cpu_numpy(yaw))
+        state.velocity_history.append(_to_cpu_numpy(velocity))
+        state.valid_history.append(valid.detach().cpu().numpy())
+
+    @torch.inference_mode()
     def _advance(
         self,
         state: SessionState,
         analog_control: AnalogControl | None = None,
     ) -> None:
+        if self.model_backend == "direct_action_flow":
+            self._advance_direct_action_flow(state, analog_control)
+            return
         if analog_control is None:
             next_focus, action = integrate_focus_control(
                 state.focus, set(state.keys_down), self.control
@@ -1075,6 +1649,9 @@ class WaymoInteractiveServer:
             draw.line([tuple(pts[0]), tuple(pts[1])], fill=(29, 38, 51), width=1)
             value += grid_step
 
+        # These are the same batch map polylines and point masks passed to
+        # encode_scene, not an independently loaded background road map.
+        map_color = (50, 220, 245)
         for polyline, mask in zip(state.map_polylines, state.map_point_mask):
             points = polyline[mask, :2]
             if len(points) < 2:
@@ -1087,7 +1664,7 @@ class WaymoInteractiveServer:
             ):
                 continue
             pixels = _world_to_pixel(points, center_xy=center, radius_m=radius, canvas_size=size)
-            draw.line([tuple(map(float, point)) for point in pixels], fill=(93, 104, 119), width=2)
+            draw.line([tuple(map(float, point)) for point in pixels], fill=map_color, width=3)
 
         trail_length = max(1, int(self.args.trail_length))
         history_start = max(0, len(state.world_history) - trail_length)
@@ -1153,6 +1730,15 @@ class WaymoInteractiveServer:
                 outline=(190, 197, 208),
             )
             draw.text((size / 2 - width / 2, 51), text, fill=(245, 245, 245), font=font)
+
+        legend = "Model input map"
+        box = draw.textbbox((0, 0), legend, font=font)
+        draw.rectangle(
+            (8, size - 30, 46 + box[2] - box[0], size - 8),
+            fill=(8, 11, 17),
+        )
+        draw.line([(14, size - 19), (34, size - 19)], fill=map_color, width=3)
+        draw.text((40, size - 25), legend, fill=map_color, font=font)
 
         buffer = io.BytesIO()
         image.save(buffer, format="JPEG", quality=int(self.args.jpeg_quality), optimize=True)
@@ -1329,6 +1915,9 @@ class WaymoInteractiveServer:
         )
 
     def close(self) -> None:
+        executor = getattr(self, "daf_executor", None)
+        if executor is not None:
+            executor.shutdown(wait=True, cancel_futures=True)
         if self.puffer_renderer is not None:
             self.puffer_renderer.close()
 
@@ -1440,6 +2029,39 @@ def build_parser() -> argparse.ArgumentParser:
         "--world-model-ckpt",
         default=None,
         help="Explicit checkpoint path; when provided, overrides --checkpoint-profile.",
+    )
+    parser.add_argument(
+        "--direct-action-flow-ckpt",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Use a DirectActionFlow checkpoint instead of the latent world model. "
+            "The model replans traffic in committed blocks while slot 0 remains "
+            "under live human control."
+        ),
+    )
+    parser.add_argument(
+        "--direct-action-flow-weights",
+        choices=("ema", "model"),
+        default="ema",
+        help="DirectActionFlow state dict to load (default: EMA).",
+    )
+    parser.add_argument(
+        "--direct-action-flow-commitment",
+        type=int,
+        default=0,
+        metavar="STEPS",
+        help=(
+            "Traffic frames executed per DirectActionFlow replan. "
+            "Zero uses the checkpoint training commitment."
+        ),
+    )
+    parser.add_argument(
+        "--direct-action-flow-solver-steps",
+        type=int,
+        default=8,
+        metavar="STEPS",
+        help="Euler flow-solver passes per DirectActionFlow replan.",
     )
     parser.add_argument("--tokenizer-ckpt", default=None, help="Defaults to the path saved in the WM checkpoint.")
     parser.add_argument("--data-dir", default=None, help="Defaults to checkpoint val_data_dir.")

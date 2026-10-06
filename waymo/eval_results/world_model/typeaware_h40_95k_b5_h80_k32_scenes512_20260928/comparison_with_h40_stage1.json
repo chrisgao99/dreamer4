@@ -1,0 +1,21 @@
+{
+  "non_typeaware_h40": {
+    "minade_m": 1.895674228668213,
+    "mean_ade_m": 2.8200669288635254,
+    "flow_erd_cpd": 0.2537384033203125,
+    "first40_mean_ade_m": 1.023323197330609
+  },
+  "typeaware": {
+    "minade_m": 1.851656436920166,
+    "mean_ade_m": 2.764986515045166,
+    "flow_erd_cpd": 0.25742873549461365,
+    "first40_mean_ade_m": 1.0030899047851562
+  },
+  "typeaware_vxvy": {
+    "minade_m": 1.63206946849823,
+    "mean_ade_m": 2.6866185665130615,
+    "flow_erd_cpd": 0.2593761682510376,
+    "first40_mean_ade_m": 0.7947975397109985
+  },
+  "verification": "All 128 baseline/typeaware batches have identical GT validity masks and agent IDs; first40 recomputed from saved baseline rollouts."
+}

@@ -1,0 +1,30 @@
+{
+  "source_checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_95k_catk_sample8_recovery_flow_unroll80_b5_10k_20260922/step_0001000.pt",
+  "step": 1000,
+  "validation": {
+    "kind": "validation",
+    "step": 1000,
+    "val_ade_m": 2.005249097943306,
+    "val_minade_m": 1.668216422200203,
+    "val_cpd": 0.25158073753118515,
+    "val_displacement_gt5_fraction": 0.0,
+    "val_scenes": 32.0
+  },
+  "historical_minade": {
+    "kind": "validation",
+    "step": 500,
+    "val_ade_m": 2.016239657998085,
+    "val_minade_m": 1.6582571119070053,
+    "val_cpd": 0.2490506824105978,
+    "val_displacement_gt5_fraction": 0.0,
+    "val_scenes": 32.0
+  },
+  "reference_dir": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/h90_intersection10_two_agent_n10_ctx11_h80_20260907",
+  "seed": 20260907,
+  "num_scenes": 10,
+  "num_rollouts": 10,
+  "rollout_steps": 80,
+  "commitment_steps": 5,
+  "solver_steps": 8,
+  "weights": "ema"
+}

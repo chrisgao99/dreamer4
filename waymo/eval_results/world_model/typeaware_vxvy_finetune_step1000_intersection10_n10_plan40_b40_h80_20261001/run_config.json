@@ -1,0 +1,17 @@
+{
+  "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_typeaware_vxvy_best95k_mon8_gt_unroll80_b5_detach0_10k_20260929/step_0001000.pt",
+  "checkpoint_step": 1000,
+  "weights": "ema",
+  "plan_horizon": 40,
+  "commitment_steps": 40,
+  "rollout_steps": 80,
+  "num_scenes": 10,
+  "num_rollouts": 10,
+  "solver_steps": 8,
+  "seed": 20260907,
+  "device": "cpu",
+  "focus_mode": "generate_all",
+  "val_data_dir": "data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val",
+  "selected_manifest": "waymo/eval_results/world_model/h90_intersection10_two_agent_n10_ctx11_h80_20260907/selected_intersection10_manifest.json",
+  "output_dir": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/typeaware_vxvy_finetune_step1000_intersection10_n10_plan40_b40_h80_20261001"
+}

@@ -1,0 +1,34 @@
+{
+  "scenes": 512,
+  "rollouts": 32,
+  "context": 11,
+  "generate_steps": 80,
+  "plan_steps": 40,
+  "execute_steps": 5,
+  "prefix_ade_steps": [
+    20,
+    40,
+    60,
+    80
+  ],
+  "weights": "ema",
+  "seed": 12346,
+  "experiments": {
+    "catk": {
+      "cuda": 2,
+      "checkpoint_step": 1000
+    },
+    "mon_detach0": {
+      "cuda": 2,
+      "checkpoint_step": 2500
+    },
+    "mon_detach5": {
+      "cuda": 3,
+      "checkpoint_step": 2500
+    },
+    "mon_detach20": {
+      "cuda": 3,
+      "checkpoint_step": 5000
+    }
+  }
+}

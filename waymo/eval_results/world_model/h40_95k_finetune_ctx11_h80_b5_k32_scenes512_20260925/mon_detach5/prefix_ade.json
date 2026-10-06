@@ -1,0 +1,21 @@
+{
+  "definition": "Cumulative future steps 1..H; valid agent-time weighted within scene, equal scene and rollout weights; minADE selects best joint rollout per scene.",
+  "horizons": {
+    "20": {
+      "mean_ade_m": 0.3721204450051099,
+      "minade_m": 0.27479822704136736
+    },
+    "40": {
+      "mean_ade_m": 0.9359488372382196,
+      "minade_m": 0.7029719395996391
+    },
+    "60": {
+      "mean_ade_m": 1.6796582621418,
+      "minade_m": 1.2611278072382104
+    },
+    "80": {
+      "mean_ade_m": 2.6074821445559078,
+      "minade_m": 1.956001964961903
+    }
+  }
+}

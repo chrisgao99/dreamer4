@@ -1,0 +1,1 @@
+{"mon_loss": 1.1275993585586548, "candidate_gt_loss_mean": 1.9038236141204834, "collision": 0.0, "offroad": 0.0, "sideslip": 0.0, "replay_max_error": 0.0, "physical_warmup_scale": 0.0, "step": 1, "grad_norm": 257.2178955078125, "elapsed_seconds": 36.940173180773854, "cuda_peak_memory_mb": 1684.181640625}

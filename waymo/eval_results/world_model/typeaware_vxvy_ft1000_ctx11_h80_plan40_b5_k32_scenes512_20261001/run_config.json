@@ -1,0 +1,23 @@
+{
+  "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_typeaware_vxvy_best95k_mon8_gt_unroll80_b5_detach0_10k_20260929/step_0001000.pt",
+  "checkpoint_step": 1000,
+  "weights": "ema",
+  "plan_horizon": 40,
+  "commitment_steps": 5,
+  "rollout_steps": 80,
+  "num_scenes": 512,
+  "num_rollouts": 32,
+  "eval_batch_size": 4,
+  "eval_max_batches": 128,
+  "solver_steps": 8,
+  "seed": 12346,
+  "metric_validity": "checkpoint",
+  "focus_mode": "generate_all",
+  "cuda_index": 0,
+  "metrics": [
+    "mean_ade_m",
+    "minade_m",
+    "flow_erd_cpd",
+    "first40_mean_ade_m"
+  ]
+}

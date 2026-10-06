@@ -1,0 +1,112 @@
+{
+  "source": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/dynamic7030_h15_90k_h40_95k_ctx11_h80_k32_scenes512_20260918/h40_b5",
+  "scene_count": 512,
+  "valid_agent_tracks": 11662,
+  "aggregation": "Equal weight per scene-agent track and per rollout. minADE is per-agent best sample, not joint scene minADE.",
+  "groups": {
+    "full80/net_displacement": [
+      {
+        "group": "<2m",
+        "agent_tracks": 3309,
+        "fraction": 0.4897868561278863,
+        "mean_ade_m": 0.2243949633952085,
+        "per_agent_minade_m": 0.029801935948248266,
+        "mean_valid_steps": 80.0
+      },
+      {
+        "group": "2-20m",
+        "agent_tracks": 1100,
+        "fraction": 0.16281823564239195,
+        "mean_ade_m": 3.2183619278398425,
+        "per_agent_minade_m": 1.3926746754974804,
+        "mean_valid_steps": 80.0
+      },
+      {
+        "group": ">20m",
+        "agent_tracks": 2347,
+        "fraction": 0.34739490822972174,
+        "mean_ade_m": 5.778084844490493,
+        "per_agent_minade_m": 2.4183935543540493,
+        "mean_valid_steps": 80.0
+      }
+    ],
+    "full80/path_length": [
+      {
+        "group": "<2m",
+        "agent_tracks": 3261,
+        "fraction": 0.4826820603907638,
+        "mean_ade_m": 0.20329029831280762,
+        "per_agent_minade_m": 0.0245880217630772,
+        "mean_valid_steps": 80.0
+      },
+      {
+        "group": "2-20m",
+        "agent_tracks": 1099,
+        "fraction": 0.16267021906453522,
+        "mean_ade_m": 2.9517317875555364,
+        "per_agent_minade_m": 1.2075287258986374,
+        "mean_valid_steps": 80.0
+      },
+      {
+        "group": ">20m",
+        "agent_tracks": 2396,
+        "fraction": 0.354647720544701,
+        "mean_ade_m": 5.816779335223773,
+        "per_agent_minade_m": 2.4621330602825284,
+        "mean_valid_steps": 80.0
+      }
+    ],
+    "any_valid_prefix/net_displacement": [
+      {
+        "group": "<2m",
+        "agent_tracks": 6167,
+        "fraction": 0.5288115246098439,
+        "mean_ade_m": 0.15645983189735013,
+        "per_agent_minade_m": 0.026621268463645355,
+        "mean_valid_steps": 56.58099562185828
+      },
+      {
+        "group": "2-20m",
+        "agent_tracks": 1958,
+        "fraction": 0.1678957297204596,
+        "mean_ade_m": 2.258737691882636,
+        "per_agent_minade_m": 0.9547610328643582,
+        "mean_valid_steps": 57.333503575076605
+      },
+      {
+        "group": ">20m",
+        "agent_tracks": 3537,
+        "fraction": 0.30329274566969644,
+        "mean_ade_m": 4.845867758143376,
+        "per_agent_minade_m": 2.0010427563544178,
+        "mean_valid_steps": 67.94345490528697
+      }
+    ],
+    "any_valid_prefix/path_length": [
+      {
+        "group": "<2m",
+        "agent_tracks": 6088,
+        "fraction": 0.5220373863831247,
+        "mean_ade_m": 0.13988693869017133,
+        "per_agent_minade_m": 0.0221894731585365,
+        "mean_valid_steps": 56.4495729303548
+      },
+      {
+        "group": "2-20m",
+        "agent_tracks": 1981,
+        "fraction": 0.16986794717887155,
+        "mean_ade_m": 2.084554422044998,
+        "per_agent_minade_m": 0.835478672629635,
+        "mean_valid_steps": 57.171125694093895
+      },
+      {
+        "group": ">20m",
+        "agent_tracks": 3593,
+        "fraction": 0.30809466643800376,
+        "mean_ade_m": 4.8834390347212295,
+        "per_agent_minade_m": 2.0376039329587567,
+        "mean_valid_steps": 68.07375452268299
+      }
+    ]
+  }
+}

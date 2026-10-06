@@ -1,0 +1,131 @@
+{
+  "ade_by_agent_scope": {
+    "all": {
+      "mean_ade_m": 2.5779430325773793,
+      "minade_m": 2.289607155879892,
+      "scene_count": 4,
+      "valid_agent_time_points_per_rollout": 4848
+    },
+    "focus": {
+      "mean_ade_m": 9.898881703615189,
+      "minade_m": 9.159324884414673,
+      "scene_count": 4,
+      "valid_agent_time_points_per_rollout": 320
+    },
+    "nonfocus": {
+      "mean_ade_m": 1.9741113316577201,
+      "minade_m": 1.7116683749222181,
+      "scene_count": 4,
+      "valid_agent_time_points_per_rollout": 4528
+    }
+  },
+  "ade_definition": "Each candidate ADE averages xy error over valid all_agent agent-time points within one scene. mean_ade_m averages scenes and rollouts equally; minade_m takes the best joint rollout per scene before averaging scenes.",
+  "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_scratch100k_20260925/step_000095000.pt",
+  "checkpoint_step": 95000,
+  "condition_focus_actions": false,
+  "cpd_exclude_focus": false,
+  "details_npz": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/typeaware_h40_95k_b5_h80_k32_scenes512_20260928/smoke_typeaware_vxvy/details.npz",
+  "elapsed_seconds": 4.281723319552839,
+  "eval_batch_size": 4,
+  "eval_batches": 1,
+  "first40_mean_ade_m": 0.7185788154602051,
+  "first40_steps": 40,
+  "first_rollout_ade_m": 2.289607286453247,
+  "flow_erd_cpd": 0.24777643382549286,
+  "flow_erd_cpd_type_ids": [
+    1,
+    2,
+    3
+  ],
+  "flow_erd_cpd_type_order": [
+    "vehicle",
+    "pedestrian",
+    "cyclist"
+  ],
+  "flow_erd_cpd_type_scales_m": [
+    25.423524547767016,
+    4.925798640017075,
+    18.77286026475977
+  ],
+  "flow_erd_cpd_unscaled": 3.523171901702881,
+  "flow_erd_cpd_valid_scene_fraction": 1.0,
+  "ground_truth_physical_metrics": {
+    "acceleration_mean_norm_mps2": 1.221120996341059,
+    "collision_agent_time_rate_proxy": 0.0,
+    "collision_pair_time_rate_proxy": 0.0,
+    "collision_scene_rollout_rate_proxy": 0.0,
+    "collision_warning_pair_time_rate_proxy": 0.012063985241643808,
+    "displacement_gt5m_rate": 0.0,
+    "jerk_mean_norm_mps3": 19.26474710251947,
+    "lateral_speed_mean_abs_mps": 0.0366708442181155,
+    "offroad_agent_time_rate_proxy_raw": 0.009898904802021904,
+    "offroad_agent_time_rate_proxy_reliable": 0.0,
+    "offroad_scene_rollout_rate_proxy_reliable": 0.0,
+    "reverse_motion_rate_moving": 0.00425531914893617,
+    "road_edge_scene_coverage": 1.0,
+    "road_reliable_coverage": 0.9477674810446504,
+    "sideslip_angle_mean_abs_deg_moving": 1.068299828808596,
+    "sideslip_gt10deg_rate_moving": 0.009929078014184398,
+    "speed_mean_mps": 3.3354331676321096,
+    "yaw_change_gt075rad_rate": 0.0,
+    "yaw_rate_mean_abs_radps": 0.03386388071507243
+  },
+  "history_context_steps": 11,
+  "mean_ade_by_rollout_m": [
+    2.289607286453247,
+    2.866279125213623
+  ],
+  "mean_ade_m": 2.5779430866241455,
+  "metric_scope": "generated_all_agents; focus_future_is_not_conditioned; focus_is_included",
+  "metric_validity": "holonomic",
+  "minade_m": 2.289607286453247,
+  "model_plan_horizon": 40,
+  "model_training_commitment_steps": 5,
+  "num_rollouts": 2,
+  "per_agent_minade_m": 1.2829325199127197,
+  "physical_metric_definitions": {
+    "aggregation": "sum of numerators / sum of denominators across all scenes and all rollouts; null if no valid denominator",
+    "collision": "all valid agents; overlap when all four SAT axes overlap; warning when maximum separating-axis gap <1m",
+    "geometry": "oriented-rectangle SAT using proxy sizes: vehicle 4.8x2m, pedestrian .8x.8m, cyclist 2x.8m, unknown 1x1m",
+    "motion": "finite differences dt=.1s; sideslip uses midpoint heading for vehicles/cyclists, moving angle/reverse metrics require speed>1m/s",
+    "road": "vehicle/cyclist corners against nearest retained oriented road-edge samples (types15/16); raw plus GT/map-reliable subset",
+    "road_reliability": "logged footprint inside with .3m margin at initial anchor and corresponding future frame; mask fixed across models and samples",
+    "scope": "all K rollouts, no best-candidate selection for physical metrics",
+    "status": "physical proxy diagnostics, not official WOSAC metrics",
+    "validity": "same physically-filtered logged transition mask as ADE; acceleration/jerk need 2/3 consecutive valid transitions"
+  },
+  "physical_metrics": {
+    "acceleration_mean_norm_mps2": 0.38798620237653747,
+    "collision_agent_time_rate_proxy": 0.024546204620462045,
+    "collision_pair_time_rate_proxy": 0.0014442799232953856,
+    "collision_scene_rollout_rate_proxy": 0.625,
+    "collision_warning_pair_time_rate_proxy": 0.014794766609219119,
+    "displacement_gt5m_rate": 0.0,
+    "jerk_mean_norm_mps3": 4.118056167336823,
+    "lateral_speed_mean_abs_mps": 0.011221671433124374,
+    "offroad_agent_time_rate_proxy_raw": 0.013795282224094355,
+    "offroad_agent_time_rate_proxy_reliable": 0.004111111111111111,
+    "offroad_scene_rollout_rate_proxy_reliable": 0.5,
+    "reverse_motion_rate_moving": 0.0,
+    "road_edge_scene_coverage": 1.0,
+    "road_reliable_coverage": 0.9477674810446504,
+    "sideslip_angle_mean_abs_deg_moving": 0.42813290261926495,
+    "sideslip_gt10deg_rate_moving": 0.0,
+    "speed_mean_mps": 2.5856360500639988,
+    "yaw_change_gt075rad_rate": 0.0,
+    "yaw_rate_mean_abs_radps": 0.011923978891966369
+  },
+  "rollout_ade_csv": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/typeaware_h40_95k_b5_h80_k32_scenes512_20260928/smoke_typeaware_vxvy/rollout_ade.csv",
+  "rollout_batches_dir": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/typeaware_h40_95k_b5_h80_k32_scenes512_20260928/smoke_typeaware_vxvy/rollout_batches",
+  "rollout_commitment_steps": 5,
+  "rollout_seed_formula": "seed + batch_index * num_rollouts + rollout_index",
+  "rollout_steps": 80,
+  "scene_count": 4,
+  "scene_metrics_csv": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/typeaware_h40_95k_b5_h80_k32_scenes512_20260928/smoke_typeaware_vxvy/scene_metrics.csv",
+  "seed": 12346,
+  "solver_steps": 8,
+  "start_batch": 0,
+  "val_data_dir": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val",
+  "valid_all_agent_time_points_per_rollout": 4848,
+  "weights": "ema"
+}

@@ -1,0 +1,10 @@
+{
+  "child_pid": 819987,
+  "cuda_index": 0,
+  "elapsed_seconds": 154594.76430130005,
+  "error": "RuntimeError('training exited 130: /p/yufeng/tri30/dreamer4/waymo/data_prep/runs/waymo_daf_h40_typeaware_vxvy_best95k_mon8_gt_unroll80_b5_detach0_10k_20260929/train.log')",
+  "pid": 819624,
+  "stage": "training",
+  "started_unix": 1790709963.0773988,
+  "status": "failed"
+}

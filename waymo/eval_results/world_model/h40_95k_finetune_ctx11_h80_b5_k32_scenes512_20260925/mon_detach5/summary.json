@@ -1,0 +1,16 @@
+{
+  "experiment": "mon_detach5",
+  "checkpoint_step": 2500,
+  "scenes": 512,
+  "mean_ade_m": 2.6074819564819336,
+  "minade_at_32_m": 1.956001877784729,
+  "cpd": 0.17729468643665314,
+  "first_20_mean_ade_m": 0.3721204450051099,
+  "first_20_minade_m": 0.27479822704136736,
+  "first_40_mean_ade_m": 0.9359488372382196,
+  "first_40_minade_m": 0.7029719395996391,
+  "first_60_mean_ade_m": 1.6796582621418,
+  "first_60_minade_m": 1.2611278072382104,
+  "first_80_mean_ade_m": 2.6074821445559078,
+  "first_80_minade_m": 1.956001964961903
+}

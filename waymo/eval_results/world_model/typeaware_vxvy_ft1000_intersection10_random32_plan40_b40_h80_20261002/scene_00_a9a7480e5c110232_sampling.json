@@ -1,0 +1,101 @@
+{
+  "seed": 20260907,
+  "samples": [
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    },
+    {
+      "source": "iid_gaussian"
+    }
+  ]
+}

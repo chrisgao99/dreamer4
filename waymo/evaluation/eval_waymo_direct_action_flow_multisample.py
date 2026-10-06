@@ -49,6 +49,8 @@ from waymo.training.world_model.train_waymo_direct_action_flow import (
     seed_everything,
 )
 
+from waymo.training.world_model.action_kinematics import inverse_model_actions
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -59,6 +61,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scene_metrics_csv", required=True)
     parser.add_argument("--details_npz", required=True)
     parser.add_argument("--start_batch", type=int, default=0, help="Skip completed batches, retaining original dataset indices and seeds.")
+    parser.add_argument("--metric_validity", choices=("checkpoint", "holonomic"), default="checkpoint",
+                        help="Use legacy holonomic GT validity for comparable generate-all scoring")
+    parser.add_argument("--physical_metrics", action="store_true", help="Compute physical diagnostics and save complete per-batch rollouts.")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", choices=("ema", "model"), default="ema")
     parser.add_argument(
@@ -88,6 +93,13 @@ def parse_args() -> argparse.Namespace:
         required=True,
     )
     return parser.parse_args()
+
+
+def prefix_scene_ade(distance: torch.Tensor, valid: torch.Tensor, steps: int) -> torch.Tensor:
+    """Per-scene/per-rollout ADE over a prefix, using the legacy point weighting."""
+    distance = distance[..., :steps]
+    valid = valid[..., :steps]
+    return (distance * valid[:, None]).sum(dim=(2, 3)) / valid.sum(dim=(1, 2))[:, None].clamp_min(1)
 
 
 def require_positive(name: str, value: int) -> None:
@@ -282,6 +294,14 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         device=device,
     )
 
+    physical_parts, gt_physical_parts = [], []
+    if args.physical_metrics:
+        from waymo.evaluation import direct_action_flow_physical_metrics as physical
+        batch_dir = output_json.parent / "rollout_batches"
+        batch_dir.mkdir(exist_ok=True)
+        if any(batch_dir.glob("batch_*.npz")):
+            raise FileExistsError(f"Saved batches already exist: {batch_dir}")
+
     candidate_scene_ade_parts: list[np.ndarray] = []
     candidate_agent_ade_parts: list[np.ndarray] = []
     agent_valid_steps_parts: list[np.ndarray] = []
@@ -299,6 +319,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
 
     scene_ade_sum = 0.0
     scene_minade_sum = 0.0
+    prefix40_parts: list[np.ndarray] = []
     cpd_sum = 0.0
     cpd_valid_scenes = 0
     valid_point_count = 0
@@ -370,13 +391,24 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 history_length=int(train_args.history_length),
                 horizon=int(args.rollout_steps),
             )
-            targets = inverse_holonomic_actions(
-                history,
+            targets = inverse_model_actions(
+                model, history,
                 future,
                 batch["agent_mask"],
+                agent_lengths=batch.get("agent_lengths"),
                 max_displacement_m=float(train_args.physical_max_displacement_m),
                 max_yaw_delta_rad=float(train_args.physical_max_yaw_delta_rad),
             )
+
+            if getattr(args, "metric_validity", "checkpoint") == "holonomic":
+                if condition_focus_actions:
+                    raise ValueError("holonomic metric validity requires generate-all evaluation")
+                # Only GT scoring changes; rollout execution still uses model kinematics.
+                targets = inverse_holonomic_actions(
+                    history, future, batch["agent_mask"],
+                    max_displacement_m=float(train_args.physical_max_displacement_m),
+                    max_yaw_delta_rad=float(train_args.physical_max_yaw_delta_rad),
+                )
 
             candidate_poses = []
             rollout_seeds = []
@@ -393,6 +425,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                         model,
                         normalizer,
                         initial_history=history,
+                        agent_lengths=batch.get("agent_lengths"),
                         agent_mask=batch["agent_mask"],
                         map_polylines=batch["map_polylines"],
                         map_mask=batch["map_mask"],
@@ -434,6 +467,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             candidate_scene_ade = (distance * valid[:, None]).sum(dim=(2, 3)) / (
                 per_scene_valid_points[:, None].clamp_min(1)
             )
+            prefix40_parts.append(prefix_scene_ade(distance, valid, 40).cpu().numpy())
             scene_mean_ade = candidate_scene_ade.mean(dim=1)
             scene_minade = candidate_scene_ade.min(dim=1).values
             per_agent_minade = torch.nan_to_num(
@@ -469,6 +503,22 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             scene_cpd = cpd_components["scene_cpd"]
             scene_cpd_unscaled = cpd_components["scene_cpd_unscaled"]
             scene_cpd_valid = cpd_components["scene_valid"]
+
+            if args.physical_metrics:
+                pm, gm = physical.evaluate_batch(poses, targets.current_pose, targets.future_pose,
+                    valid, targets.agent_type, batch["map_polylines"], batch["map_mask"])
+                physical_parts.append(pm); gt_physical_parts.append(gm)
+                atomic_write_npz(batch_dir / f"batch_{batch_index:05d}.npz",
+                    poses=poses.cpu().numpy(), initial_pose=targets.current_pose.cpu().numpy(),
+                    gt_pose=targets.future_pose.cpu().numpy(), valid=valid.cpu().numpy(),
+                    agent_type=targets.agent_type.cpu().numpy(), agent_ids=batch["agent_ids"].cpu().numpy(),
+                    map_polylines=batch["map_polylines"].cpu().numpy(), map_mask=batch["map_mask"].cpu().numpy(),
+                    dataset_index=np.arange(batch_index*int(args.eval_batch_size),batch_index*int(args.eval_batch_size)+batch_size),
+                    rollout_seeds=np.asarray(rollout_seeds), candidate_scene_ade=candidate_scene_ade.cpu().numpy(),
+                    candidate_agent_ade=per_agent_ade.cpu().numpy(), agent_valid_steps=per_agent_valid_steps.cpu().numpy(),
+                    scene_cpd=scene_cpd.cpu().numpy(), scene_cpd_unscaled=scene_cpd_unscaled.cpu().numpy(),
+                    scene_cpd_valid=scene_cpd_valid.cpu().numpy(), physical_stats=pm, gt_physical_stats=gm,
+                    physical_metric_names=np.asarray(physical.METRIC_NAMES))
 
             start_index = batch_index * int(args.eval_batch_size)
             batch_paths = dataset.paths[start_index : start_index + batch_size]
@@ -597,6 +647,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             "takes the best joint rollout per scene before averaging scenes."
         ),
         "mean_ade_m": float(candidate_scene_ade_all.mean()),
+        "first40_mean_ade_m": float(np.concatenate(prefix40_parts, axis=0).mean()),
+        "first40_steps": min(40, int(args.rollout_steps)),
+        "metric_validity": getattr(args, "metric_validity", "checkpoint"),
         "minade_m": float(candidate_scene_ade_all.min(axis=1).mean()),
         "per_agent_minade_m": per_agent_minade_m,
         "first_rollout_ade_m": float(candidate_scene_ade_all[:, 0].mean()),
@@ -640,6 +693,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     atomic_write_npz(
         details_npz,
         candidate_scene_ade_m=candidate_scene_ade_all,
+        candidate_scene_first40_ade_m=np.concatenate(prefix40_parts, axis=0),
         candidate_agent_ade_m=candidate_agent_ade_all,
         agent_valid_steps=agent_valid_steps_all,
         agent_ids=agent_ids_all,
@@ -659,6 +713,17 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         condition_focus_actions=np.asarray(condition_focus_actions),
         cpd_exclude_focus=np.asarray(condition_focus_actions),
     )
+    if args.physical_metrics:
+        all_physical=np.concatenate(physical_parts,axis=0)
+        all_gt_physical=np.concatenate(gt_physical_parts,axis=0)
+        result["physical_metrics"]=physical.summarize(all_physical)
+        result["ground_truth_physical_metrics"]=physical.summarize(all_gt_physical)
+        result["physical_metric_definitions"]=physical.DEFINITIONS
+        result["rollout_batches_dir"]=str(batch_dir)
+        atomic_write_npz(output_json.parent / "physical_metrics.npz",
+            generated_stats=all_physical,ground_truth_stats=all_gt_physical,
+            metric_names=np.asarray(physical.METRIC_NAMES),
+            dataset_index=np.asarray(all_dataset_indices,dtype=np.int64))
     atomic_write_json(output_json, result)
     return result
 

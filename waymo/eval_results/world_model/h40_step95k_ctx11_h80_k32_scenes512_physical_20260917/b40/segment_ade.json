@@ -1,0 +1,20 @@
+{
+  "scene_count": 512,
+  "num_rollouts": 32,
+  "definition": "Mean over scenes and rollouts; per-scene ADE uses valid agent-time points within each segment. Segments exclude scenes with no valid points.",
+  "first40": {
+    "valid_scenes": 512,
+    "mean_ade_m": 1.1019724433283313,
+    "minade_m": 0.67248146258586
+  },
+  "last40": {
+    "valid_scenes": 512,
+    "mean_ade_m": 5.775628692549432,
+    "minade_m": 3.2000728889783217
+  },
+  "full80": {
+    "valid_scenes": 512,
+    "mean_ade_m": 3.021038747566453,
+    "minade_m": 1.7687876586818017
+  }
+}

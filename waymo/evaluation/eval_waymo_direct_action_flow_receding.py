@@ -37,6 +37,8 @@ from waymo.training.world_model.train_waymo_direct_action_flow import (
     seed_everything,
 )
 
+from waymo.training.world_model.action_kinematics import inverse_model_actions
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -176,10 +178,11 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             history_length=int(train_args.history_length),
             horizon=int(args.rollout_steps),
         )
-        targets = inverse_holonomic_actions(
-            history,
+        targets = inverse_model_actions(
+            model, history,
             future,
             batch["agent_mask"],
+            agent_lengths=batch.get("agent_lengths"),
             max_displacement_m=float(train_args.physical_max_displacement_m),
             max_yaw_delta_rad=float(train_args.physical_max_yaw_delta_rad),
         )
@@ -187,6 +190,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             model,
             normalizer,
             initial_history=history,
+            agent_lengths=batch.get("agent_lengths"),
             agent_mask=batch["agent_mask"],
             map_polylines=batch["map_polylines"],
             map_mask=batch["map_mask"],

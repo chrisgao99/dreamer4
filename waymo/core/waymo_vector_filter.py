@@ -588,6 +588,12 @@ def _build_lights(
     return lights, light_mask, light_id.astype(np.int64)
 
 
+def _selected_agent_lengths(data, selected_idx, agent_mask):
+    """Use measured current-frame box lengths; never infer size from future poses."""
+    lengths = _maybe_reshape(data, "state/current/length", (N_AGENTS_WAYMO,), default=0.)
+    return np.where(agent_mask, lengths[np.maximum(selected_idx, 0)], 0.).astype(np.float32)
+
+
 def filter_scenario(data: Dict[str, np.ndarray], cfg: WaymoVectorConfig = WaymoVectorConfig()) -> Dict[str, np.ndarray]:
     agent = _build_agent_arrays(data)
     selected_idx, selected_ids, agent_mask = _select_agents(agent, cfg)
@@ -632,6 +638,7 @@ def filter_scenario(data: Dict[str, np.ndarray], cfg: WaymoVectorConfig = WaymoV
         "agents": agents,
         "agent_mask": agent_mask,
         "agent_ids": selected_ids,
+        "agent_lengths": _selected_agent_lengths(data, selected_idx, agent_mask),
         "agent_src_indices": selected_idx,
         "agent_objects_of_interest": agent["objects_of_interest"][np.maximum(selected_idx, 0)] & agent_mask,
         "agent_tracks_to_predict": agent["tracks_to_predict"][np.maximum(selected_idx, 0)] & agent_mask,
@@ -732,6 +739,7 @@ def filter_scenario_around_focus(
         "agents": agents,
         "agent_mask": agent_mask,
         "agent_ids": selected_ids,
+        "agent_lengths": _selected_agent_lengths(data, selected_idx, agent_mask),
         "agent_src_indices": selected_idx,
         "agent_objects_of_interest": agent["objects_of_interest"][np.maximum(selected_idx, 0)] & agent_mask,
         "agent_tracks_to_predict": agent["tracks_to_predict"][np.maximum(selected_idx, 0)] & agent_mask,

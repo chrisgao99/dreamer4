@@ -40,3 +40,14 @@ def test_scope_ade_weights_points_selects_joint_rollouts_and_omits_empty_scenes(
 def test_empty_scope_is_not_reported_as_perfect_prediction():
     result = summarize_agent_scopes(np.ones((1, 2, 1)), np.ones((1, 1)))
     assert result["nonfocus"] == {"scene_count": 0, "mean_ade_m": None, "minade_m": None}
+
+
+def test_first40_ade_excludes_later_errors_and_weights_valid_points():
+    import torch
+    from waymo.evaluation.eval_waymo_direct_action_flow_multisample import prefix_scene_ade
+    distance=torch.full((1,2,2,80),1000.)
+    distance[:,0,0,:40]=2.;distance[:,0,1,:40]=10.
+    distance[:,1,0,:40]=8.;distance[:,1,1,:40]=4.
+    valid=torch.zeros((1,2,80),dtype=torch.bool)
+    valid[:,0,:10]=True;valid[:,1,:30]=True;valid[:,:,40:]=True
+    torch.testing.assert_close(prefix_scene_ade(distance,valid,40),torch.tensor([[8.,5.]]))

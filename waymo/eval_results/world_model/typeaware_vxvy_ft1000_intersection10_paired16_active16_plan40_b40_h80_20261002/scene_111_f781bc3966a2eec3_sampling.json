@@ -1,0 +1,145 @@
+{
+  "seed": 20261018,
+  "samples": [
+    {
+      "source": "paired_gaussian",
+      "pair": 0,
+      "sign": 1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 0,
+      "sign": -1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 1,
+      "sign": 1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 1,
+      "sign": -1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 2,
+      "sign": 1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 2,
+      "sign": -1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 3,
+      "sign": 1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 3,
+      "sign": -1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 4,
+      "sign": 1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 4,
+      "sign": -1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 5,
+      "sign": 1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 5,
+      "sign": -1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 6,
+      "sign": 1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 6,
+      "sign": -1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 7,
+      "sign": 1
+    },
+    {
+      "source": "paired_gaussian",
+      "pair": 7,
+      "sign": -1
+    },
+    {
+      "source": "active_mutation",
+      "parent": 9
+    },
+    {
+      "source": "active_mutation",
+      "parent": 9
+    },
+    {
+      "source": "active_mutation",
+      "parent": 13
+    },
+    {
+      "source": "active_mutation",
+      "parent": 13
+    },
+    {
+      "source": "active_mutation",
+      "parent": 10
+    },
+    {
+      "source": "active_mutation",
+      "parent": 10
+    },
+    {
+      "source": "active_mutation",
+      "parent": 0
+    },
+    {
+      "source": "active_mutation",
+      "parent": 0
+    },
+    {
+      "source": "active_mutation",
+      "parent": 2
+    },
+    {
+      "source": "active_mutation",
+      "parent": 2
+    },
+    {
+      "source": "active_mutation",
+      "parent": 6
+    },
+    {
+      "source": "active_mutation",
+      "parent": 6
+    },
+    {
+      "source": "fresh_exploration"
+    },
+    {
+      "source": "fresh_exploration"
+    },
+    {
+      "source": "fresh_exploration"
+    },
+    {
+      "source": "fresh_exploration"
+    }
+  ]
+}

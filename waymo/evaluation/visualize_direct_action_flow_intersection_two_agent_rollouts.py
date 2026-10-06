@@ -50,6 +50,8 @@ from waymo.training.world_model.train_waymo_direct_action_flow import (  # noqa:
     seed_everything,
 )
 
+from waymo.training.world_model.action_kinematics import inverse_model_actions
+
 
 def _repeat_batch(value: torch.Tensor, repeats: int) -> torch.Tensor:
     return value.repeat_interleave(int(repeats), dim=0)
@@ -305,8 +307,8 @@ def visualize(args: argparse.Namespace) -> None:
         raise ValueError(
             f"Expected history_length=11, checkpoint has {train_args.history_length}"
         )
-    if int(train_args.horizon) != 15:
-        raise ValueError(f"Expected native horizon=15, checkpoint has {train_args.horizon}")
+    if int(train_args.horizon) < 1:
+        raise ValueError(f"Invalid native horizon={train_args.horizon}")
     commitment = (
         int(args.commitment_steps)
         if int(args.commitment_steps) > 0
@@ -342,14 +344,15 @@ def visualize(args: argparse.Namespace) -> None:
             history_length=int(train_args.history_length),
             horizon=int(args.rollout_steps),
         )
-        targets = inverse_holonomic_actions(
-            history,
+        targets = inverse_model_actions(
+            model, history,
             future,
             batch["agent_mask"],
+            agent_lengths=batch.get("agent_lengths"),
             max_displacement_m=float(train_args.physical_max_displacement_m),
             max_yaw_delta_rad=float(train_args.physical_max_yaw_delta_rad),
         )
-        if not bool(targets.valid[0, 0].all()):
+        if condition_focus_actions and not bool(targets.valid[0, 0].all()):
             raise RuntimeError(
                 f"Recorded focus plan is not valid for all 80 steps in {record['scenario_id']}"
             )
@@ -360,6 +363,8 @@ def visualize(args: argparse.Namespace) -> None:
             model,
             normalizer,
             initial_history=_repeat_batch(history, repeats),
+            agent_lengths=(_repeat_batch(batch["agent_lengths"], repeats)
+                           if "agent_lengths" in batch else None),
             agent_mask=_repeat_batch(batch["agent_mask"], repeats),
             map_polylines=_repeat_batch(batch["map_polylines"], repeats),
             map_mask=_repeat_batch(batch["map_mask"], repeats),
@@ -422,6 +427,20 @@ def visualize(args: argparse.Namespace) -> None:
                 f"Selected target in {record['scenario_id']} is not a car: "
                 f"{record['target_type']}"
             )
+        image_path = output_dir / f"scene_{scene_index:02d}_{record['scenario_id']}.png"
+        plot_scene = _plot_scene if condition_focus_actions else _plot_generate_all_scene
+        if args.images_only:
+            image_path = output_dir / (
+                f"{args.filename_prefix}scene_{scene_index:02d}_{record['scenario_id']}.png"
+            )
+            plot_scene(
+                args=args, record=record, gt_tkf=gt_tkf, pred_xy=pred_xy,
+                map_polylines=batch["map_polylines"][0].detach().float().cpu().numpy(),
+                map_mask=batch["map_mask"][0].detach().cpu().numpy().astype(bool),
+                agent_ids=agent_ids, output_path=image_path,
+            )
+            print(f"generated {scene_index + 1}/{len(records)} image={image_path}", flush=True)
+            continue
         bounds = _reference_bounds(
             reference_dir,
             record,
@@ -438,8 +457,6 @@ def visualize(args: argparse.Namespace) -> None:
         target_outside_fraction = _outside_fraction(
             target_prediction, target_valid, bounds
         )
-        image_path = output_dir / f"scene_{scene_index:02d}_{record['scenario_id']}.png"
-        plot_scene = _plot_scene if condition_focus_actions else _plot_generate_all_scene
         metrics = plot_scene(
             args=args,
             record=record,
@@ -522,6 +539,13 @@ def visualize(args: argparse.Namespace) -> None:
                 flush=True,
             )
 
+    if args.images_only:
+        del model, normalizer
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+        return
+
     reference_bounds_contact_sheet = output_dir / "contact_sheet_intersection10_n10.png"
     full_bounds_contact_sheet = output_dir / "contact_sheet_intersection10_n10_full_bounds.png"
     _make_contact_sheet(reference_bounds_image_paths, reference_bounds_contact_sheet)
@@ -534,7 +558,7 @@ def visualize(args: argparse.Namespace) -> None:
         "condition_focus_actions": condition_focus_actions,
         "focus_mode": str(args.focus_mode),
         "protocol": (
-            f"ctx11_native_h15_commit{commitment}_receding_h80_"
+            f"ctx11_native_h{int(train_args.horizon)}_commit{commitment}_receding_h80_"
             f"solver{int(args.solver_steps)}_"
             + (
                 "recorded_focus_plan_target_agent_n10"
@@ -577,6 +601,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--selected_manifest", required=True)
     parser.add_argument("--reference_h90_dir", required=True)
     parser.add_argument("--output_dir", required=True)
+    parser.add_argument("--images_only", action="store_true",
+                        help="Write only one full-bounds PNG per scene; no NPZ, JSON or contact sheets.")
+    parser.add_argument("--filename_prefix", default="")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--weights", choices=("ema", "model"), default="ema")
     parser.add_argument(

@@ -59,6 +59,8 @@ class WaymoVectorDataset(Dataset):
                 "ego_origin_xy": torch.from_numpy(data["ego_origin_xy"]).float(),
                 "ego_heading": torch.as_tensor(float(data["ego_heading"]), dtype=torch.float32),
             }
+            if "agent_lengths" in data:
+                item["agent_lengths"] = torch.from_numpy(data["agent_lengths"]).float()
             optional_long_keys = (
                 "agent_src_indices",
                 "focus_src_index",

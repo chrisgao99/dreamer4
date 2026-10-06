@@ -1,0 +1,14 @@
+[
+  {
+    "label": "typeaware",
+    "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_scratch100k_20260924/step_000095000.pt",
+    "include_agent_velocity": false,
+    "step": 95000
+  },
+  {
+    "label": "typeaware_vxvy",
+    "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_scratch100k_20260925/step_000095000.pt",
+    "include_agent_velocity": true,
+    "step": 95000
+  }
+]

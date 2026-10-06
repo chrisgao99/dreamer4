@@ -1,0 +1,14 @@
+{
+  "active_job": "typeaware_vxvy",
+  "child_pid": 304219,
+  "cuda_index": 0,
+  "elapsed_seconds": 14836.528228521347,
+  "jobs": {
+    "typeaware": "complete",
+    "typeaware_vxvy": "complete"
+  },
+  "pid": 247538,
+  "stage": "complete",
+  "started_unix": 1790604683.3967557,
+  "status": "complete"
+}

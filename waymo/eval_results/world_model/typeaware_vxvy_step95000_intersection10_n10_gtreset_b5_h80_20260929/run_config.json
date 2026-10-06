@@ -1,0 +1,18 @@
+{
+  "checkpoint": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_scratch100k_20260925/best.pt",
+  "checkpoint_step": 95000,
+  "weights": "ema",
+  "manifest": "/p/yufeng/tri30/dreamer4/waymo/eval_results/world_model/h90_intersection10_two_agent_n10_ctx11_h80_20260907/selected_intersection10_manifest.json",
+  "data_dir": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val",
+  "mode": "all-agent GT history and pose reset every 5 steps",
+  "plan_horizon": 40,
+  "history_length": 11,
+  "commitment_steps": 5,
+  "rollout_steps": 80,
+  "num_rollouts": 10,
+  "solver_steps": 8,
+  "seed": 20260907,
+  "device": "cpu",
+  "focus_mode": "generate_all",
+  "note": "Connected plot lines may bridge reset discontinuities. ADE measures short GT-conditioned predictions, not closed-loop performance."
+}

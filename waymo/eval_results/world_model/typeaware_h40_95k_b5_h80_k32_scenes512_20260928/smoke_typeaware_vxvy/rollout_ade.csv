@@ -1,0 +1,9 @@
+dataset_index,batch_index,scene_in_batch,scenario_id,npz_path,rollout_index,rollout_seed,all_agent_scene_ade_m,valid_all_agent_time_points
+0,0,0,10046aa6cf702930_focus_1024_src2,/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/10046aa6cf702930_focus_1024_src2.npz,0,12346,3.4444425106048584,917
+0,0,0,10046aa6cf702930_focus_1024_src2,/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/10046aa6cf702930_focus_1024_src2.npz,1,12347,3.603961229324341,917
+1,0,1,10046aa6cf702930_focus_3426_src4,/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/10046aa6cf702930_focus_3426_src4.npz,0,12346,3.2932748794555664,1113
+1,0,1,10046aa6cf702930_focus_3426_src4,/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/10046aa6cf702930_focus_3426_src4.npz,1,12347,4.75039529800415,1113
+2,0,2,103dbbb3def8afe3_focus_31_src1,/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/103dbbb3def8afe3_focus_31_src1.npz,0,12346,0.8998759388923645,1529
+2,0,2,103dbbb3def8afe3_focus_31_src1,/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/103dbbb3def8afe3_focus_31_src1.npz,1,12347,1.4279934167861938,1529
+3,0,3,103dbbb3def8afe3_focus_33_src2,/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/103dbbb3def8afe3_focus_33_src2.npz,0,12346,1.520835280418396,1289
+3,0,3,103dbbb3def8afe3_focus_33_src2,/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/103dbbb3def8afe3_focus_33_src2.npz,1,12347,1.6827657222747803,1289
