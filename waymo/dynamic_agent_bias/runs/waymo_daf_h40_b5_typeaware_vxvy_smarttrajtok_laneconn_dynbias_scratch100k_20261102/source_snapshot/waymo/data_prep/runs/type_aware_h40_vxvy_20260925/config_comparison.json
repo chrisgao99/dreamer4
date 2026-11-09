@@ -1,0 +1,15 @@
+{
+  "baseline": "waymo_daf_h40_b5_typeaware_scratch100k_20260924",
+  "exceptions": [
+    "ckpt_dir",
+    "wandb_run_name",
+    "include_agent_velocity=true",
+    "velocity_scale_mps=10"
+  ],
+  "reused_inputs_sha256": {
+    "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/direct_action_stats_typeaware_h40_l11_phys5_yaw075_reexec025_8192_v1.json": "9ce8cb4216d83bc9b7982f5e1707c0d55245ec1d668fd2c5ffa8716c9d86b368",
+    "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/kinematics_calibration_train8192_firstvalid_v1.json": "4b8bd11e7e06dfbed94de1ab1e5c8179fb56b8cab1be3e390ebb791c4603602f",
+    "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/length_supplement_summary.json": "de0a65b69a15324dc70a96d2364c15f5463a2fa4afe9aca3a5ea597eabaf880e"
+  },
+  "same_training_arguments": true
+}

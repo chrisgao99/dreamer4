@@ -1,0 +1,21 @@
+{
+  "train": {
+    "files": 4,
+    "losses": {
+      "offroad_loss": 1.5614004135131836,
+      "lane_direction_loss": 0.15947844088077545,
+      "illegal_lane_transition_loss": 0.015244781970977783,
+      "illegal_transition_fraction": 0.028952205553650856,
+      "offroad_valid_pose_count": 607.0,
+      "direction_valid_pose_count": 2193.0,
+      "map_aux_loss": 0.16563844680786133,
+      "aux_loss_scale": 1.0,
+      "total_loss": 0.7304888963699341,
+      "flow_loss": 0.5648504495620728,
+      "normalized_endpoint_mae": 0.4194863736629486,
+      "flow_time_mean": 0.5799741148948669,
+      "valid_action_fraction": 0.5498046875
+    },
+    "gpu_peak_mib": 5962.5283203125
+  }
+}

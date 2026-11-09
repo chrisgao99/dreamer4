@@ -1,0 +1,40 @@
+{
+  "train": {
+    "files": [
+      "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/10035ee859a47435_focus_797_src0.npz",
+      "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/86f24c77e6954922_focus_1993_src3.npz"
+    ],
+    "map_segments": [
+      2025,
+      1509
+    ],
+    "stop_sign_segments": [
+      0,
+      23
+    ],
+    "observed_signals": [
+      637,
+      0
+    ],
+    "flow_loss": 0.5569586753845215
+  },
+  "val": {
+    "files": [
+      "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/10046aa6cf702930_focus_1024_src2.npz",
+      "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/889dd830904ce1df_focus_19_src1.npz"
+    ],
+    "map_segments": [
+      1947,
+      3891
+    ],
+    "stop_sign_segments": [
+      0,
+      91
+    ],
+    "observed_signals": [
+      136,
+      0
+    ],
+    "flow_loss": 0.7494797110557556
+  }
+}

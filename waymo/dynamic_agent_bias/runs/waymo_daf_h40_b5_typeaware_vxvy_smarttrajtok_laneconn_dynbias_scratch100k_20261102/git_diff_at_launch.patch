@@ -1,0 +1,1115 @@
+diff --git a/waymo/adaptations/launch_stage1_tmux.sh b/waymo/adaptations/launch_stage1_tmux.sh
+index 7376ad4..480061b 100755
+--- a/waymo/adaptations/launch_stage1_tmux.sh
++++ b/waymo/adaptations/launch_stage1_tmux.sh
+@@ -1,52 +1,59 @@
+ #!/usr/bin/env bash
+ # Invoke this script on the GPU training host; preparation runs on CPU first.
+ set -euo pipefail
+-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+-if [[ -z "${PYTHON:-}" ]]; then
+-  owner_root="$(cd "$REPO_ROOT/../.." && pwd)"
+-  candidates=("${CONDA_PREFIX:-/nonexistent}/bin/python"
+-              "$owner_root/.conda/envs/dreamer4/bin/python"
+-              "${HOME}/.conda/envs/dreamer4/bin/python"
+-              "$(command -v python || true)")
+-  for candidate in "${candidates[@]}"; do
+-    if [[ -x "$candidate" ]] && "$candidate" -c 'import torch, numpy, google.protobuf' >/dev/null 2>&1; then
+-      PYTHON="$candidate"; break
+-    fi
+-  done
+-  [[ -n "${PYTHON:-}" ]] || { echo 'Activate the dreamer4 environment or set PYTHON=/path/to/python' >&2; exit 1; }
+-fi
+-export PYTHON
+-export DATA_ROOT="${DATA_ROOT:-$REPO_ROOT/data/waymo_vector_dataset_ooi_centered_50k_with_lengths}"
+-export CUDA_DEVICE="${CUDA_DEVICE:-0}"
+-export RUN_NAME="${RUN_NAME:-waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_scratch100k_20261006}"
+-export SESSION_NAME="${SESSION_NAME:-daf_map_stage1_cuda${CUDA_DEVICE}}"
+-export MAP_CACHE_DIR="${MAP_CACHE_DIR:-$REPO_ROOT/data/waymo_map_smarttrajtok_5m_v2}"
+-export SCENARIO_ROOT="${SCENARIO_ROOT:-/p/liverobotics/waymo_open_dataset_motion/scenario}"
+-export INDEX_DIR="${INDEX_DIR:-$REPO_ROOT/data/waymo_scenario_index_v1}"
+-export PREP_WORKERS="${PREP_WORKERS:-4}"
+-export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+-cd "$REPO_ROOT"
+-if [[ "${1:-}" != "--worker" ]]; then
+-  command -v tmux >/dev/null
+-  [[ -x "$PYTHON" ]] || { echo "Python missing: $PYTHON" >&2; exit 1; }
+-  [[ "$RUN_NAME" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo 'Invalid RUN_NAME' >&2; exit 1; }
+-  [[ ! -e "waymo/checkpoints/$RUN_NAME" ]] || { echo 'Checkpoint already exists; choose a new RUN_NAME' >&2; exit 1; }
+-  tmux has-session -t "$SESSION_NAME" 2>/dev/null && { echo 'tmux session already exists' >&2; exit 1; }
+-  mkdir -p waymo/logs/wm
+-  [[ ! -e "waymo/logs/wm/$RUN_NAME.log" ]] || { echo 'Log exists; choose a new RUN_NAME' >&2; exit 1; }
+-  printf -v worker_cmd '%q ' bash "$REPO_ROOT/waymo/adaptations/launch_stage1_tmux.sh" --worker
+-  printf -v logfile '%q' "$REPO_ROOT/waymo/logs/wm/$RUN_NAME.log"
+-  # Explicit exports survive even when the tmux server predates this invocation.
+-  prefix=''
+-  for name in PYTHON DATA_ROOT CUDA_DEVICE RUN_NAME SESSION_NAME MAP_CACHE_DIR SCENARIO_ROOT INDEX_DIR PREP_WORKERS; do
+-    printf -v entry '%q=%q ' "$name" "${!name}"; prefix+="$entry"
+-  done
+-  tmux new-session -d -s "$SESSION_NAME" "env $prefix bash -c $(printf '%q' "set -o pipefail; $worker_cmd 2>&1 | tee $logfile")"
+-  echo "tmux attach -t $SESSION_NAME"
+-  echo "log: $REPO_ROOT/waymo/logs/wm/$RUN_NAME.log"
+-  exit 0
+-fi
+-CUDA_VISIBLE_DEVICES="$CUDA_DEVICE" "$PYTHON" -c 'import torch; assert torch.cuda.is_available(), "CUDA unavailable on this host/device"'
+-"$PYTHON" waymo/adaptations/index_scenarios.py --scenario_root "$SCENARIO_ROOT" --output_dir "$INDEX_DIR" --workers "$PREP_WORKERS"
+-"$PYTHON" waymo/adaptations/prepare_map_cache.py --data_root "$DATA_ROOT" --scenario_root "$SCENARIO_ROOT" --index_dir "$INDEX_DIR" --output_dir "$MAP_CACHE_DIR" --workers "$PREP_WORKERS"
+-CUDA_VISIBLE_DEVICES="$CUDA_DEVICE" "$PYTHON" waymo/adaptations/run_stage1.py --map_cache_dir "$MAP_CACHE_DIR" --data_root "$DATA_ROOT" --run_name "$RUN_NAME"
++# Parse the complete workflow before running long preparation commands.
++# A checkout/pull or an edit of this file cannot shift Bash's next read offset.
++main() {
++  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
++  if [[ -z "${PYTHON:-}" ]]; then
++    owner_root="$(cd "$REPO_ROOT/../.." && pwd)"
++    candidates=("${CONDA_PREFIX:-/nonexistent}/bin/python"
++                "$owner_root/.conda/envs/dreamer4/bin/python"
++                "${HOME}/.conda/envs/dreamer4/bin/python"
++                "$(command -v python || true)")
++    for candidate in "${candidates[@]}"; do
++      if [[ -x "$candidate" ]] && "$candidate" -c 'import torch, numpy, google.protobuf' >/dev/null 2>&1; then
++        PYTHON="$candidate"; break
++      fi
++    done
++    [[ -n "${PYTHON:-}" ]] || { echo 'Activate the dreamer4 environment or set PYTHON=/path/to/python' >&2; exit 1; }
++  fi
++  export PYTHON
++  export DATA_ROOT="${DATA_ROOT:-$REPO_ROOT/data/waymo_vector_dataset_ooi_centered_50k_with_lengths}"
++  export CUDA_DEVICE="${CUDA_DEVICE:-0}"
++  export RUN_NAME="${RUN_NAME:-waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_scratch100k_20261006}"
++  export SESSION_NAME="${SESSION_NAME:-daf_map_stage1_cuda${CUDA_DEVICE}}"
++  export MAP_CACHE_DIR="${MAP_CACHE_DIR:-$REPO_ROOT/data/waymo_map_smarttrajtok_5m_v2}"
++  export SCENARIO_ROOT="${SCENARIO_ROOT:-/p/liverobotics/waymo_open_dataset_motion/scenario}"
++  export INDEX_DIR="${INDEX_DIR:-$REPO_ROOT/data/waymo_scenario_index_v1}"
++  export PREP_WORKERS="${PREP_WORKERS:-4}"
++  export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
++  cd "$REPO_ROOT"
++  if [[ "${1:-}" != "--worker" ]]; then
++    command -v tmux >/dev/null
++    [[ -x "$PYTHON" ]] || { echo "Python missing: $PYTHON" >&2; exit 1; }
++    [[ "$RUN_NAME" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo 'Invalid RUN_NAME' >&2; exit 1; }
++    [[ ! -e "waymo/checkpoints/$RUN_NAME" ]] || { echo 'Checkpoint already exists; choose a new RUN_NAME' >&2; exit 1; }
++    tmux has-session -t "$SESSION_NAME" 2>/dev/null && { echo 'tmux session already exists' >&2; exit 1; }
++    mkdir -p waymo/logs/wm
++    [[ ! -e "waymo/logs/wm/$RUN_NAME.log" ]] || { echo 'Log exists; choose a new RUN_NAME' >&2; exit 1; }
++    printf -v worker_cmd '%q ' bash "$REPO_ROOT/waymo/adaptations/launch_stage1_tmux.sh" --worker
++    printf -v logfile '%q' "$REPO_ROOT/waymo/logs/wm/$RUN_NAME.log"
++    # Explicit exports survive even when the tmux server predates this invocation.
++    prefix=''
++    for name in PYTHON DATA_ROOT CUDA_DEVICE RUN_NAME SESSION_NAME MAP_CACHE_DIR SCENARIO_ROOT INDEX_DIR PREP_WORKERS; do
++      printf -v entry '%q=%q ' "$name" "${!name}"; prefix+="$entry"
++    done
++    tmux new-session -d -s "$SESSION_NAME" "env $prefix bash -c $(printf '%q' "set -o pipefail; $worker_cmd 2>&1 | tee $logfile")"
++    echo "tmux attach -t $SESSION_NAME"
++    echo "log: $REPO_ROOT/waymo/logs/wm/$RUN_NAME.log"
++    exit 0
++  fi
++  CUDA_VISIBLE_DEVICES="$CUDA_DEVICE" "$PYTHON" -c 'import torch; assert torch.cuda.is_available(), "CUDA unavailable on this host/device"'
++  "$PYTHON" waymo/adaptations/index_scenarios.py --scenario_root "$SCENARIO_ROOT" --output_dir "$INDEX_DIR" --workers "$PREP_WORKERS"
++  "$PYTHON" waymo/adaptations/prepare_map_cache.py --data_root "$DATA_ROOT" --scenario_root "$SCENARIO_ROOT" --index_dir "$INDEX_DIR" --output_dir "$MAP_CACHE_DIR" --workers "$PREP_WORKERS"
++  CUDA_VISIBLE_DEVICES="$CUDA_DEVICE" "$PYTHON" waymo/adaptations/run_stage1.py --map_cache_dir "$MAP_CACHE_DIR" --data_root "$DATA_ROOT" --run_name "$RUN_NAME"
++}
++# Keep exit in this same parsed command, so Bash never reads the file again
++# after the long-running function returns.
++main "$@"; exit $?
+diff --git a/waymo/adaptations/scenario_reader.py b/waymo/adaptations/scenario_reader.py
+index c26e168..a77c956 100644
+--- a/waymo/adaptations/scenario_reader.py
++++ b/waymo/adaptations/scenario_reader.py
+@@ -20,7 +20,15 @@ def scenario_class():
+                 field.type = kind
+     # double=1, int64=3, int32=5, string=9, float=2, bool=8
+     message('Point', [('x',1,1,False),('y',2,1,False),('z',3,1,False)])
+-    message('Lane', [('type',2,5,False),('polyline',8,'Point',True)])
++    message('Boundary', [('lane_start_index',1,5,False),('lane_end_index',2,5,False),
++                         ('boundary_feature_id',3,3,False),('boundary_type',4,5,False)])
++    message('Neighbor', [('feature_id',1,3,False),('self_start_index',2,5,False),
++                         ('self_end_index',3,5,False),('neighbor_start_index',4,5,False),
++                         ('neighbor_end_index',5,5,False),('boundaries',6,'Boundary',True)])
++    message('Lane', [('type',2,5,False),('polyline',8,'Point',True),
++                     ('entry_lanes',9,3,True),('exit_lanes',10,3,True),
++                     ('left_neighbors',11,'Neighbor',True),('right_neighbors',12,'Neighbor',True),
++                     ('left_boundaries',13,'Boundary',True),('right_boundaries',14,'Boundary',True)])
+     message('RoadLine', [('type',1,5,False),('polyline',2,'Point',True)])
+     message('RoadEdge', [('type',1,5,False),('polyline',2,'Point',True)])
+     message('StopSign', [('lane',1,3,True),('position',2,'Point',False)])
+@@ -30,7 +38,7 @@ def scenario_class():
+                         ('crosswalk',8,'Polygon',False),('speed_bump',9,'Polygon',False),('driveway',10,'Polygon',False)])
+     message('Light', [('lane',1,3,False),('state',2,5,False),('stop_point',3,'Point',False)])
+     message('Dynamic', [('lane_states',1,'Light',True)])
+-    message('State', [('center_x',2,1,False),('center_y',3,1,False),('valid',11,8,False)])
++    message('State', [('center_x',2,1,False),('center_y',3,1,False),('length',5,2,False),('width',6,2,False),('valid',11,8,False)])
+     message('Track', [('id',1,5,False),('states',3,'State',True)])
+     message('Scenario', [('scenario_id',5,9,False),('tracks',2,'Track',True),
+                          ('dynamic_map_states',7,'Dynamic',True),('map_features',8,'Feature',True),
+diff --git a/waymo/adaptations/tests/test_map_adaptation.py b/waymo/adaptations/tests/test_map_adaptation.py
+index 49d5b61..1fae4f5 100644
+--- a/waymo/adaptations/tests/test_map_adaptation.py
++++ b/waymo/adaptations/tests/test_map_adaptation.py
+@@ -214,3 +214,43 @@ def test_manifest_rebases_old_paths_without_modifying_file():
+         rows=rebase_manifest_rows([row],root)
+         assert rows[0]['npz_path']==str(source.resolve())
+         assert rows[0]['tfrecord_path']=='/old/raw.tfrecord'
++
++
++def test_launcher_survives_script_rewrite_during_preparation():
++    """Reproduce the live edit failure without CUDA, tmux or training work."""
++    import os
++    import subprocess
++    import tempfile
++    import time
++    from pathlib import Path
++    launcher=Path(__file__).resolve().parents[1]/'launch_stage1_tmux.sh'
++    with tempfile.TemporaryDirectory() as folder:
++        root=Path(folder);script=root/'repo/waymo/adaptations/launch_stage1_tmux.sh'
++        script.parent.mkdir(parents=True);script.write_text(launcher.read_text())
++        fake=root/'python'
++        fake.write_text('''#!/bin/bash
++printf '%s\\n' "$1" >> "$CALLS"
++if [[ "$1" == *index_scenarios.py ]]; then
++  touch "$READY"
++  while [[ ! -f "$RELEASE" ]]; do sleep .05; done
++fi
++''')
++        fake.chmod(0o755)
++        env=dict(os.environ,PYTHON=str(fake),READY=str(root/'ready'),RELEASE=str(root/'release'),CALLS=str(root/'calls'))
++        process=subprocess.Popen(['bash',str(script),'--worker'],env=env,
++                                  stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
++        try:
++            deadline=time.monotonic()+10
++            while not (root/'ready').exists() and time.monotonic()<deadline:
++                if process.poll() is not None:break
++                time.sleep(.05)
++            assert (root/'ready').exists(), 'Mock index stage did not start'
++            # Truncate and replace the active script, including invalid shell text.
++            script.write_text('do\n'*1000)
++            (root/'release').touch()
++            stdout,stderr=process.communicate(timeout=10)
++            assert process.returncode==0,(stdout,stderr)
++            calls=(root/'calls').read_text().splitlines()
++            assert calls[-2:]==['waymo/adaptations/prepare_map_cache.py','waymo/adaptations/run_stage1.py']
++        finally:
++            if process.poll() is None:process.kill();process.wait()
+diff --git a/waymo/evaluation/eval_waymo_direct_action_flow_multisample.py b/waymo/evaluation/eval_waymo_direct_action_flow_multisample.py
+index 16b54ef..d3ca6cf 100755
+--- a/waymo/evaluation/eval_waymo_direct_action_flow_multisample.py
++++ b/waymo/evaluation/eval_waymo_direct_action_flow_multisample.py
+@@ -56,12 +56,14 @@ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--checkpoint", required=True)
+     parser.add_argument("--val_data_dir", required=True)
++    parser.add_argument("--map_cache_dir", default=None)
++    parser.add_argument("--lane_topology_dir", default=None)
+     parser.add_argument("--output_json", required=True)
+     parser.add_argument("--rollout_ade_csv", required=True)
+     parser.add_argument("--scene_metrics_csv", required=True)
+     parser.add_argument("--details_npz", required=True)
+     parser.add_argument("--start_batch", type=int, default=0, help="Skip completed batches, retaining original dataset indices and seeds.")
+-    parser.add_argument("--metric_validity", choices=("checkpoint", "holonomic"), default="checkpoint",
++    parser.add_argument("--metric_validity", choices=("checkpoint", "holonomic"), default="holonomic",
+                         help="Use legacy holonomic GT validity for comparable generate-all scoring")
+     parser.add_argument("--physical_metrics", action="store_true", help="Compute physical diagnostics and save complete per-batch rollouts.")
+     parser.add_argument("--device", default="cuda")
+@@ -285,7 +287,17 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
+             f"{train_args.horizon}"
+         )
+ 
+-    dataset = WaymoVectorDataset(str(val_data_dir))
++    if getattr(train_args, "map_adaptation", False):
++        cache = args.map_cache_dir or train_args.map_cache_dir
++        if getattr(train_args, "lane_connectivity", False):
++            from waymo.lane_connectivity.dataset import ConnectivityDataset
++            topology = args.lane_topology_dir or train_args.lane_topology_dir
++            dataset = ConnectivityDataset(str(val_data_dir), cache, topology)
++        else:
++            from waymo.adaptations.map_dataset import MapAdaptationDataset
++            dataset = MapAdaptationDataset(str(val_data_dir), cache)
++    else:
++        dataset = WaymoVectorDataset(str(val_data_dir))
+     loader = make_loader(
+         dataset,
+         batch_size=args.eval_batch_size,
+@@ -400,7 +412,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
+                 max_yaw_delta_rad=float(train_args.physical_max_yaw_delta_rad),
+             )
+ 
+-            if getattr(args, "metric_validity", "checkpoint") == "holonomic":
++            if getattr(args, "metric_validity", "holonomic") == "holonomic":
+                 if condition_focus_actions:
+                     raise ValueError("holonomic metric validity requires generate-all evaluation")
+                 # Only GT scoring changes; rollout execution still uses model kinematics.
+@@ -435,6 +447,12 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
+                         current_light_mask_sequence=batch["light_mask"][
+                             :, anchor : anchor + int(args.rollout_steps)
+                         ],
++                        **(dict(map_ids=batch["map_ids"], map_is_lane=batch["map_is_lane"],
++                                map_stop_sign=batch["map_stop_sign"], map_stop_point=batch["map_stop_point"],
++                                light_id_sequence=batch["light_ids"][:, anchor : anchor + int(args.rollout_steps)])
++                           if "map_adaptation" in batch else {}),
++                        **(dict(lane_edges=batch["lane_edges"], lane_edge_types=batch["lane_edge_types"])
++                           if "lane_edges" in batch else {}),
+                         focus_action_sequence=(targets.actions[:, 0] if condition_focus_actions else None),
+                         focus_action_valid=(targets.valid[:, 0] if condition_focus_actions else None),
+                         rollout_steps=int(args.rollout_steps),
+@@ -649,7 +667,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
+         "mean_ade_m": float(candidate_scene_ade_all.mean()),
+         "first40_mean_ade_m": float(np.concatenate(prefix40_parts, axis=0).mean()),
+         "first40_steps": min(40, int(args.rollout_steps)),
+-        "metric_validity": getattr(args, "metric_validity", "checkpoint"),
++        "metric_validity": getattr(args, "metric_validity", "holonomic"),
+         "minade_m": float(candidate_scene_ade_all.min(axis=1).mean()),
+         "per_agent_minade_m": per_agent_minade_m,
+         "first_rollout_ade_m": float(candidate_scene_ade_all[:, 0].mean()),
+diff --git a/waymo/evaluation/visualize_flow_noise_coverage.py b/waymo/evaluation/visualize_flow_noise_coverage.py
+index 5e8cbd9..60240ee 100644
+--- a/waymo/evaluation/visualize_flow_noise_coverage.py
++++ b/waymo/evaluation/visualize_flow_noise_coverage.py
+@@ -111,7 +111,7 @@ def plot_scene(out, record, gt, poses, maps, masks, ids, mode):
+         stats[str(slot)] = {'base_visited_area_m2': int((heat > 0).sum()),
+                             'all_visited_area_m2': int((all_heat > 0).sum()),
+                             'endpoint_max_pair_distance_m': float(np.linalg.norm(c[:, None, -1] - c[None, :, -1], axis=-1).max())}
+-    fig.suptitle(f"{record['scenario_id']} | {mode} | EMA step1000 | plan40 / commitment40 / 80 steps\n"
++    fig.suptitle(f"{record['scenario_id']} | {mode} | EMA step{record.get('checkpoint_step', 1000)} | plan40 / commitment40 / 80 steps\n"
+                  'Observed sample coverage, not a support bound; active samples are not density estimates', fontsize=13)
+     path = out / f"scene_{int(record['sample_order']):02d}_{record['scenario_id']}.png"
+     fig.savefig(path)
+@@ -124,19 +124,26 @@ def main():
+     parser = argparse.ArgumentParser()
+     parser.add_argument('--mode', choices=['random32', 'paired16_active16'], required=True)
+     parser.add_argument('--output_dir', type=Path, required=True)
++    parser.add_argument('--checkpoint', type=Path, default=None)
++    parser.add_argument('--images_only', action='store_true')
++    parser.add_argument('--map_cache_dir', type=Path, default=None)
++    parser.add_argument('--lane_topology_dir', type=Path, default=None)
+     parser.add_argument('--max_scenes', type=int, default=10)
+     parser.add_argument('--batch_size', type=int, default=4)
+     args = parser.parse_args()
+     out = args.output_dir.resolve(); out.mkdir(parents=True, exist_ok=True)
+     config = json.loads(REFERENCE.read_text())
++    if args.checkpoint is not None:config['checkpoint']=str(args.checkpoint.resolve())
++    def write_json(path, payload):
++        if not args.images_only:path.write_text(json.dumps(payload, indent=2) + '\n')
+     config.update(mode=args.mode, output_dir=str(out), device='cuda:0', num_rollouts=32,
+                   cuda_visible_devices='0', batch_size=args.batch_size,
+                   sampling_protocol='random32: iid Gaussian; paired16_active16: 8 Gaussian +/- pairs, then 12 mutations of 6 output-diverse parents + 4 fresh Gaussian samples',
+                   active_mutation='0.8 * parent + 0.6 * independent Gaussian; parents chosen using both cars at 1-second intervals; both replans mutated',
+                   plot_protocol='Base-only per-rollout grid visit frequency; active extra coverage separate; raw positions at 2/4/6/8 seconds',
+                   metric_validity='raw logged GT for display; generated trajectories never truncated by inverse-action masks')
+-    (out / 'run_config.json').write_text(json.dumps(config, indent=2) + '\n')
+-    (out / 'status.json').write_text(json.dumps({'state': 'loading', 'completed_scenes': 0}))
++    write_json(out / 'run_config.json', config)
++    write_json(out / 'status.json', {'state': 'loading', 'completed_scenes': 0})
+     torch.set_num_threads(4)
+     torch.set_float32_matmul_precision('high')
+     device = torch.device('cuda:0')
+@@ -149,7 +156,17 @@ def main():
+     records = json.loads((ROOT / config['selected_manifest']).read_text())['samples']
+     assert len(records) == 10
+     records = records[:args.max_scenes]
+-    dataset = vis.WaymoVectorDataset(str(ROOT / config['val_data_dir']))
++    config['checkpoint_step']=step
++    if getattr(train_args, 'map_adaptation', False):
++        cache=args.map_cache_dir or Path(train_args.map_cache_dir)
++        if getattr(train_args, 'lane_connectivity', False):
++            from waymo.lane_connectivity.dataset import ConnectivityDataset
++            dataset=ConnectivityDataset(str(ROOT / config['val_data_dir']),cache,args.lane_topology_dir or train_args.lane_topology_dir)
++        else:
++            from waymo.adaptations.map_dataset import MapAdaptationDataset
++            dataset=MapAdaptationDataset(str(ROOT / config['val_data_dir']),cache)
++    else:
++        dataset = vis.WaymoVectorDataset(str(ROOT / config['val_data_dir']))
+     loader = vis.make_loader(vis.Subset(dataset, [int(r['dataset_index']) for r in records]), batch_size=1,
+                              shuffle=False, num_workers=0, device=device)
+     images, summaries = [], []
+@@ -177,6 +194,10 @@ def main():
+                     agent_mask=rep(batch['agent_mask']), map_polylines=rep(batch['map_polylines']),
+                     map_mask=rep(batch['map_mask']), current_light_sequence=rep(batch['lights'][:, 10:90]),
+                     current_light_mask_sequence=rep(batch['light_mask'][:, 10:90]),
++                    **(dict(map_ids=rep(batch['map_ids']),map_is_lane=rep(batch['map_is_lane']),
++                            map_stop_sign=rep(batch['map_stop_sign']),map_stop_point=rep(batch['map_stop_point']),
++                            light_id_sequence=rep(batch['light_ids'][:,10:90])) if 'map_adaptation' in batch else {}),
++                    **(dict(lane_edges=rep(batch['lane_edges']),lane_edge_types=rep(batch['lane_edge_types'])) if 'lane_edges' in batch else {}),
+                     focus_action_sequence=None, focus_action_valid=None,
+                     rollout_steps=80, commitment=40, solver_steps=8, noise_sequence=z)
+                 results.append(result)
+@@ -204,19 +225,20 @@ def main():
+         gt = agents[0].permute(1, 0, 2).cpu().numpy()
+         pose_np = poses.cpu().numpy()
+         stem = f"scene_{int(record['sample_order']):02d}_{record['scenario_id']}"
+-        np.savez_compressed(out / (stem + '.npz'), poses=pose_np, noise_sequence=noise.cpu().numpy(),
++        if not args.images_only:np.savez_compressed(out / (stem + '.npz'), poses=pose_np, noise_sequence=noise.cpu().numpy(),
+                             gt_tkf=gt, agent_ids=ids, selected_slots=np.array([0, slot]),
+                             map_polylines=batch['map_polylines'][0].cpu().numpy(), map_mask=batch['map_mask'][0].cpu().numpy())
+-        (out / (stem + '_sampling.json')).write_text(json.dumps({'seed': seed, 'samples': metadata}, indent=2))
++        write_json(out / (stem + '_sampling.json'), {'seed': seed, 'samples': metadata})
++        record=dict(record,checkpoint_step=step)
+         path, stats = plot_scene(out, record, gt, pose_np, batch['map_polylines'][0].cpu().numpy(),
+                                  batch['map_mask'][0].cpu().numpy().astype(bool), ids, args.mode)
+         images.append(path)
+         summaries.append({'record': record, 'coverage': stats, 'image': str(path)})
+-        (out / 'coverage_summary.json').write_text(json.dumps(summaries, indent=2))
+-        (out / 'status.json').write_text(json.dumps({'state': 'running', 'completed_scenes': len(images)}))
++        write_json(out / 'coverage_summary.json', summaries)
++        write_json(out / 'status.json', {'state': 'running', 'completed_scenes': len(images)})
+         print(f'DONE scene={scene_index} image={path}', flush=True)
+     vis._make_contact_sheet(images, out / 'contact_sheet.png')
+-    (out / 'status.json').write_text(json.dumps({'state': 'complete', 'completed_scenes': len(images)}))
++    write_json(out / 'status.json', {'state': 'complete', 'completed_scenes': len(images)})
+     print(f'COMPLETE {args.mode}: {len(images)} scenes', flush=True)
+ 
+ 
+diff --git a/waymo/interactive_world_model_game.py b/waymo/interactive_world_model_game.py
+index b3532de..f5aa452 100644
+--- a/waymo/interactive_world_model_game.py
++++ b/waymo/interactive_world_model_game.py
+@@ -490,7 +490,23 @@ class WaymoInteractiveServer:
+         data_dir = args.data_dir or _first_path(self.model_args.val_data_dir)
+         if not data_dir:
+             raise ValueError("No --data-dir was provided and checkpoint args contain no val_data_dir")
+-        self.dataset = wm.WaymoVectorDataset(str(Path(data_dir).expanduser().resolve()))
++        data_dir = str(Path(data_dir).expanduser().resolve())
++        if self.model_backend == "direct_action_flow" and getattr(
++            self.model_args, "map_adaptation", False
++        ):
++            if getattr(self.model_args, "lane_connectivity", False):
++                from waymo.lane_connectivity.dataset import ConnectivityDataset
++
++                self.dataset = ConnectivityDataset(
++                    data_dir, self.model_args.map_cache_dir,
++                    self.model_args.lane_topology_dir,
++                )
++            else:
++                from waymo.adaptations.map_dataset import MapAdaptationDataset
++
++                self.dataset = MapAdaptationDataset(data_dir, self.model_args.map_cache_dir)
++        else:
++            self.dataset = wm.WaymoVectorDataset(data_dir)
+         if not (0 <= args.scene_index < len(self.dataset)):
+             raise IndexError(f"scene-index must be in [0, {len(self.dataset) - 1}]")
+         self.initial_scene_index = int(args.scene_index)
+@@ -536,12 +552,7 @@ class WaymoInteractiveServer:
+                 ),
+             )
+             if self.puffer_manifest is not None:
+-                mapped_paths = self.puffer_manifest.mapped_npz_paths
+-                mapped_scene_indices = tuple(
+-                    index
+-                    for index, path in enumerate(self.dataset.paths)
+-                    if str(Path(path).expanduser().resolve(strict=False)) in mapped_paths
+-                )
++                mapped_scene_indices = self._mapped_puffer_scene_indices()
+                 self.puffer_scene_indices = tuple(
+                     index
+                     for index in mapped_scene_indices
+@@ -554,10 +565,11 @@ class WaymoInteractiveServer:
+                         f"is absent during the {self.context_frames}-frame chase-camera replay",
+                         flush=True,
+                     )
+-                if mapped_scene_indices and not self.puffer_scene_indices:
++                if not self.puffer_scene_indices:
+                     raise ValueError(
+-                        "No mapped Puffer scene has a continuously valid focus agent "
+-                        f"through the {self.context_frames}-frame context replay"
++                        "No dataset view has available Puffer assets and a continuously "
++                        f"valid focus agent through the {self.context_frames}-frame replay. "
++                        "Check --puffer-manifest and --data-dir."
+                     )
+                 if (
+                     self.puffer_scene_indices
+@@ -576,7 +588,7 @@ class WaymoInteractiveServer:
+         )
+         if requested_scene_queue:
+             available_scene_indices: tuple[int, ...] | range
+-            if args.renderer == "puffer" and self.puffer_scene_indices:
++            if args.renderer == "puffer":
+                 available_scene_indices = self.puffer_scene_indices
+             else:
+                 available_scene_indices = range(len(self.dataset))
+@@ -802,6 +814,30 @@ class WaymoInteractiveServer:
+         if problems:
+             raise ValueError("Incompatible checkpoint: " + "; ".join(problems))
+ 
++    def _mapped_puffer_scene_indices(self) -> tuple[int, ...]:
++        # Dataset variants (e.g. with agent lengths) retain view filenames but
++        # have different roots. Confirm scenario/focus identity through resolve
++        # instead of requiring the manifest's original absolute NPZ path.
++        mapped_paths = self.puffer_manifest.mapped_npz_paths
++        mapped_names = {Path(path).name for path in mapped_paths}
++        indices = []
++        for index, path in enumerate(self.dataset.paths):
++            source = Path(path).expanduser().resolve(strict=False)
++            if str(source) not in mapped_paths and source.name not in mapped_names:
++                continue
++            with np.load(source, allow_pickle=False) as data:
++                scenario_id = str(data["scenario_id"]) if "scenario_id" in data else source.stem.split("_")[0]
++                focus_track_id = int(data["agent_ids"][0])
++            try:
++                self.puffer_manifest.resolve(
++                    scenario_id=scenario_id, npz_path=source,
++                    focus_track_id=focus_track_id,
++                )
++            except (FileNotFoundError, KeyError, ValueError):
++                continue
++            indices.append(index)
++        return tuple(indices)
++
+     def _has_continuous_puffer_focus_context(self, scene_index: int) -> bool:
+         """Whether Puffer's chase camera can follow slot 0 for the full replay."""
+ 
+@@ -847,7 +883,7 @@ class WaymoInteractiveServer:
+             return int(scene_queue[(current_position + 1) % len(scene_queue)])
+ 
+         candidates: tuple[int, ...] | range
+-        if self.args.renderer == "puffer" and self.puffer_scene_indices:
++        if self.args.renderer == "puffer":
+             candidates = self.puffer_scene_indices
+         else:
+             candidates = range(len(self.dataset))
+@@ -863,9 +899,12 @@ class WaymoInteractiveServer:
+     @torch.inference_mode()
+     def _load_direct_action_flow_scene(self, scene_index: int) -> SessionState:
+         from waymo.training.world_model.direct_action_flow import agents_to_bntf
++        from waymo.training.world_model.train_waymo_direct_action_flow import (
++            collate_vector_batch,
++        )
+ 
+         item = self.dataset[int(scene_index)]
+-        batch = wm.move_batch(wm._collate([item]), self.device)
++        batch = wm.move_batch(collate_vector_batch([item]), self.device)
+         agents = agents_to_bntf(batch["agents"], batch["agent_mask"])
+         total_steps = int(agents.shape[2])
+         start_frame, context_end = context_frame_bounds(
+@@ -1215,16 +1254,19 @@ class WaymoInteractiveServer:
+         from waymo.training.world_model.action_kinematics import (
+             execute_model_actions,
+         )
++        from waymo.training.world_model.train_waymo_direct_action_flow import scene_kwargs
+ 
+         def generate() -> tuple[torch.Tensor, torch.Tensor]:
+-            scene = self.direct_action_model.encode_scene(
++            prepared = SimpleNamespace(
+                 history=history,
+-                agent_mask=batch["agent_mask"],
+-                map_polylines=batch["map_polylines"],
+-                map_mask=batch["map_mask"],
+                 current_lights=batch["lights"][:, light_index],
+                 current_light_mask=batch["light_mask"][:, light_index],
++                anchors=torch.full(
++                    (history.shape[0],), light_index,
++                    device=history.device, dtype=torch.long,
++                ),
+             )
++            scene = self.direct_action_model.encode_scene(**scene_kwargs(batch, prepared))
+             action_mask = scene.agent_mask[:, :, None].expand(
+                 -1, -1, int(self.model_args.horizon)
+             )
+diff --git a/waymo/tests/test_interactive_world_model_game.py b/waymo/tests/test_interactive_world_model_game.py
+index e755180..94fa8a1 100644
+--- a/waymo/tests/test_interactive_world_model_game.py
++++ b/waymo/tests/test_interactive_world_model_game.py
+@@ -1,6 +1,8 @@
+ import concurrent.futures
++import csv
+ import math
+ import random
++import tempfile
+ import unittest
+ from pathlib import Path
+ from types import SimpleNamespace
+@@ -8,6 +10,8 @@ from types import SimpleNamespace
+ import numpy as np
+ import torch
+ 
++from waymo.puffer_renderer_bridge import ScenarioManifest
++
+ from waymo.interactive_world_model_game import (
+     AnalogControl,
+     ControlConfig,
+@@ -151,6 +155,37 @@ class ConvertedSceneSelectionTest(unittest.TestCase):
+         self.assertEqual(server._pick_new_scene_index(7), 7)
+         self.assertEqual(server._pick_new_scene_index(3), 7)
+ 
++    def test_empty_converted_views_never_select_unconverted_scene(self):
++        server = self.make_server(())
++        self.assertEqual(server._pick_new_scene_index(7), 7)
++
++    def test_dataset_variant_matches_manifest_by_verified_view_identity(self):
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            variant = root / "with_lengths"
++            variant.mkdir()
++            paths = [variant / f"scene_focus_{focus}.npz" for focus in (11, 22)]
++            for path, focus in zip(paths, (11, 22)):
++                np.savez(path, scenario_id="scene", agent_ids=np.array([focus]))
++            binary = root / "map_000.bin"
++            binary.write_bytes(b"map")
++            manifest_path = root / "manifest.csv"
++            with manifest_path.open("w", newline="") as handle:
++                writer = csv.DictWriter(handle, fieldnames=(
++                    "scenario_id", "focus_track_id", "npz_path", "puffer_bin_path",
++                ))
++                writer.writeheader()
++                for path, focus in zip(paths, (11, 22)):
++                    writer.writerow(dict(
++                        scenario_id="scene", focus_track_id=focus,
++                        npz_path=root / "original" / path.name,
++                        puffer_bin_path=binary if focus == 11 else root / "missing.bin",
++                    ))
++            server = self.make_server(())
++            server.dataset = SimpleNamespace(paths=paths)
++            server.puffer_manifest = ScenarioManifest(manifest_path)
++            self.assertEqual(server._mapped_puffer_scene_indices(), (0,))
++
+     def test_priority_queue_is_visited_in_order_before_remaining_scenes(self):
+         server = self.make_server((2, 5, 7, 9))
+         server.scene_queue = (5, 9, 2, 7)
+diff --git a/waymo/training/world_model/direct_action_flow.py b/waymo/training/world_model/direct_action_flow.py
+index 4339ee6..eb0f4f9 100644
+--- a/waymo/training/world_model/direct_action_flow.py
++++ b/waymo/training/world_model/direct_action_flow.py
+@@ -12,8 +12,8 @@ by the continuous flow.
+ from __future__ import annotations
+ 
+ import math
+-from dataclasses import dataclass
+-from typing import Optional
++from dataclasses import dataclass, replace
++from typing import Optional, Callable
+ 
+ import torch
+ import torch.nn as nn
+@@ -622,6 +622,70 @@ class RelativeAgentBias(nn.Module):
+         return self.mlp(features).permute(0, 3, 1, 2).contiguous()
+ 
+ 
++class FutureAgentBias(nn.Module):
++    """Per-chunk agent-agent bias from the planned poses at each chunk end.
++
++    Same directed geometry features as ``RelativeAgentBias``, evaluated on the
++    poses integrated from the self-conditioning estimate of the clean actions,
++    plus flow time and an availability flag. Without an estimate every feature
++    except flow time is zero, so the bias is constant over keys and leaves the
++    softmax unchanged. The output layer is zero-initialized.
++    """
++
++    def __init__(self, n_heads: int, hidden_dim: int, position_scale_m: float):
++        super().__init__()
++        self.position_scale_m = float(position_scale_m)
++        self.mlp = nn.Sequential(
++            nn.Linear(9, hidden_dim),
++            nn.SiLU(),
++            nn.Linear(hidden_dim, n_heads),
++        )
++        nn.init.zeros_(self.mlp[-1].weight)
++        nn.init.zeros_(self.mlp[-1].bias)
++
++    def forward(
++        self,
++        chunk_pose: torch.Tensor,
++        agent_type: torch.Tensor,
++        flow_time: torch.Tensor,
++        available: torch.Tensor,
++    ) -> torch.Tensor:
++        # chunk_pose (B,N,C,3) -> (B,C,N,3); output (B,C,heads,N,N).
++        pose = chunk_pose.permute(0, 2, 1, 3)
++        delta = pose[:, :, None, :, 0:2] - pose[:, :, :, None, 0:2]
++        yaw_i = pose[:, :, :, None, 2]
++        c = torch.cos(yaw_i)
++        s = torch.sin(yaw_i)
++        dx = (c * delta[..., 0] + s * delta[..., 1]) / self.position_scale_m
++        dy = (-s * delta[..., 0] + c * delta[..., 1]) / self.position_scale_m
++        dyaw = pose[:, :, None, :, 2] - pose[:, :, :, None, 2]
++        distance = torch.linalg.vector_norm(delta, dim=-1) / self.position_scale_m
++        same_type = (agent_type[:, :, None] == agent_type[:, None, :]).to(pose.dtype)
++        type_delta = (agent_type[:, None, :] - agent_type[:, :, None]).to(pose.dtype) / 4.0
++        shape = dx.shape
++        geometry = torch.stack(
++            (
++                dx,
++                dy,
++                torch.sin(dyaw),
++                torch.cos(dyaw),
++                distance,
++                same_type[:, None].expand(shape),
++                type_delta[:, None].expand(shape),
++            ),
++            dim=-1,
++        )
++        flag = available.to(pose.dtype)[:, None, None, None, None]
++        geometry = geometry * flag
++        extra = torch.stack(
++            (flow_time.to(pose.dtype)[:, None, None, None].expand(shape),
++             flag[..., 0].expand(shape)),
++            dim=-1,
++        )
++        features = torch.cat((geometry, extra), dim=-1)
++        return self.mlp(features).permute(0, 1, 4, 2, 3).contiguous()
++
++
+ class SceneInteractionBlock(nn.Module):
+     def __init__(self, d_model: int, n_heads: int, dropout: float, mlp_ratio: float):
+         super().__init__()
+@@ -658,6 +722,8 @@ class SceneEncoding:
+     agent_memory: Optional[torch.Tensor] = None
+     agent_memory_mask: Optional[torch.Tensor] = None
+     agent_memory_bias: Optional[torch.Tensor] = None
++    # (B,C,heads,N,N) per-chunk agent-agent bias from planned poses; set per flow step.
++    chunk_bias: Optional[torch.Tensor] = None
+ 
+ 
+ class DirectActionSceneEncoder(nn.Module):
+@@ -867,7 +933,12 @@ class JointActionDiTBlock(nn.Module):
+         )
+         relation_bias = scene.relative_bias[:, None].expand(
+             -1, num_chunks, -1, -1, -1
+-        ).reshape(bsz * num_chunks, scene.relative_bias.shape[1], num_agents, num_agents)
++        )
++        if scene.chunk_bias is not None:
++            relation_bias = relation_bias + scene.chunk_bias.to(relation_bias.dtype)
++        relation_bias = relation_bias.reshape(
++            bsz * num_chunks, scene.relative_bias.shape[1], num_agents, num_agents
++        )
+         normed, gate = _modulate(
+             self.norm_agent(flat), self.mod_agent(cond_agent), **modulation_kwargs
+         )
+@@ -943,10 +1014,12 @@ class DirectActionFlowModel(nn.Module):
+         agent_map_radius_m: float = 100.0,
+         modulation_scale_limit: float = 0.0,
+         modulation_shift_limit: float = 0.0,
++        dynamic_agent_bias: bool = False,
+     ) -> None:
+         super().__init__()
+         if horizon % chunk_size:
+             raise ValueError(f"horizon={horizon} must be divisible by chunk_size={chunk_size}")
++        self.dynamic_agent_bias = bool(dynamic_agent_bias)
+         self.include_agent_velocity = bool(include_agent_velocity)
+         self.d_model = int(d_model)
+         self.horizon = int(horizon)
+@@ -1009,6 +1082,40 @@ class DirectActionFlowModel(nn.Module):
+             nn.SiLU(),
+             nn.Linear(d_model, 3),
+         )
++        if self.dynamic_agent_bias:
++            self.future_agent_bias = FutureAgentBias(n_heads, hidden_dim, position_scale_m)
++        # Not a submodule: checkpoints keep their state_dict keys; set by every entry point.
++        self.__dict__["_action_normalizer"] = None
++
++    # Self-conditioning estimates are clipped like the training targets.
++    self_condition_clip = 5.0
++
++    def set_action_normalizer(self, normalizer: "ActionNormalizer") -> None:
++        self.__dict__["_action_normalizer"] = normalizer
++
++    @torch.no_grad()
++    def planned_chunk_poses(
++        self, self_condition: torch.Tensor, scene: SceneEncoding, action_mask: torch.Tensor
++    ) -> torch.Tensor:
++        """Integrate a normalized clean-action estimate; poses at chunk ends (B,N,C,3)."""
++        normalizer = self.__dict__.get("_action_normalizer")
++        if normalizer is None:
++            raise RuntimeError("dynamic_agent_bias requires model.set_action_normalizer(normalizer)")
++        actions = self_condition.float().clamp(-self.self_condition_clip, self.self_condition_clip)
++        metric = normalizer.denormalize(actions, scene.agent_type)
++        # Vectorized execute_holonomic_actions: an invalid step holds the pose, i.e. a
++        # zero action; each displacement uses the pre-action heading.
++        metric = metric * action_mask[..., None].to(metric.dtype)
++        start = scene.agent_pose.float()
++        heading = start[..., 2:3] + torch.cumsum(metric[..., 2], dim=-1)
++        before = torch.cat((start[..., 2:3], heading[..., :-1]), dim=-1)
++        c, s = torch.cos(before), torch.sin(before)
++        dx = c * metric[..., 0] - s * metric[..., 1]
++        dy = s * metric[..., 0] + c * metric[..., 1]
++        poses = torch.stack((start[..., 0:1] + torch.cumsum(dx, dim=-1),
++                             start[..., 1:2] + torch.cumsum(dy, dim=-1),
++                             wrap_angle_rad(heading)), dim=-1)
++        return poses[:, :, self.chunk_size - 1 :: self.chunk_size]
+ 
+     def encode_scene(self, **kwargs: torch.Tensor) -> SceneEncoding:
+         return self.scene_encoder(**kwargs)
+@@ -1022,12 +1129,27 @@ class DirectActionFlowModel(nn.Module):
+         *,
+         focus_actions: Optional[torch.Tensor] = None,
+         focus_index: int = 0,
++        self_condition: Optional[torch.Tensor] = None,
++        self_condition_mask: Optional[torch.Tensor] = None,
+     ) -> torch.Tensor:
++        """``self_condition``: normalized clean-action estimate (B,N,H,3) from the
++        previous solver step, used only by ``dynamic_agent_bias``; ``self_condition_mask``
++        (B,) selects the examples that receive it (default: all when given)."""
+         bsz, num_agents, horizon, channels = noisy_actions.shape
+         if horizon != self.horizon or channels != 3:
+             raise ValueError(
+                 f"Expected noisy actions (B,N,{self.horizon},3), got {tuple(noisy_actions.shape)}"
+             )
++        if self.dynamic_agent_bias:
++            if self_condition is None:
++                available = torch.zeros(bsz, dtype=torch.bool, device=noisy_actions.device)
++                chunk_pose = scene.agent_pose.new_zeros((bsz, num_agents, self.num_chunks, 3))
++            else:
++                available = (torch.ones(bsz, dtype=torch.bool, device=noisy_actions.device)
++                             if self_condition_mask is None else self_condition_mask.bool())
++                chunk_pose = self.planned_chunk_poses(self_condition, scene, action_mask)
++            scene = replace(scene, chunk_bias=self.future_agent_bias(
++                chunk_pose, scene.agent_type, flow_time, available))
+         x_input = noisy_actions
+         if focus_actions is not None:
+             if focus_actions.shape != (bsz, horizon, 3):
+@@ -1128,6 +1250,7 @@ class DirectActionFlowModel(nn.Module):
+         if focus_actions is not None:
+             x[:, int(focus_index)] = focus_actions.to(x.dtype)
+         dt = 1.0 / float(solver_steps)
++        estimate = None
+         for step in range(int(solver_steps)):
+             flow_time = torch.full(
+                 (int(x.shape[0]),),
+@@ -1142,7 +1265,13 @@ class DirectActionFlowModel(nn.Module):
+                 action_mask,
+                 focus_actions=focus_actions,
+                 focus_index=focus_index,
++                **({"self_condition": estimate} if self.dynamic_agent_bias else {}),
+             )
++            if self.dynamic_agent_bias:
++                # Clean-action estimate for the next step's planned-pose bias.
++                estimate = x.float() + (1.0 - float(step) / float(solver_steps)) * velocity.float()
++                if focus_actions is not None:
++                    estimate[:, int(focus_index)] = focus_actions.float()
+             x = x + dt * velocity * generated_mask[..., None].to(velocity.dtype)
+             if focus_actions is not None:
+                 x[:, int(focus_index)] = focus_actions.to(x.dtype)
+@@ -1190,6 +1319,7 @@ def flow_matching_loss(
+     huber_beta: float = 1.0,
+     dynamic_mask: Optional[torch.Tensor] = None,
+     dynamic_weight: float = 0.7,
++    endpoint_regularizer: Optional[Callable] = None,
+ ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+     """Standard affine-path conditional flow-matching objective."""
+     if not 0.0 < float(flow_time_max) <= 1.0:
+@@ -1218,6 +1348,25 @@ def flow_matching_loss(
+     # roster of current-valid agents fixed across H and therefore must not leak
+     # logged disappearance times through the action attention mask.
+     model_action_mask = scene.agent_mask[:, :, None].expand_as(action_valid)
++    self_condition_kwargs = {}
++    if getattr(model, "dynamic_agent_bias", False):
++        # Self-conditioning: half of the examples get the clean-action estimate of
++        # a no-grad pass at the same (x_lambda, t), as the next solver step would.
++        with torch.no_grad():
++            first = model.decode_velocity(
++                x_lambda, flow_time, scene, model_action_mask,
++                focus_actions=focus_actions, focus_index=focus_index,
++            )
++            estimate = x_lambda.float() + (1.0 - lam.float()) * first.float()
++            if focus_actions is not None:
++                estimate[:, int(focus_index)] = focus_actions.float()
++        # Weights first cast by autocast under no_grad are cached without autograd
++        # history; reusing them would silently drop every decoder gradient.
++        torch.clear_autocast_cache()
++        self_condition_kwargs = dict(
++            self_condition=estimate,
++            self_condition_mask=torch.rand((bsz,), device=normalized_actions.device) < 0.5,
++        )
+     pred_velocity = model.decode_velocity(
+         x_lambda,
+         flow_time,
+@@ -1225,6 +1374,7 @@ def flow_matching_loss(
+         model_action_mask,
+         focus_actions=focus_actions,
+         focus_index=focus_index,
++        **self_condition_kwargs,
+     )
+     generated_valid = action_valid.clone().bool()
+     if condition_focus_actions:
+@@ -1251,9 +1401,16 @@ def flow_matching_loss(
+     endpoint_mae = (
+         (endpoint - normalized_actions.float()).abs() * weight.float()
+     ).sum() / denom.float()
++    flow_loss = loss
++    auxiliary_metrics = {}
++    if endpoint_regularizer is not None:
++        extra_loss, auxiliary_metrics = endpoint_regularizer(endpoint)
++        loss = loss + extra_loss
++        auxiliary_metrics = {**auxiliary_metrics, "total_loss": loss.detach()}
+     return loss, {
+         **group_metrics,
+-        "flow_loss": loss.detach(),
++        **auxiliary_metrics,
++        "flow_loss": flow_loss.detach(),
+         "normalized_endpoint_mae": endpoint_mae.detach(),
+         "flow_time_mean": flow_time.mean().detach(),
+         "valid_action_fraction": generated_valid.float().mean().detach(),
+@@ -1285,6 +1442,8 @@ def rollout_receding_horizon(
+     map_stop_sign: Optional[torch.Tensor] = None,
+     map_stop_point: Optional[torch.Tensor] = None,
+     light_id_sequence: Optional[torch.Tensor] = None,
++    lane_edges: Optional[torch.Tensor] = None,
++    lane_edge_types: Optional[torch.Tensor] = None,
+ ) -> torch.Tensor:
+     """Run closed-loop generate-H/execute-B simulation.
+ 
+@@ -1359,6 +1518,8 @@ def rollout_receding_horizon(
+             **(dict(map_ids=map_ids, map_is_lane=map_is_lane, map_stop_sign=map_stop_sign,
+                     map_stop_point=map_stop_point, current_light_ids=light_id_sequence[:, elapsed])
+                if getattr(model, "map_adaptation", False) else {}),
++            **(dict(lane_edges=lane_edges,lane_edge_types=lane_edge_types)
++               if getattr(model,"lane_connectivity",False) else {}),
+         )
+         action_mask = scene.agent_mask[:, :, None].expand(
+             -1, -1, model.horizon
+diff --git a/waymo/training/world_model/mon_long_rollout.py b/waymo/training/world_model/mon_long_rollout.py
+index f03c146..8a137e1 100644
+--- a/waymo/training/world_model/mon_long_rollout.py
++++ b/waymo/training/world_model/mon_long_rollout.py
+@@ -7,7 +7,9 @@ from waymo.training.world_model.direct_action_flow import execute_holonomic_acti
+ 
+ def generate_poses(model, normalizer, history, batch, anchors, *,
+                    rollout_steps=80, commitment=5, detach_every=0,
+-                   solver_steps=8, checkpoint_grad=True):
++                   solver_steps=8, checkpoint_grad=True, noise=None):
++    """``noise``: optional (replans,B,N,H,3) initial flow noise per replan, in place of
++    the ``torch.randn`` draw of each plan (e.g. several seeded candidates batched)."""
+     if detach_every < 0 or (detach_every and detach_every % commitment):
+         raise ValueError('detach_every must be zero or a multiple of commitment')
+     if commitment < 1 or commitment > model.horizon:
+@@ -17,27 +19,38 @@ def generate_poses(model, normalizer, history, batch, anchors, *,
+     history_length = history.shape[2]
+     pieces = []
+ 
+-    def plan(h, light, light_mask):
++    def plan(h, light, light_mask, light_ids, initial=None):
+         scene = model.encode_scene(history=h, agent_mask=batch['agent_mask'],
+             map_polylines=batch['map_polylines'], map_mask=batch['map_mask'],
+-            current_lights=light, current_light_mask=light_mask)
++            current_lights=light, current_light_mask=light_mask,
++            **(dict(map_ids=batch['map_ids'],map_is_lane=batch['map_is_lane'],
++                    map_stop_sign=batch['map_stop_sign'],map_stop_point=batch['map_stop_point'],
++                    current_light_ids=light_ids) if 'map_adaptation' in batch else {}),
++            **(dict(lane_edges=batch['lane_edges'],lane_edge_types=batch['lane_edge_types']) if 'lane_edges' in batch else {}))
+         mask = scene.agent_mask[:, :, None].expand(-1, -1, model.horizon)
+-        x = torch.randn((*mask.shape, 3), device=h.device, dtype=torch.float32)
++        x = torch.randn((*mask.shape, 3), device=h.device, dtype=torch.float32) if initial is None else initial.float()
+         x = x * mask[..., None]
++        dynamic = getattr(model, 'dynamic_agent_bias', False)
++        estimate = None
+         for step in range(solver_steps):
+             t = torch.full((h.shape[0],), step / solver_steps, device=h.device)
+-            v = model.decode_velocity(x, t, scene, mask)
++            v = model.decode_velocity(x, t, scene, mask, **({'self_condition': estimate} if dynamic else {}))
++            if dynamic:
++                # Detached: the planned-pose bias is a feature, as in self-conditioned training.
++                estimate = (x + (1.0 - step / solver_steps) * v.float()).detach()
+             x = (x + v.float() / solver_steps) * mask[..., None]
+         return x, mask
+ 
+     for elapsed in range(0, rollout_steps, commitment):
+         light = batch['lights'][indices, anchors + elapsed]
+         light_mask = batch['light_mask'][indices, anchors + elapsed]
++        light_ids=batch['light_ids'][indices,anchors+elapsed] if 'map_adaptation' in batch else None
++        initial = None if noise is None else noise[elapsed // commitment]
+         if torch.is_grad_enabled() and checkpoint_grad:
+-            actions, mask = checkpoint(plan, history, light, light_mask,
++            actions, mask = checkpoint(plan, history, light, light_mask, light_ids, initial,
+                 use_reentrant=False, preserve_rng_state=True)
+         else:
+-            actions, mask = plan(history, light, light_mask)
++            actions, mask = plan(history, light, light_mask, light_ids, initial)
+         take = min(commitment, rollout_steps - elapsed)
+         actions, mask = actions[:, :, :take], mask[:, :, :take]
+         metric = normalizer.denormalize(actions, types)
+diff --git a/waymo/training/world_model/train_waymo_direct_action_flow.py b/waymo/training/world_model/train_waymo_direct_action_flow.py
+index b4daedb..38051ca 100644
+--- a/waymo/training/world_model/train_waymo_direct_action_flow.py
++++ b/waymo/training/world_model/train_waymo_direct_action_flow.py
+@@ -72,6 +72,12 @@ def move_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
+ 
+ def collate_vector_batch(items: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
+     """Stack tensor fields; paths and scenario strings are not training inputs."""
++    if "lane_half_widths" in items[0]:
++        from waymo.lane_losses.dataset import collate_losses
++        return collate_losses(items)
++    if "lane_edges" in items[0]:
++        from waymo.lane_connectivity.dataset import collate_connectivity
++        return collate_connectivity(items)
+     if "map_adaptation" in items[0]:
+         from waymo.adaptations.map_dataset import collate_maps
+         return collate_maps(items)
+@@ -359,9 +365,17 @@ def scene_kwargs(batch: dict[str, Any], prepared: PreparedBatch) -> dict[str, to
+                 current_light_ids=batch["light_ids"][torch.arange(len(prepared.anchors),
+                                     device=prepared.anchors.device), prepared.anchors])
+            if "map_adaptation" in batch else {}),
++        **(dict(lane_edges=batch["lane_edges"],lane_edge_types=batch["lane_edge_types"])
++           if "lane_edges" in batch else {}),
+     }
+ 
+ 
++def map_aux_kwargs(model,normalizer,prepared,batch,args,step):
++    if not getattr(args,"map_aux_losses",False):return {}
++    from waymo.lane_losses.losses import endpoint_regularizer
++    return dict(endpoint_regularizer=endpoint_regularizer(model,normalizer,prepared,batch,args,step))
++
++
+ def balance_kwargs(prepared, args):
+     if not getattr(args, "balance_dynamic_loss", False):
+         return {}
+@@ -390,7 +404,11 @@ class ModelEMA:
+ 
+ 
+ def create_model(args: argparse.Namespace) -> DirectActionFlowModel:
+-    model = DirectActionFlowModel(
++    model_class = DirectActionFlowModel
++    if getattr(args,"lane_connectivity",False):
++        from waymo.lane_connectivity.model import ConnectivityFlowModel
++        model_class=ConnectivityFlowModel
++    model = model_class(
+         d_model=args.d_model,
+         n_heads=args.n_heads,
+         history_length=args.history_length,
+@@ -414,6 +432,7 @@ def create_model(args: argparse.Namespace) -> DirectActionFlowModel:
+         agent_map_radius_m=getattr(args, "agent_map_radius_m", 100.0),
+         modulation_scale_limit=args.modulation_scale_limit,
+         modulation_shift_limit=args.modulation_shift_limit,
++        dynamic_agent_bias=getattr(args, "dynamic_agent_bias", False),
+     )
+     model.kinematics = KinematicsConfig.from_args(args)
+     return model
+@@ -535,6 +554,7 @@ def evaluate_flow(
+             huber_beta=args.flow_huber_beta,
+             condition_focus_actions=args.condition_focus_actions,
+             **balance_kwargs(prepared, args),
++            **map_aux_kwargs(model,normalizer,prepared,batch,args,getattr(args,"aux_loss_warmup_steps",0)),
+         )
+         predicted_pose = execute_model_actions(
+             model, prepared.targets.current_pose,
+@@ -712,6 +732,8 @@ def evaluate_receding_rollout(
+                     map_stop_sign=batch["map_stop_sign"], map_stop_point=batch["map_stop_point"],
+                     light_id_sequence=batch["light_ids"][:, anchor : anchor + available])
+                if "map_adaptation" in batch else {}),
++            **(dict(lane_edges=batch["lane_edges"],lane_edge_types=batch["lane_edge_types"])
++               if "lane_edges" in batch else {}),
+             focus_action_sequence=(
+                 targets.actions[:, 0] if args.condition_focus_actions else None
+             ),
+@@ -799,8 +821,20 @@ def train(args: argparse.Namespace) -> None:
+         if not args.map_cache_dir:
+             raise ValueError("--map_adaptation requires --map_cache_dir generated from raw Scenarios")
+         from waymo.adaptations.map_dataset import MapAdaptationDataset
+-        train_dataset = MapAdaptationDataset(args.data_dir, args.map_cache_dir)
+-        val_dataset = MapAdaptationDataset(args.val_data_dir, args.map_cache_dir)
++        if getattr(args,"lane_connectivity",False):
++            if not args.lane_topology_dir:raise ValueError("Connectivity requires --lane_topology_dir")
++            from waymo.lane_connectivity.dataset import ConnectivityDataset
++            if getattr(args,"map_aux_losses",False):
++                from waymo.lane_losses.dataset import LaneLossDataset
++                if not args.loss_geometry_dir:raise ValueError("Map losses require --loss_geometry_dir")
++                train_dataset=LaneLossDataset(args.data_dir,args.map_cache_dir,args.lane_topology_dir,args.loss_geometry_dir)
++                val_dataset=LaneLossDataset(args.val_data_dir,args.map_cache_dir,args.lane_topology_dir,args.loss_geometry_dir)
++            else:
++                train_dataset=ConnectivityDataset(args.data_dir,args.map_cache_dir,args.lane_topology_dir)
++                val_dataset=ConnectivityDataset(args.val_data_dir,args.map_cache_dir,args.lane_topology_dir)
++        else:
++            train_dataset = MapAdaptationDataset(args.data_dir, args.map_cache_dir)
++            val_dataset = MapAdaptationDataset(args.val_data_dir, args.map_cache_dir)
+     else:
+         train_dataset = WaymoVectorDataset(args.data_dir)
+         val_dataset = WaymoVectorDataset(args.val_data_dir)
+@@ -820,6 +854,7 @@ def train(args: argparse.Namespace) -> None:
+     )
+ 
+     model = create_model(args).to(device)
++    model.set_action_normalizer(normalizer)
+     ema = ModelEMA(model, args.ema_decay)
+     optimizer = torch.optim.AdamW(
+         model.parameters(),
+@@ -929,6 +964,7 @@ def train(args: argparse.Namespace) -> None:
+                     huber_beta=args.flow_huber_beta,
+                     condition_focus_actions=args.condition_focus_actions,
+                     **balance_kwargs(prepared, args),
++                    **map_aux_kwargs(model,normalizer,prepared,batch,args,step),
+                 )
+                 scaled_loss = loss / float(args.grad_accum_steps)
+             if args.fail_on_nonfinite and not bool(torch.isfinite(loss).item()):
+@@ -1115,6 +1151,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
+     parser.add_argument("--history_depth", type=int, default=2)
+     parser.add_argument("--map_depth", type=int, default=2)
+     parser.add_argument("--map_adaptation", action="store_true")
++    parser.add_argument("--map_aux_losses",action="store_true")
++    parser.add_argument("--loss_geometry_dir",default=None)
++    parser.add_argument("--offroad_weight",type=float,default=0.1)
++    parser.add_argument("--lane_direction_weight",type=float,default=0.05)
++    parser.add_argument("--lane_transition_weight",type=float,default=0.1)
++    parser.add_argument("--aux_loss_warmup_steps",type=int,default=5000)
++    parser.add_argument("--lane_connectivity",action="store_true")
++    parser.add_argument("--lane_topology_dir",default=None)
+     parser.add_argument("--map_cache_dir", default=None)
+     parser.add_argument("--map_neighbors", type=int, default=32)
+     parser.add_argument("--agent_map_neighbors", type=int, default=64)
+@@ -1213,6 +1257,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
+     parser.add_argument("--receding_eval_batches", type=int, default=1)
+     parser.add_argument("--receding_eval_horizon", type=int, default=80)
+ 
++    parser.add_argument("--dynamic_agent_bias", action="store_true",
++                        help="Per-chunk agent-agent bias from self-conditioned planned poses")
+     parser.add_argument("--wandb", action=argparse.BooleanOptionalAction, default=False)
+     parser.add_argument("--wandb_project", default="waymo-world-model")
+     parser.add_argument("--wandb_run_name", default="waymo_direct_action_flow_v1")
+diff --git a/waymo/training/world_model/train_waymo_direct_action_flow_erd.py b/waymo/training/world_model/train_waymo_direct_action_flow_erd.py
+index 73acddc..626ca78 100644
+--- a/waymo/training/world_model/train_waymo_direct_action_flow_erd.py
++++ b/waymo/training/world_model/train_waymo_direct_action_flow_erd.py
+@@ -151,6 +151,9 @@ def validate(model, normalizer, loader, ta, device, cfg):
+                 agent_mask=b['agent_mask'], map_polylines=b['map_polylines'], map_mask=b['map_mask'],
+                 current_light_sequence=b['lights'][:, anchor:anchor+80],
+                 current_light_mask_sequence=b['light_mask'][:, anchor:anchor+80],
++                **(dict(map_ids=b['map_ids'],map_is_lane=b['map_is_lane'],map_stop_sign=b['map_stop_sign'],
++                        map_stop_point=b['map_stop_point'],light_id_sequence=b['light_ids'][:,anchor:anchor+80]) if 'map_adaptation' in b else {}),
++                **(dict(lane_edges=b['lane_edges'],lane_edge_types=b['lane_edge_types']) if 'lane_edges' in b else {}),
+                 focus_action_sequence=None, focus_action_valid=None, rollout_steps=80,
+                 commitment=5, solver_steps=cfg.solver_steps, generator=gen))
+         poses = torch.stack(poses, 1)
+diff --git a/waymo/training/world_model/train_waymo_direct_action_flow_mon80.py b/waymo/training/world_model/train_waymo_direct_action_flow_mon80.py
+index db7dcf4..7b900ad 100644
+--- a/waymo/training/world_model/train_waymo_direct_action_flow_mon80.py
++++ b/waymo/training/world_model/train_waymo_direct_action_flow_mon80.py
+@@ -90,6 +90,9 @@ def validate(model,normalizer,loader,ta,cfg):
+             poses=rollout_receding_horizon(model,normalizer,initial_history=h,agent_lengths=b.get('agent_lengths'),agent_mask=b['agent_mask'],
+                 map_polylines=b['map_polylines'],map_mask=b['map_mask'],current_light_sequence=b['lights'][:,10:90],
+                 current_light_mask_sequence=b['light_mask'][:,10:90],focus_action_sequence=None,focus_action_valid=None,
++                **(dict(map_ids=b['map_ids'],map_is_lane=b['map_is_lane'],map_stop_sign=b['map_stop_sign'],
++                        map_stop_point=b['map_stop_point'],light_id_sequence=b['light_ids'][:,10:90]) if 'map_adaptation' in b else {}),
++                **(dict(lane_edges=b['lane_edges'],lane_edge_types=b['lane_edge_types']) if 'lane_edges' in b else {}),
+                 rollout_steps=80,commitment=5,solver_steps=cfg.solver_steps,
+                 generator=torch.Generator(device=device).manual_seed(12346+bi*cfg.eval_rollouts+k))
+             _,m=physical_losses(poses,t.current_pose,t.valid,t.agent_type,b['map_polylines'],b['map_mask'],road_support=support)
+@@ -110,7 +113,7 @@ def train(cfg):
+     if not cfg.resume and (out/'latest.pt').exists(): raise FileExistsError('Use --resume')
+     initial=torch.load(cfg.checkpoint,map_location='cpu',weights_only=False,mmap=True)
+     ta=argparse.Namespace(**initial['args']);stats=initial['action_stats']
+-    if initial['step']!=95000 or ta.condition_focus_actions or ta.horizon!=40 or ta.commitment!=5 or getattr(ta,'balance_dynamic_loss',False): raise ValueError('Expected original generate-all 95k H40/B5')
++    if ta.condition_focus_actions or ta.horizon!=40 or ta.commitment!=5 or getattr(ta,'balance_dynamic_loss',False): raise ValueError('Expected generate-all H40/B5')
+     rollout_args=argparse.Namespace(**vars(ta));rollout_args.horizon=80
+     model=base.create_model(ta).to(device);model.load_state_dict(initial['ema_model']);model.eval()
+     ema=base.ModelEMA(model,cfg.ema_decay);normalizer=base.build_normalizer(stats,device)
+@@ -123,7 +126,17 @@ def train(cfg):
+         model.load_state_dict(c['model']);ema.model.load_state_dict(c['ema_model']);opt.load_state_dict(c['optimizer'])
+         step=c['step'];best=c['best_val'];validation=c.get('validation',{});erd.restore_rng(c['rng']);del c
+     del initial
+-    data=base.WaymoVectorDataset(cfg.train_data);val=base.WaymoVectorDataset(cfg.val_data)
++    if getattr(ta,'map_adaptation',False):
++        ta.map_cache_dir=cfg.map_cache_dir or ta.map_cache_dir
++        if getattr(ta,'lane_connectivity',False):
++            from waymo.lane_connectivity.dataset import ConnectivityDataset
++            ta.lane_topology_dir=cfg.lane_topology_dir or ta.lane_topology_dir
++            make_dataset=lambda root:ConnectivityDataset(root,ta.map_cache_dir,ta.lane_topology_dir)
++        else:
++            from waymo.adaptations.map_dataset import MapAdaptationDataset
++            make_dataset=lambda root:MapAdaptationDataset(root,ta.map_cache_dir)
++    else:make_dataset=base.WaymoVectorDataset
++    data=make_dataset(cfg.train_data);val=make_dataset(cfg.val_data)
+     stop=min(cfg.max_steps,step+cfg.max_iterations) if cfg.max_iterations else cfg.max_steps
+     loader=DataLoader(data,batch_sampler=erd.StepBatches(len(data),cfg.batch_size,step,stop,cfg.seed+100000),
+         num_workers=cfg.num_workers,collate_fn=base.collate_vector_batch,pin_memory=True,
+@@ -180,6 +193,7 @@ def train(cfg):
+ def parse_args():
+     p=argparse.ArgumentParser(description=__doc__)
+     for key in ('checkpoint','train_data','val_data','output_dir'):p.add_argument('--'+key,required=True)
++    p.add_argument('--map_cache_dir');p.add_argument('--lane_topology_dir')
+     p.add_argument('--detach_every',type=int,choices=(0,5,20),required=True)
+     p.add_argument('--resume');p.add_argument('--physical',action='store_true');p.add_argument('--skip_validation',action='store_true')
+     for key,value in dict(seed=20260911,batch_size=2,num_workers=4,num_candidates=8,solver_steps=8,max_steps=10000,max_iterations=0,

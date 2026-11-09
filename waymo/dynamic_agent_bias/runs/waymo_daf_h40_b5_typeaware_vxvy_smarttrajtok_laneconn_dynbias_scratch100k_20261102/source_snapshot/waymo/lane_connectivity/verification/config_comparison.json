@@ -1,0 +1,16 @@
+{
+  "original_parameter_differences": {
+    "ckpt_dir": {
+      "baseline": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_scratch100k_20261007",
+      "comparison": "/p/yufeng/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_laneconn_scratch100k_20261007"
+    },
+    "wandb_run_name": {
+      "baseline": "waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_scratch100k_20261007",
+      "comparison": "waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_laneconn_scratch100k_20261007"
+    }
+  },
+  "new_parameters": {
+    "lane_connectivity": true,
+    "lane_topology_dir": "/p/yufeng/tri30/dreamer4/data/waymo_lane_connectivity_5m_v1"
+  }
+}

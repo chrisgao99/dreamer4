@@ -1,0 +1,573 @@
+[
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/6ad3877a87398284_focus_957_src0.npz",
+    "slots": [
+      8
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      6.4238104820251465
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/6501cae8a1947120_focus_3453_src1.npz",
+    "slots": [
+      20
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.4659013748168945
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/1dc26b7531fd9e2f_focus_304_src0.npz",
+    "slots": [
+      9,
+      13
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      5.242971420288086,
+      4.61257266998291
+    ],
+    "first_valid_frame": [
+      0,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/1dc26b7531fd9e2f_focus_318_src4.npz",
+    "slots": [
+      6,
+      9
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      4.61257266998291,
+      5.242971420288086
+    ],
+    "first_valid_frame": [
+      0,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/218f7afef7c63186_focus_2_src2.npz",
+    "slots": [
+      15
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.834443092346191
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/218f7afef7c63186_focus_6_src3.npz",
+    "slots": [
+      8
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.834443092346191
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/1fa89143af0adc72_focus_392_src0.npz",
+    "slots": [
+      3
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.128982067108154
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/1fa89143af0adc72_focus_603_src2.npz",
+    "slots": [
+      3
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.128982067108154
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/c3aff2d8c39315a4_focus_0_src0.npz",
+    "slots": [
+      13,
+      17,
+      22
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      4.510037422180176,
+      4.5836076736450195,
+      8.042119979858398
+    ],
+    "first_valid_frame": [
+      0,
+      1,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/c3aff2d8c39315a4_focus_32_src1.npz",
+    "slots": [
+      20,
+      21,
+      24
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      8.042119979858398,
+      4.510037422180176,
+      4.5836076736450195
+    ],
+    "first_valid_frame": [
+      0,
+      0,
+      1
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/7a271442b04f8c0e_focus_1224_src1.npz",
+    "slots": [
+      25
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.284472465515137
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/7a271442b04f8c0e_focus_1650_src3.npz",
+    "slots": [
+      20
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.284472465515137
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/8d5399ceaff4d559_focus_519_src0.npz",
+    "slots": [
+      16,
+      19,
+      20,
+      21,
+      23,
+      25,
+      27,
+      28
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      5.7342209815979,
+      4.413278102874756,
+      4.98254919052124,
+      4.44671630859375,
+      4.92164945602417,
+      5.153759002685547,
+      4.789633750915527,
+      5.023874282836914
+    ],
+    "first_valid_frame": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/8d5399ceaff4d559_focus_522_src1.npz",
+    "slots": [
+      13,
+      14,
+      17,
+      18,
+      23,
+      25,
+      28,
+      30
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      4.413278102874756,
+      5.7342209815979,
+      4.613422870635986,
+      4.44671630859375,
+      4.98254919052124,
+      5.023874282836914,
+      4.92164945602417,
+      5.153759002685547
+    ],
+    "first_valid_frame": [
+      0,
+      0,
+      6,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/d0384c1f7462b31a_focus_628_src0.npz",
+    "slots": [
+      16,
+      26,
+      28,
+      30
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0,
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      4.664031982421875,
+      4.490933895111084,
+      4.373080253601074,
+      4.661135196685791
+    ],
+    "first_valid_frame": [
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/d0384c1f7462b31a_focus_629_src1.npz",
+    "slots": [
+      12,
+      15
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      4.4595513343811035,
+      4.664031982421875
+    ],
+    "first_valid_frame": [
+      9,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/dd335e47e4366c38_focus_1304_src0.npz",
+    "slots": [
+      21
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.905674457550049
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/d6396e25ab5d6f13_focus_783_src0.npz",
+    "slots": [
+      9,
+      25
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      4.781610012054443,
+      4.460014343261719
+    ],
+    "first_valid_frame": [
+      0,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/d6396e25ab5d6f13_focus_843_src2.npz",
+    "slots": [
+      17
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.781610012054443
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/b0e5c2d3fac2fb5c_focus_1490_src0.npz",
+    "slots": [
+      9,
+      17
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      1.7270442247390747,
+      4.5118937492370605
+    ],
+    "first_valid_frame": [
+      1,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/b0e5c2d3fac2fb5c_focus_3469_src4.npz",
+    "slots": [
+      17,
+      24
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      1.7270442247390747,
+      4.5118937492370605
+    ],
+    "first_valid_frame": [
+      1,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/b7ec27d08df514d8_focus_693_src1.npz",
+    "slots": [
+      23,
+      26,
+      28
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      4.7101593017578125,
+      4.493227958679199,
+      4.619609355926514
+    ],
+    "first_valid_frame": [
+      0,
+      0,
+      7
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/b7ec27d08df514d8_focus_786_src4.npz",
+    "slots": [
+      26,
+      30
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      4.493227958679199,
+      4.7101593017578125
+    ],
+    "first_valid_frame": [
+      0,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/69f4f050bd313726_focus_1742_src3.npz",
+    "slots": [
+      31
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.570109844207764
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/194ad13ab4fdb4a1_focus_230_src1.npz",
+    "slots": [
+      8
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.65490198135376
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/1e9c9fe725013a2a_focus_1216_src0.npz",
+    "slots": [
+      14,
+      28,
+      30
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      4.631217956542969,
+      4.540190696716309,
+      4.392098903656006
+    ],
+    "first_valid_frame": [
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/train/1e9c9fe725013a2a_focus_3742_src2.npz",
+    "slots": [
+      15,
+      28,
+      29
+    ],
+    "old_lengths": [
+      -1.0,
+      -1.0,
+      -1.0
+    ],
+    "new_lengths": [
+      4.631217956542969,
+      4.540190696716309,
+      4.392098903656006
+    ],
+    "first_valid_frame": [
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/25f5c81237e1a1e2_focus_3811_src0.npz",
+    "slots": [
+      18
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.615630149841309
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  },
+  {
+    "npz_path": "/p/yufeng/tri30/dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/val/25f5c81237e1a1e2_focus_7491_src1.npz",
+    "slots": [
+      20
+    ],
+    "old_lengths": [
+      -1.0
+    ],
+    "new_lengths": [
+      4.615630149841309
+    ],
+    "first_valid_frame": [
+      0
+    ]
+  }
+]

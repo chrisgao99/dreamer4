@@ -56,12 +56,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--val_data_dir", required=True)
+    parser.add_argument("--map_cache_dir", default=None)
+    parser.add_argument("--lane_topology_dir", default=None)
     parser.add_argument("--output_json", required=True)
     parser.add_argument("--rollout_ade_csv", required=True)
     parser.add_argument("--scene_metrics_csv", required=True)
     parser.add_argument("--details_npz", required=True)
     parser.add_argument("--start_batch", type=int, default=0, help="Skip completed batches, retaining original dataset indices and seeds.")
-    parser.add_argument("--metric_validity", choices=("checkpoint", "holonomic"), default="checkpoint",
+    parser.add_argument("--metric_validity", choices=("checkpoint", "holonomic"), default="holonomic",
                         help="Use legacy holonomic GT validity for comparable generate-all scoring")
     parser.add_argument("--physical_metrics", action="store_true", help="Compute physical diagnostics and save complete per-batch rollouts.")
     parser.add_argument("--device", default="cuda")
@@ -133,6 +135,8 @@ def load_model_and_normalizer(
     model.load_state_dict(checkpoint[state_key], strict=True)
     model.eval()
     normalizer = build_normalizer(checkpoint["action_stats"], device)
+    # dynamic_agent_bias integrates self-conditioned plans in metric space.
+    model.set_action_normalizer(normalizer)
     checkpoint_step = int(checkpoint.get("step", -1))
     del checkpoint
     gc.collect()
@@ -285,7 +289,17 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             f"{train_args.horizon}"
         )
 
-    dataset = WaymoVectorDataset(str(val_data_dir))
+    if getattr(train_args, "map_adaptation", False):
+        cache = args.map_cache_dir or train_args.map_cache_dir
+        if getattr(train_args, "lane_connectivity", False):
+            from waymo.lane_connectivity.dataset import ConnectivityDataset
+            topology = args.lane_topology_dir or train_args.lane_topology_dir
+            dataset = ConnectivityDataset(str(val_data_dir), cache, topology)
+        else:
+            from waymo.adaptations.map_dataset import MapAdaptationDataset
+            dataset = MapAdaptationDataset(str(val_data_dir), cache)
+    else:
+        dataset = WaymoVectorDataset(str(val_data_dir))
     loader = make_loader(
         dataset,
         batch_size=args.eval_batch_size,
@@ -400,7 +414,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 max_yaw_delta_rad=float(train_args.physical_max_yaw_delta_rad),
             )
 
-            if getattr(args, "metric_validity", "checkpoint") == "holonomic":
+            if getattr(args, "metric_validity", "holonomic") == "holonomic":
                 if condition_focus_actions:
                     raise ValueError("holonomic metric validity requires generate-all evaluation")
                 # Only GT scoring changes; rollout execution still uses model kinematics.
@@ -435,6 +449,12 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                         current_light_mask_sequence=batch["light_mask"][
                             :, anchor : anchor + int(args.rollout_steps)
                         ],
+                        **(dict(map_ids=batch["map_ids"], map_is_lane=batch["map_is_lane"],
+                                map_stop_sign=batch["map_stop_sign"], map_stop_point=batch["map_stop_point"],
+                                light_id_sequence=batch["light_ids"][:, anchor : anchor + int(args.rollout_steps)])
+                           if "map_adaptation" in batch else {}),
+                        **(dict(lane_edges=batch["lane_edges"], lane_edge_types=batch["lane_edge_types"])
+                           if "lane_edges" in batch else {}),
                         focus_action_sequence=(targets.actions[:, 0] if condition_focus_actions else None),
                         focus_action_valid=(targets.valid[:, 0] if condition_focus_actions else None),
                         rollout_steps=int(args.rollout_steps),
@@ -649,7 +669,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "mean_ade_m": float(candidate_scene_ade_all.mean()),
         "first40_mean_ade_m": float(np.concatenate(prefix40_parts, axis=0).mean()),
         "first40_steps": min(40, int(args.rollout_steps)),
-        "metric_validity": getattr(args, "metric_validity", "checkpoint"),
+        "metric_validity": getattr(args, "metric_validity", "holonomic"),
         "minade_m": float(candidate_scene_ade_all.min(axis=1).mean()),
         "per_agent_minade_m": per_agent_minade_m,
         "first_rollout_ade_m": float(candidate_scene_ade_all[:, 0].mean()),

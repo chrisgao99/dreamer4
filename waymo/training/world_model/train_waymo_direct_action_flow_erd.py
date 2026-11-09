@@ -151,6 +151,9 @@ def validate(model, normalizer, loader, ta, device, cfg):
                 agent_mask=b['agent_mask'], map_polylines=b['map_polylines'], map_mask=b['map_mask'],
                 current_light_sequence=b['lights'][:, anchor:anchor+80],
                 current_light_mask_sequence=b['light_mask'][:, anchor:anchor+80],
+                **(dict(map_ids=b['map_ids'],map_is_lane=b['map_is_lane'],map_stop_sign=b['map_stop_sign'],
+                        map_stop_point=b['map_stop_point'],light_id_sequence=b['light_ids'][:,anchor:anchor+80]) if 'map_adaptation' in b else {}),
+                **(dict(lane_edges=b['lane_edges'],lane_edge_types=b['lane_edge_types']) if 'lane_edges' in b else {}),
                 focus_action_sequence=None, focus_action_valid=None, rollout_steps=80,
                 commitment=5, solver_steps=cfg.solver_steps, generator=gen))
         poses = torch.stack(poses, 1)

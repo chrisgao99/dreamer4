@@ -12,8 +12,8 @@ by the continuous flow.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, replace
+from typing import Optional, Callable
 
 import torch
 import torch.nn as nn
@@ -622,6 +622,70 @@ class RelativeAgentBias(nn.Module):
         return self.mlp(features).permute(0, 3, 1, 2).contiguous()
 
 
+class FutureAgentBias(nn.Module):
+    """Per-chunk agent-agent bias from the planned poses at each chunk end.
+
+    Same directed geometry features as ``RelativeAgentBias``, evaluated on the
+    poses integrated from the self-conditioning estimate of the clean actions,
+    plus flow time and an availability flag. Without an estimate every feature
+    except flow time is zero, so the bias is constant over keys and leaves the
+    softmax unchanged. The output layer is zero-initialized.
+    """
+
+    def __init__(self, n_heads: int, hidden_dim: int, position_scale_m: float):
+        super().__init__()
+        self.position_scale_m = float(position_scale_m)
+        self.mlp = nn.Sequential(
+            nn.Linear(9, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, n_heads),
+        )
+        nn.init.zeros_(self.mlp[-1].weight)
+        nn.init.zeros_(self.mlp[-1].bias)
+
+    def forward(
+        self,
+        chunk_pose: torch.Tensor,
+        agent_type: torch.Tensor,
+        flow_time: torch.Tensor,
+        available: torch.Tensor,
+    ) -> torch.Tensor:
+        # chunk_pose (B,N,C,3) -> (B,C,N,3); output (B,C,heads,N,N).
+        pose = chunk_pose.permute(0, 2, 1, 3)
+        delta = pose[:, :, None, :, 0:2] - pose[:, :, :, None, 0:2]
+        yaw_i = pose[:, :, :, None, 2]
+        c = torch.cos(yaw_i)
+        s = torch.sin(yaw_i)
+        dx = (c * delta[..., 0] + s * delta[..., 1]) / self.position_scale_m
+        dy = (-s * delta[..., 0] + c * delta[..., 1]) / self.position_scale_m
+        dyaw = pose[:, :, None, :, 2] - pose[:, :, :, None, 2]
+        distance = torch.linalg.vector_norm(delta, dim=-1) / self.position_scale_m
+        same_type = (agent_type[:, :, None] == agent_type[:, None, :]).to(pose.dtype)
+        type_delta = (agent_type[:, None, :] - agent_type[:, :, None]).to(pose.dtype) / 4.0
+        shape = dx.shape
+        geometry = torch.stack(
+            (
+                dx,
+                dy,
+                torch.sin(dyaw),
+                torch.cos(dyaw),
+                distance,
+                same_type[:, None].expand(shape),
+                type_delta[:, None].expand(shape),
+            ),
+            dim=-1,
+        )
+        flag = available.to(pose.dtype)[:, None, None, None, None]
+        geometry = geometry * flag
+        extra = torch.stack(
+            (flow_time.to(pose.dtype)[:, None, None, None].expand(shape),
+             flag[..., 0].expand(shape)),
+            dim=-1,
+        )
+        features = torch.cat((geometry, extra), dim=-1)
+        return self.mlp(features).permute(0, 1, 4, 2, 3).contiguous()
+
+
 class SceneInteractionBlock(nn.Module):
     def __init__(self, d_model: int, n_heads: int, dropout: float, mlp_ratio: float):
         super().__init__()
@@ -658,6 +722,8 @@ class SceneEncoding:
     agent_memory: Optional[torch.Tensor] = None
     agent_memory_mask: Optional[torch.Tensor] = None
     agent_memory_bias: Optional[torch.Tensor] = None
+    # (B,C,heads,N,N) per-chunk agent-agent bias from planned poses; set per flow step.
+    chunk_bias: Optional[torch.Tensor] = None
 
 
 class DirectActionSceneEncoder(nn.Module):
@@ -867,7 +933,12 @@ class JointActionDiTBlock(nn.Module):
         )
         relation_bias = scene.relative_bias[:, None].expand(
             -1, num_chunks, -1, -1, -1
-        ).reshape(bsz * num_chunks, scene.relative_bias.shape[1], num_agents, num_agents)
+        )
+        if scene.chunk_bias is not None:
+            relation_bias = relation_bias + scene.chunk_bias.to(relation_bias.dtype)
+        relation_bias = relation_bias.reshape(
+            bsz * num_chunks, scene.relative_bias.shape[1], num_agents, num_agents
+        )
         normed, gate = _modulate(
             self.norm_agent(flat), self.mod_agent(cond_agent), **modulation_kwargs
         )
@@ -943,10 +1014,12 @@ class DirectActionFlowModel(nn.Module):
         agent_map_radius_m: float = 100.0,
         modulation_scale_limit: float = 0.0,
         modulation_shift_limit: float = 0.0,
+        dynamic_agent_bias: bool = False,
     ) -> None:
         super().__init__()
         if horizon % chunk_size:
             raise ValueError(f"horizon={horizon} must be divisible by chunk_size={chunk_size}")
+        self.dynamic_agent_bias = bool(dynamic_agent_bias)
         self.include_agent_velocity = bool(include_agent_velocity)
         self.d_model = int(d_model)
         self.horizon = int(horizon)
@@ -1009,6 +1082,40 @@ class DirectActionFlowModel(nn.Module):
             nn.SiLU(),
             nn.Linear(d_model, 3),
         )
+        if self.dynamic_agent_bias:
+            self.future_agent_bias = FutureAgentBias(n_heads, hidden_dim, position_scale_m)
+        # Not a submodule: checkpoints keep their state_dict keys; set by every entry point.
+        self.__dict__["_action_normalizer"] = None
+
+    # Self-conditioning estimates are clipped like the training targets.
+    self_condition_clip = 5.0
+
+    def set_action_normalizer(self, normalizer: "ActionNormalizer") -> None:
+        self.__dict__["_action_normalizer"] = normalizer
+
+    @torch.no_grad()
+    def planned_chunk_poses(
+        self, self_condition: torch.Tensor, scene: SceneEncoding, action_mask: torch.Tensor
+    ) -> torch.Tensor:
+        """Integrate a normalized clean-action estimate; poses at chunk ends (B,N,C,3)."""
+        normalizer = self.__dict__.get("_action_normalizer")
+        if normalizer is None:
+            raise RuntimeError("dynamic_agent_bias requires model.set_action_normalizer(normalizer)")
+        actions = self_condition.float().clamp(-self.self_condition_clip, self.self_condition_clip)
+        metric = normalizer.denormalize(actions, scene.agent_type)
+        # Vectorized execute_holonomic_actions: an invalid step holds the pose, i.e. a
+        # zero action; each displacement uses the pre-action heading.
+        metric = metric * action_mask[..., None].to(metric.dtype)
+        start = scene.agent_pose.float()
+        heading = start[..., 2:3] + torch.cumsum(metric[..., 2], dim=-1)
+        before = torch.cat((start[..., 2:3], heading[..., :-1]), dim=-1)
+        c, s = torch.cos(before), torch.sin(before)
+        dx = c * metric[..., 0] - s * metric[..., 1]
+        dy = s * metric[..., 0] + c * metric[..., 1]
+        poses = torch.stack((start[..., 0:1] + torch.cumsum(dx, dim=-1),
+                             start[..., 1:2] + torch.cumsum(dy, dim=-1),
+                             wrap_angle_rad(heading)), dim=-1)
+        return poses[:, :, self.chunk_size - 1 :: self.chunk_size]
 
     def encode_scene(self, **kwargs: torch.Tensor) -> SceneEncoding:
         return self.scene_encoder(**kwargs)
@@ -1022,12 +1129,27 @@ class DirectActionFlowModel(nn.Module):
         *,
         focus_actions: Optional[torch.Tensor] = None,
         focus_index: int = 0,
+        self_condition: Optional[torch.Tensor] = None,
+        self_condition_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        """``self_condition``: normalized clean-action estimate (B,N,H,3) from the
+        previous solver step, used only by ``dynamic_agent_bias``; ``self_condition_mask``
+        (B,) selects the examples that receive it (default: all when given)."""
         bsz, num_agents, horizon, channels = noisy_actions.shape
         if horizon != self.horizon or channels != 3:
             raise ValueError(
                 f"Expected noisy actions (B,N,{self.horizon},3), got {tuple(noisy_actions.shape)}"
             )
+        if self.dynamic_agent_bias:
+            if self_condition is None:
+                available = torch.zeros(bsz, dtype=torch.bool, device=noisy_actions.device)
+                chunk_pose = scene.agent_pose.new_zeros((bsz, num_agents, self.num_chunks, 3))
+            else:
+                available = (torch.ones(bsz, dtype=torch.bool, device=noisy_actions.device)
+                             if self_condition_mask is None else self_condition_mask.bool())
+                chunk_pose = self.planned_chunk_poses(self_condition, scene, action_mask)
+            scene = replace(scene, chunk_bias=self.future_agent_bias(
+                chunk_pose, scene.agent_type, flow_time, available))
         x_input = noisy_actions
         if focus_actions is not None:
             if focus_actions.shape != (bsz, horizon, 3):
@@ -1128,6 +1250,7 @@ class DirectActionFlowModel(nn.Module):
         if focus_actions is not None:
             x[:, int(focus_index)] = focus_actions.to(x.dtype)
         dt = 1.0 / float(solver_steps)
+        estimate = None
         for step in range(int(solver_steps)):
             flow_time = torch.full(
                 (int(x.shape[0]),),
@@ -1142,7 +1265,13 @@ class DirectActionFlowModel(nn.Module):
                 action_mask,
                 focus_actions=focus_actions,
                 focus_index=focus_index,
+                **({"self_condition": estimate} if self.dynamic_agent_bias else {}),
             )
+            if self.dynamic_agent_bias:
+                # Clean-action estimate for the next step's planned-pose bias.
+                estimate = x.float() + (1.0 - float(step) / float(solver_steps)) * velocity.float()
+                if focus_actions is not None:
+                    estimate[:, int(focus_index)] = focus_actions.float()
             x = x + dt * velocity * generated_mask[..., None].to(velocity.dtype)
             if focus_actions is not None:
                 x[:, int(focus_index)] = focus_actions.to(x.dtype)
@@ -1190,6 +1319,7 @@ def flow_matching_loss(
     huber_beta: float = 1.0,
     dynamic_mask: Optional[torch.Tensor] = None,
     dynamic_weight: float = 0.7,
+    endpoint_regularizer: Optional[Callable] = None,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """Standard affine-path conditional flow-matching objective."""
     if not 0.0 < float(flow_time_max) <= 1.0:
@@ -1218,6 +1348,25 @@ def flow_matching_loss(
     # roster of current-valid agents fixed across H and therefore must not leak
     # logged disappearance times through the action attention mask.
     model_action_mask = scene.agent_mask[:, :, None].expand_as(action_valid)
+    self_condition_kwargs = {}
+    if getattr(model, "dynamic_agent_bias", False):
+        # Self-conditioning: half of the examples get the clean-action estimate of
+        # a no-grad pass at the same (x_lambda, t), as the next solver step would.
+        with torch.no_grad():
+            first = model.decode_velocity(
+                x_lambda, flow_time, scene, model_action_mask,
+                focus_actions=focus_actions, focus_index=focus_index,
+            )
+            estimate = x_lambda.float() + (1.0 - lam.float()) * first.float()
+            if focus_actions is not None:
+                estimate[:, int(focus_index)] = focus_actions.float()
+        # Weights first cast by autocast under no_grad are cached without autograd
+        # history; reusing them would silently drop every decoder gradient.
+        torch.clear_autocast_cache()
+        self_condition_kwargs = dict(
+            self_condition=estimate,
+            self_condition_mask=torch.rand((bsz,), device=normalized_actions.device) < 0.5,
+        )
     pred_velocity = model.decode_velocity(
         x_lambda,
         flow_time,
@@ -1225,6 +1374,7 @@ def flow_matching_loss(
         model_action_mask,
         focus_actions=focus_actions,
         focus_index=focus_index,
+        **self_condition_kwargs,
     )
     generated_valid = action_valid.clone().bool()
     if condition_focus_actions:
@@ -1251,9 +1401,16 @@ def flow_matching_loss(
     endpoint_mae = (
         (endpoint - normalized_actions.float()).abs() * weight.float()
     ).sum() / denom.float()
+    flow_loss = loss
+    auxiliary_metrics = {}
+    if endpoint_regularizer is not None:
+        extra_loss, auxiliary_metrics = endpoint_regularizer(endpoint)
+        loss = loss + extra_loss
+        auxiliary_metrics = {**auxiliary_metrics, "total_loss": loss.detach()}
     return loss, {
         **group_metrics,
-        "flow_loss": loss.detach(),
+        **auxiliary_metrics,
+        "flow_loss": flow_loss.detach(),
         "normalized_endpoint_mae": endpoint_mae.detach(),
         "flow_time_mean": flow_time.mean().detach(),
         "valid_action_fraction": generated_valid.float().mean().detach(),
@@ -1285,6 +1442,8 @@ def rollout_receding_horizon(
     map_stop_sign: Optional[torch.Tensor] = None,
     map_stop_point: Optional[torch.Tensor] = None,
     light_id_sequence: Optional[torch.Tensor] = None,
+    lane_edges: Optional[torch.Tensor] = None,
+    lane_edge_types: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """Run closed-loop generate-H/execute-B simulation.
 
@@ -1359,6 +1518,8 @@ def rollout_receding_horizon(
             **(dict(map_ids=map_ids, map_is_lane=map_is_lane, map_stop_sign=map_stop_sign,
                     map_stop_point=map_stop_point, current_light_ids=light_id_sequence[:, elapsed])
                if getattr(model, "map_adaptation", False) else {}),
+            **(dict(lane_edges=lane_edges,lane_edge_types=lane_edge_types)
+               if getattr(model,"lane_connectivity",False) else {}),
         )
         action_mask = scene.agent_mask[:, :, None].expand(
             -1, -1, model.horizon

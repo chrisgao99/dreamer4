@@ -90,6 +90,9 @@ def validate(model,normalizer,loader,ta,cfg):
             poses=rollout_receding_horizon(model,normalizer,initial_history=h,agent_lengths=b.get('agent_lengths'),agent_mask=b['agent_mask'],
                 map_polylines=b['map_polylines'],map_mask=b['map_mask'],current_light_sequence=b['lights'][:,10:90],
                 current_light_mask_sequence=b['light_mask'][:,10:90],focus_action_sequence=None,focus_action_valid=None,
+                **(dict(map_ids=b['map_ids'],map_is_lane=b['map_is_lane'],map_stop_sign=b['map_stop_sign'],
+                        map_stop_point=b['map_stop_point'],light_id_sequence=b['light_ids'][:,10:90]) if 'map_adaptation' in b else {}),
+                **(dict(lane_edges=b['lane_edges'],lane_edge_types=b['lane_edge_types']) if 'lane_edges' in b else {}),
                 rollout_steps=80,commitment=5,solver_steps=cfg.solver_steps,
                 generator=torch.Generator(device=device).manual_seed(12346+bi*cfg.eval_rollouts+k))
             _,m=physical_losses(poses,t.current_pose,t.valid,t.agent_type,b['map_polylines'],b['map_mask'],road_support=support)
@@ -110,7 +113,7 @@ def train(cfg):
     if not cfg.resume and (out/'latest.pt').exists(): raise FileExistsError('Use --resume')
     initial=torch.load(cfg.checkpoint,map_location='cpu',weights_only=False,mmap=True)
     ta=argparse.Namespace(**initial['args']);stats=initial['action_stats']
-    if initial['step']!=95000 or ta.condition_focus_actions or ta.horizon!=40 or ta.commitment!=5 or getattr(ta,'balance_dynamic_loss',False): raise ValueError('Expected original generate-all 95k H40/B5')
+    if ta.condition_focus_actions or ta.horizon!=40 or ta.commitment!=5 or getattr(ta,'balance_dynamic_loss',False): raise ValueError('Expected generate-all H40/B5')
     rollout_args=argparse.Namespace(**vars(ta));rollout_args.horizon=80
     model=base.create_model(ta).to(device);model.load_state_dict(initial['ema_model']);model.eval()
     ema=base.ModelEMA(model,cfg.ema_decay);normalizer=base.build_normalizer(stats,device)
@@ -123,7 +126,17 @@ def train(cfg):
         model.load_state_dict(c['model']);ema.model.load_state_dict(c['ema_model']);opt.load_state_dict(c['optimizer'])
         step=c['step'];best=c['best_val'];validation=c.get('validation',{});erd.restore_rng(c['rng']);del c
     del initial
-    data=base.WaymoVectorDataset(cfg.train_data);val=base.WaymoVectorDataset(cfg.val_data)
+    if getattr(ta,'map_adaptation',False):
+        ta.map_cache_dir=cfg.map_cache_dir or ta.map_cache_dir
+        if getattr(ta,'lane_connectivity',False):
+            from waymo.lane_connectivity.dataset import ConnectivityDataset
+            ta.lane_topology_dir=cfg.lane_topology_dir or ta.lane_topology_dir
+            make_dataset=lambda root:ConnectivityDataset(root,ta.map_cache_dir,ta.lane_topology_dir)
+        else:
+            from waymo.adaptations.map_dataset import MapAdaptationDataset
+            make_dataset=lambda root:MapAdaptationDataset(root,ta.map_cache_dir)
+    else:make_dataset=base.WaymoVectorDataset
+    data=make_dataset(cfg.train_data);val=make_dataset(cfg.val_data)
     stop=min(cfg.max_steps,step+cfg.max_iterations) if cfg.max_iterations else cfg.max_steps
     loader=DataLoader(data,batch_sampler=erd.StepBatches(len(data),cfg.batch_size,step,stop,cfg.seed+100000),
         num_workers=cfg.num_workers,collate_fn=base.collate_vector_batch,pin_memory=True,
@@ -180,6 +193,7 @@ def train(cfg):
 def parse_args():
     p=argparse.ArgumentParser(description=__doc__)
     for key in ('checkpoint','train_data','val_data','output_dir'):p.add_argument('--'+key,required=True)
+    p.add_argument('--map_cache_dir');p.add_argument('--lane_topology_dir')
     p.add_argument('--detach_every',type=int,choices=(0,5,20),required=True)
     p.add_argument('--resume');p.add_argument('--physical',action='store_true');p.add_argument('--skip_validation',action='store_true')
     for key,value in dict(seed=20260911,batch_size=2,num_workers=4,num_candidates=8,solver_steps=8,max_steps=10000,max_iterations=0,

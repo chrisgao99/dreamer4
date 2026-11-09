@@ -1,0 +1,47 @@
+{
+  "result": [
+    {
+      "npz_path": "/tmp/typeaware_fix_qsumm2ss/fb78ba1f36c383_focus_938_src2.npz",
+      "slots": [
+        4,
+        12,
+        16,
+        17,
+        25
+      ],
+      "old_lengths": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "new_lengths": [
+        4.443112850189209,
+        4.583368301391602,
+        4.34726619720459,
+        4.8711256980896,
+        -1.0
+      ],
+      "first_valid_frame": [
+        0,
+        0,
+        0,
+        0,
+        -1
+      ],
+      "first_required_frame": 10,
+      "unresolved_inactive_tracks": [
+        {
+          "slot": 25,
+          "track_id": 978,
+          "source_index": 64,
+          "reason": "no positive measurement; inactive from first_required_frame onward"
+        }
+      ]
+    }
+  ],
+  "feature_bytes_preserved": true,
+  "required_length_check_passed": true,
+  "smoke_dir": "/tmp/typeaware_fix_qsumm2ss"
+}

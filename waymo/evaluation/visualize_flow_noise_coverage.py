@@ -111,7 +111,7 @@ def plot_scene(out, record, gt, poses, maps, masks, ids, mode):
         stats[str(slot)] = {'base_visited_area_m2': int((heat > 0).sum()),
                             'all_visited_area_m2': int((all_heat > 0).sum()),
                             'endpoint_max_pair_distance_m': float(np.linalg.norm(c[:, None, -1] - c[None, :, -1], axis=-1).max())}
-    fig.suptitle(f"{record['scenario_id']} | {mode} | EMA step1000 | plan40 / commitment40 / 80 steps\n"
+    fig.suptitle(f"{record['scenario_id']} | {mode} | EMA step{record.get('checkpoint_step', 1000)} | plan40 / commitment40 / 80 steps\n"
                  'Observed sample coverage, not a support bound; active samples are not density estimates', fontsize=13)
     path = out / f"scene_{int(record['sample_order']):02d}_{record['scenario_id']}.png"
     fig.savefig(path)
@@ -124,19 +124,26 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', choices=['random32', 'paired16_active16'], required=True)
     parser.add_argument('--output_dir', type=Path, required=True)
+    parser.add_argument('--checkpoint', type=Path, default=None)
+    parser.add_argument('--images_only', action='store_true')
+    parser.add_argument('--map_cache_dir', type=Path, default=None)
+    parser.add_argument('--lane_topology_dir', type=Path, default=None)
     parser.add_argument('--max_scenes', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=4)
     args = parser.parse_args()
     out = args.output_dir.resolve(); out.mkdir(parents=True, exist_ok=True)
     config = json.loads(REFERENCE.read_text())
+    if args.checkpoint is not None:config['checkpoint']=str(args.checkpoint.resolve())
+    def write_json(path, payload):
+        if not args.images_only:path.write_text(json.dumps(payload, indent=2) + '\n')
     config.update(mode=args.mode, output_dir=str(out), device='cuda:0', num_rollouts=32,
                   cuda_visible_devices='0', batch_size=args.batch_size,
                   sampling_protocol='random32: iid Gaussian; paired16_active16: 8 Gaussian +/- pairs, then 12 mutations of 6 output-diverse parents + 4 fresh Gaussian samples',
                   active_mutation='0.8 * parent + 0.6 * independent Gaussian; parents chosen using both cars at 1-second intervals; both replans mutated',
                   plot_protocol='Base-only per-rollout grid visit frequency; active extra coverage separate; raw positions at 2/4/6/8 seconds',
                   metric_validity='raw logged GT for display; generated trajectories never truncated by inverse-action masks')
-    (out / 'run_config.json').write_text(json.dumps(config, indent=2) + '\n')
-    (out / 'status.json').write_text(json.dumps({'state': 'loading', 'completed_scenes': 0}))
+    write_json(out / 'run_config.json', config)
+    write_json(out / 'status.json', {'state': 'loading', 'completed_scenes': 0})
     torch.set_num_threads(4)
     torch.set_float32_matmul_precision('high')
     device = torch.device('cuda:0')
@@ -149,7 +156,17 @@ def main():
     records = json.loads((ROOT / config['selected_manifest']).read_text())['samples']
     assert len(records) == 10
     records = records[:args.max_scenes]
-    dataset = vis.WaymoVectorDataset(str(ROOT / config['val_data_dir']))
+    config['checkpoint_step']=step
+    if getattr(train_args, 'map_adaptation', False):
+        cache=args.map_cache_dir or Path(train_args.map_cache_dir)
+        if getattr(train_args, 'lane_connectivity', False):
+            from waymo.lane_connectivity.dataset import ConnectivityDataset
+            dataset=ConnectivityDataset(str(ROOT / config['val_data_dir']),cache,args.lane_topology_dir or train_args.lane_topology_dir)
+        else:
+            from waymo.adaptations.map_dataset import MapAdaptationDataset
+            dataset=MapAdaptationDataset(str(ROOT / config['val_data_dir']),cache)
+    else:
+        dataset = vis.WaymoVectorDataset(str(ROOT / config['val_data_dir']))
     loader = vis.make_loader(vis.Subset(dataset, [int(r['dataset_index']) for r in records]), batch_size=1,
                              shuffle=False, num_workers=0, device=device)
     images, summaries = [], []
@@ -177,6 +194,10 @@ def main():
                     agent_mask=rep(batch['agent_mask']), map_polylines=rep(batch['map_polylines']),
                     map_mask=rep(batch['map_mask']), current_light_sequence=rep(batch['lights'][:, 10:90]),
                     current_light_mask_sequence=rep(batch['light_mask'][:, 10:90]),
+                    **(dict(map_ids=rep(batch['map_ids']),map_is_lane=rep(batch['map_is_lane']),
+                            map_stop_sign=rep(batch['map_stop_sign']),map_stop_point=rep(batch['map_stop_point']),
+                            light_id_sequence=rep(batch['light_ids'][:,10:90])) if 'map_adaptation' in batch else {}),
+                    **(dict(lane_edges=rep(batch['lane_edges']),lane_edge_types=rep(batch['lane_edge_types'])) if 'lane_edges' in batch else {}),
                     focus_action_sequence=None, focus_action_valid=None,
                     rollout_steps=80, commitment=40, solver_steps=8, noise_sequence=z)
                 results.append(result)
@@ -204,19 +225,20 @@ def main():
         gt = agents[0].permute(1, 0, 2).cpu().numpy()
         pose_np = poses.cpu().numpy()
         stem = f"scene_{int(record['sample_order']):02d}_{record['scenario_id']}"
-        np.savez_compressed(out / (stem + '.npz'), poses=pose_np, noise_sequence=noise.cpu().numpy(),
+        if not args.images_only:np.savez_compressed(out / (stem + '.npz'), poses=pose_np, noise_sequence=noise.cpu().numpy(),
                             gt_tkf=gt, agent_ids=ids, selected_slots=np.array([0, slot]),
                             map_polylines=batch['map_polylines'][0].cpu().numpy(), map_mask=batch['map_mask'][0].cpu().numpy())
-        (out / (stem + '_sampling.json')).write_text(json.dumps({'seed': seed, 'samples': metadata}, indent=2))
+        write_json(out / (stem + '_sampling.json'), {'seed': seed, 'samples': metadata})
+        record=dict(record,checkpoint_step=step)
         path, stats = plot_scene(out, record, gt, pose_np, batch['map_polylines'][0].cpu().numpy(),
                                  batch['map_mask'][0].cpu().numpy().astype(bool), ids, args.mode)
         images.append(path)
         summaries.append({'record': record, 'coverage': stats, 'image': str(path)})
-        (out / 'coverage_summary.json').write_text(json.dumps(summaries, indent=2))
-        (out / 'status.json').write_text(json.dumps({'state': 'running', 'completed_scenes': len(images)}))
+        write_json(out / 'coverage_summary.json', summaries)
+        write_json(out / 'status.json', {'state': 'running', 'completed_scenes': len(images)})
         print(f'DONE scene={scene_index} image={path}', flush=True)
     vis._make_contact_sheet(images, out / 'contact_sheet.png')
-    (out / 'status.json').write_text(json.dumps({'state': 'complete', 'completed_scenes': len(images)}))
+    write_json(out / 'status.json', {'state': 'complete', 'completed_scenes': len(images)})
     print(f'COMPLETE {args.mode}: {len(images)} scenes', flush=True)
 
 

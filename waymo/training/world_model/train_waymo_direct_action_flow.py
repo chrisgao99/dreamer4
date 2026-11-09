@@ -72,6 +72,12 @@ def move_batch(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
 
 def collate_vector_batch(items: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
     """Stack tensor fields; paths and scenario strings are not training inputs."""
+    if "lane_half_widths" in items[0]:
+        from waymo.lane_losses.dataset import collate_losses
+        return collate_losses(items)
+    if "lane_edges" in items[0]:
+        from waymo.lane_connectivity.dataset import collate_connectivity
+        return collate_connectivity(items)
     if "map_adaptation" in items[0]:
         from waymo.adaptations.map_dataset import collate_maps
         return collate_maps(items)
@@ -359,7 +365,15 @@ def scene_kwargs(batch: dict[str, Any], prepared: PreparedBatch) -> dict[str, to
                 current_light_ids=batch["light_ids"][torch.arange(len(prepared.anchors),
                                     device=prepared.anchors.device), prepared.anchors])
            if "map_adaptation" in batch else {}),
+        **(dict(lane_edges=batch["lane_edges"],lane_edge_types=batch["lane_edge_types"])
+           if "lane_edges" in batch else {}),
     }
+
+
+def map_aux_kwargs(model,normalizer,prepared,batch,args,step):
+    if not getattr(args,"map_aux_losses",False):return {}
+    from waymo.lane_losses.losses import endpoint_regularizer
+    return dict(endpoint_regularizer=endpoint_regularizer(model,normalizer,prepared,batch,args,step))
 
 
 def balance_kwargs(prepared, args):
@@ -390,7 +404,11 @@ class ModelEMA:
 
 
 def create_model(args: argparse.Namespace) -> DirectActionFlowModel:
-    model = DirectActionFlowModel(
+    model_class = DirectActionFlowModel
+    if getattr(args,"lane_connectivity",False):
+        from waymo.lane_connectivity.model import ConnectivityFlowModel
+        model_class=ConnectivityFlowModel
+    model = model_class(
         d_model=args.d_model,
         n_heads=args.n_heads,
         history_length=args.history_length,
@@ -414,6 +432,7 @@ def create_model(args: argparse.Namespace) -> DirectActionFlowModel:
         agent_map_radius_m=getattr(args, "agent_map_radius_m", 100.0),
         modulation_scale_limit=args.modulation_scale_limit,
         modulation_shift_limit=args.modulation_shift_limit,
+        dynamic_agent_bias=getattr(args, "dynamic_agent_bias", False),
     )
     model.kinematics = KinematicsConfig.from_args(args)
     return model
@@ -535,6 +554,7 @@ def evaluate_flow(
             huber_beta=args.flow_huber_beta,
             condition_focus_actions=args.condition_focus_actions,
             **balance_kwargs(prepared, args),
+            **map_aux_kwargs(model,normalizer,prepared,batch,args,getattr(args,"aux_loss_warmup_steps",0)),
         )
         predicted_pose = execute_model_actions(
             model, prepared.targets.current_pose,
@@ -712,6 +732,8 @@ def evaluate_receding_rollout(
                     map_stop_sign=batch["map_stop_sign"], map_stop_point=batch["map_stop_point"],
                     light_id_sequence=batch["light_ids"][:, anchor : anchor + available])
                if "map_adaptation" in batch else {}),
+            **(dict(lane_edges=batch["lane_edges"],lane_edge_types=batch["lane_edge_types"])
+               if "lane_edges" in batch else {}),
             focus_action_sequence=(
                 targets.actions[:, 0] if args.condition_focus_actions else None
             ),
@@ -799,8 +821,20 @@ def train(args: argparse.Namespace) -> None:
         if not args.map_cache_dir:
             raise ValueError("--map_adaptation requires --map_cache_dir generated from raw Scenarios")
         from waymo.adaptations.map_dataset import MapAdaptationDataset
-        train_dataset = MapAdaptationDataset(args.data_dir, args.map_cache_dir)
-        val_dataset = MapAdaptationDataset(args.val_data_dir, args.map_cache_dir)
+        if getattr(args,"lane_connectivity",False):
+            if not args.lane_topology_dir:raise ValueError("Connectivity requires --lane_topology_dir")
+            from waymo.lane_connectivity.dataset import ConnectivityDataset
+            if getattr(args,"map_aux_losses",False):
+                from waymo.lane_losses.dataset import LaneLossDataset
+                if not args.loss_geometry_dir:raise ValueError("Map losses require --loss_geometry_dir")
+                train_dataset=LaneLossDataset(args.data_dir,args.map_cache_dir,args.lane_topology_dir,args.loss_geometry_dir)
+                val_dataset=LaneLossDataset(args.val_data_dir,args.map_cache_dir,args.lane_topology_dir,args.loss_geometry_dir)
+            else:
+                train_dataset=ConnectivityDataset(args.data_dir,args.map_cache_dir,args.lane_topology_dir)
+                val_dataset=ConnectivityDataset(args.val_data_dir,args.map_cache_dir,args.lane_topology_dir)
+        else:
+            train_dataset = MapAdaptationDataset(args.data_dir, args.map_cache_dir)
+            val_dataset = MapAdaptationDataset(args.val_data_dir, args.map_cache_dir)
     else:
         train_dataset = WaymoVectorDataset(args.data_dir)
         val_dataset = WaymoVectorDataset(args.val_data_dir)
@@ -820,6 +854,7 @@ def train(args: argparse.Namespace) -> None:
     )
 
     model = create_model(args).to(device)
+    model.set_action_normalizer(normalizer)
     ema = ModelEMA(model, args.ema_decay)
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -929,6 +964,7 @@ def train(args: argparse.Namespace) -> None:
                     huber_beta=args.flow_huber_beta,
                     condition_focus_actions=args.condition_focus_actions,
                     **balance_kwargs(prepared, args),
+                    **map_aux_kwargs(model,normalizer,prepared,batch,args,step),
                 )
                 scaled_loss = loss / float(args.grad_accum_steps)
             if args.fail_on_nonfinite and not bool(torch.isfinite(loss).item()):
@@ -1115,6 +1151,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--history_depth", type=int, default=2)
     parser.add_argument("--map_depth", type=int, default=2)
     parser.add_argument("--map_adaptation", action="store_true")
+    parser.add_argument("--map_aux_losses",action="store_true")
+    parser.add_argument("--loss_geometry_dir",default=None)
+    parser.add_argument("--offroad_weight",type=float,default=0.1)
+    parser.add_argument("--lane_direction_weight",type=float,default=0.05)
+    parser.add_argument("--lane_transition_weight",type=float,default=0.1)
+    parser.add_argument("--aux_loss_warmup_steps",type=int,default=5000)
+    parser.add_argument("--lane_connectivity",action="store_true")
+    parser.add_argument("--lane_topology_dir",default=None)
     parser.add_argument("--map_cache_dir", default=None)
     parser.add_argument("--map_neighbors", type=int, default=32)
     parser.add_argument("--agent_map_neighbors", type=int, default=64)
@@ -1213,6 +1257,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--receding_eval_batches", type=int, default=1)
     parser.add_argument("--receding_eval_horizon", type=int, default=80)
 
+    parser.add_argument("--dynamic_agent_bias", action="store_true",
+                        help="Per-chunk agent-agent bias from self-conditioned planned poses")
     parser.add_argument("--wandb", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--wandb_project", default="waymo-world-model")
     parser.add_argument("--wandb_run_name", default="waymo_direct_action_flow_v1")

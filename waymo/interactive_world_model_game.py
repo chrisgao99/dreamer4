@@ -490,7 +490,23 @@ class WaymoInteractiveServer:
         data_dir = args.data_dir or _first_path(self.model_args.val_data_dir)
         if not data_dir:
             raise ValueError("No --data-dir was provided and checkpoint args contain no val_data_dir")
-        self.dataset = wm.WaymoVectorDataset(str(Path(data_dir).expanduser().resolve()))
+        data_dir = str(Path(data_dir).expanduser().resolve())
+        if self.model_backend == "direct_action_flow" and getattr(
+            self.model_args, "map_adaptation", False
+        ):
+            if getattr(self.model_args, "lane_connectivity", False):
+                from waymo.lane_connectivity.dataset import ConnectivityDataset
+
+                self.dataset = ConnectivityDataset(
+                    data_dir, self.model_args.map_cache_dir,
+                    self.model_args.lane_topology_dir,
+                )
+            else:
+                from waymo.adaptations.map_dataset import MapAdaptationDataset
+
+                self.dataset = MapAdaptationDataset(data_dir, self.model_args.map_cache_dir)
+        else:
+            self.dataset = wm.WaymoVectorDataset(data_dir)
         if not (0 <= args.scene_index < len(self.dataset)):
             raise IndexError(f"scene-index must be in [0, {len(self.dataset) - 1}]")
         self.initial_scene_index = int(args.scene_index)
@@ -536,12 +552,7 @@ class WaymoInteractiveServer:
                 ),
             )
             if self.puffer_manifest is not None:
-                mapped_paths = self.puffer_manifest.mapped_npz_paths
-                mapped_scene_indices = tuple(
-                    index
-                    for index, path in enumerate(self.dataset.paths)
-                    if str(Path(path).expanduser().resolve(strict=False)) in mapped_paths
-                )
+                mapped_scene_indices = self._mapped_puffer_scene_indices()
                 self.puffer_scene_indices = tuple(
                     index
                     for index in mapped_scene_indices
@@ -554,10 +565,11 @@ class WaymoInteractiveServer:
                         f"is absent during the {self.context_frames}-frame chase-camera replay",
                         flush=True,
                     )
-                if mapped_scene_indices and not self.puffer_scene_indices:
+                if not self.puffer_scene_indices:
                     raise ValueError(
-                        "No mapped Puffer scene has a continuously valid focus agent "
-                        f"through the {self.context_frames}-frame context replay"
+                        "No dataset view has available Puffer assets and a continuously "
+                        f"valid focus agent through the {self.context_frames}-frame replay. "
+                        "Check --puffer-manifest and --data-dir."
                     )
                 if (
                     self.puffer_scene_indices
@@ -576,7 +588,7 @@ class WaymoInteractiveServer:
         )
         if requested_scene_queue:
             available_scene_indices: tuple[int, ...] | range
-            if args.renderer == "puffer" and self.puffer_scene_indices:
+            if args.renderer == "puffer":
                 available_scene_indices = self.puffer_scene_indices
             else:
                 available_scene_indices = range(len(self.dataset))
@@ -802,6 +814,30 @@ class WaymoInteractiveServer:
         if problems:
             raise ValueError("Incompatible checkpoint: " + "; ".join(problems))
 
+    def _mapped_puffer_scene_indices(self) -> tuple[int, ...]:
+        # Dataset variants (e.g. with agent lengths) retain view filenames but
+        # have different roots. Confirm scenario/focus identity through resolve
+        # instead of requiring the manifest's original absolute NPZ path.
+        mapped_paths = self.puffer_manifest.mapped_npz_paths
+        mapped_names = {Path(path).name for path in mapped_paths}
+        indices = []
+        for index, path in enumerate(self.dataset.paths):
+            source = Path(path).expanduser().resolve(strict=False)
+            if str(source) not in mapped_paths and source.name not in mapped_names:
+                continue
+            with np.load(source, allow_pickle=False) as data:
+                scenario_id = str(data["scenario_id"]) if "scenario_id" in data else source.stem.split("_")[0]
+                focus_track_id = int(data["agent_ids"][0])
+            try:
+                self.puffer_manifest.resolve(
+                    scenario_id=scenario_id, npz_path=source,
+                    focus_track_id=focus_track_id,
+                )
+            except (FileNotFoundError, KeyError, ValueError):
+                continue
+            indices.append(index)
+        return tuple(indices)
+
     def _has_continuous_puffer_focus_context(self, scene_index: int) -> bool:
         """Whether Puffer's chase camera can follow slot 0 for the full replay."""
 
@@ -847,7 +883,7 @@ class WaymoInteractiveServer:
             return int(scene_queue[(current_position + 1) % len(scene_queue)])
 
         candidates: tuple[int, ...] | range
-        if self.args.renderer == "puffer" and self.puffer_scene_indices:
+        if self.args.renderer == "puffer":
             candidates = self.puffer_scene_indices
         else:
             candidates = range(len(self.dataset))
@@ -863,9 +899,12 @@ class WaymoInteractiveServer:
     @torch.inference_mode()
     def _load_direct_action_flow_scene(self, scene_index: int) -> SessionState:
         from waymo.training.world_model.direct_action_flow import agents_to_bntf
+        from waymo.training.world_model.train_waymo_direct_action_flow import (
+            collate_vector_batch,
+        )
 
         item = self.dataset[int(scene_index)]
-        batch = wm.move_batch(wm._collate([item]), self.device)
+        batch = wm.move_batch(collate_vector_batch([item]), self.device)
         agents = agents_to_bntf(batch["agents"], batch["agent_mask"])
         total_steps = int(agents.shape[2])
         start_frame, context_end = context_frame_bounds(
@@ -1215,16 +1254,19 @@ class WaymoInteractiveServer:
         from waymo.training.world_model.action_kinematics import (
             execute_model_actions,
         )
+        from waymo.training.world_model.train_waymo_direct_action_flow import scene_kwargs
 
         def generate() -> tuple[torch.Tensor, torch.Tensor]:
-            scene = self.direct_action_model.encode_scene(
+            prepared = SimpleNamespace(
                 history=history,
-                agent_mask=batch["agent_mask"],
-                map_polylines=batch["map_polylines"],
-                map_mask=batch["map_mask"],
                 current_lights=batch["lights"][:, light_index],
                 current_light_mask=batch["light_mask"][:, light_index],
+                anchors=torch.full(
+                    (history.shape[0],), light_index,
+                    device=history.device, dtype=torch.long,
+                ),
             )
+            scene = self.direct_action_model.encode_scene(**scene_kwargs(batch, prepared))
             action_mask = scene.agent_mask[:, :, None].expand(
                 -1, -1, int(self.model_args.horizon)
             )

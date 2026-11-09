@@ -1,0 +1,40 @@
+{
+  "train": {
+    "files": 2,
+    "losses": {
+      "offroad_loss": 0.980348527431488,
+      "lane_direction_loss": 0.03498391807079315,
+      "illegal_lane_transition_loss": 0.025886761024594307,
+      "illegal_transition_fraction": 0.049701787531375885,
+      "offroad_valid_pose_count": 1072.0,
+      "direction_valid_pose_count": 1510.0,
+      "map_aux_loss": 0.10237272083759308,
+      "aux_loss_scale": 1.0,
+      "total_loss": 0.7052437663078308,
+      "flow_loss": 0.6028710603713989,
+      "normalized_endpoint_mae": 0.7317660450935364,
+      "flow_time_mean": 0.3275773823261261,
+      "valid_action_fraction": 0.62109375
+    },
+    "gpu_peak_mib": null
+  },
+  "val": {
+    "files": 2,
+    "losses": {
+      "offroad_loss": 1.7182092666625977,
+      "lane_direction_loss": 0.017255518585443497,
+      "illegal_lane_transition_loss": 0.00038400266203098,
+      "illegal_transition_fraction": 0.0020256582647562027,
+      "offroad_valid_pose_count": 1229.0,
+      "direction_valid_pose_count": 1482.0,
+      "map_aux_loss": 0.17272210121154785,
+      "aux_loss_scale": 1.0,
+      "total_loss": 0.7499465942382812,
+      "flow_loss": 0.5772244930267334,
+      "normalized_endpoint_mae": 0.5799034833908081,
+      "flow_time_mean": 0.5002886056900024,
+      "valid_action_fraction": 0.740234375
+    },
+    "gpu_peak_mib": null
+  }
+}

@@ -1,6 +1,65 @@
 # Agent Context
 
-Last updated: 2026-08-12
+Last updated: 2026-11-09
+
+## Latest Update: Pass-Order Variable z for WM Interaction Fine-Tuning, 2026-11-09
+
+Plan agreed with the user; not yet implemented.
+
+- Problem: the laneconn90k MON-8 `best_ade.pt` collides 50–80% in some
+  scenes regardless of resampling. Violation-aware MoN selection did not help,
+  because the violating samples get no gradient. So the fix targets the
+  representation, not sample selection.
+- Design:
+  - a supervised pair variable z_ij ∈ {i first, j first, no conflict}, from the
+    logged conflict entry order, relabeled at every replan;
+  - a pair head (motion/conflict/ROW pair features plus agent tokens), trained
+    with CE;
+  - z enters the denoiser `agent_attn` through a zero-init, bounded bias
+    g(z, pair features);
+  - g has no target of its own: it is trained by the WM flow loss with
+    teacher-forced GT z and z-dropout, with the WM frozen first.
+- Inference: route first, then r and z, then the plan. One z per pair, shared
+  by both cars, re-evaluated with hysteresis at each replan.
+- Off-log branches: r and z are recomputed from the rollout's own route.
+  DAgger-style rule labels (car in zone = first, no gap → non-holder yields,
+  can't stop → goes) cover states the WM visits but the log does not.
+  Timing-shift interventions are added.
+- Steps:
+  1. WM failure table by ROW type × margin;
+  2. standalone head, A1 (own features) vs A2 (frozen WM tokens);
+  3. attach to the frozen WM;
+  4. unfreeze;
+  5. interventions / DPO.
+
+Full plan:
+
+```text
+agent_context/ROW_PAIR_ORDER_Z_WM_FINETUNE_PLAN_2026_11_09.md
+```
+
+## Latest Update: RelativeAgentBias vs Agent-Agent Attention, 2026-11-05
+
+Analysis of the laneconn90k MON-8 `best_ade.pt` world model.
+
+- `RelativeAgentBias` is a pose-only geometric prior: no velocity, no time.
+  It is one `(B, 8 heads, N, N)` tensor per replan, shared by all 4 encoder
+  self-attention layers, all 8 denoiser `agent_attn` layers and the agent part
+  of `scene_cross`.
+- It accounts for ~40% of across-key logit variance, is uncorrelated with QK,
+  and moves ~30% of attention mass when removed in one layer.
+- It ties each head index to a consistent geometric role across layers.
+- Attention weights do not track which car actually drives behavior.
+- The dynbias FutureAgentBias was barely used without a matching training
+  signal.
+
+Full structure, tables, caveats and planned experiments:
+
+```text
+agent_context/RELATIVE_AGENT_BIAS_ATTENTION_ANALYSIS_2026_11_05.md
+```
+
+Scripts and raw results: `/p/yufeng/tri30/wm_interaction_probe/`.
 
 ## Latest Update: WOSAC Improvement and Anti-Collapse Fine-Tuning, 2026-08-12
 

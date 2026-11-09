@@ -1,12 +1,16 @@
 import concurrent.futures
+import csv
 import math
 import random
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import torch
+
+from waymo.puffer_renderer_bridge import ScenarioManifest
 
 from waymo.interactive_world_model_game import (
     AnalogControl,
@@ -150,6 +154,37 @@ class ConvertedSceneSelectionTest(unittest.TestCase):
         server = self.make_server((7,))
         self.assertEqual(server._pick_new_scene_index(7), 7)
         self.assertEqual(server._pick_new_scene_index(3), 7)
+
+    def test_empty_converted_views_never_select_unconverted_scene(self):
+        server = self.make_server(())
+        self.assertEqual(server._pick_new_scene_index(7), 7)
+
+    def test_dataset_variant_matches_manifest_by_verified_view_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            variant = root / "with_lengths"
+            variant.mkdir()
+            paths = [variant / f"scene_focus_{focus}.npz" for focus in (11, 22)]
+            for path, focus in zip(paths, (11, 22)):
+                np.savez(path, scenario_id="scene", agent_ids=np.array([focus]))
+            binary = root / "map_000.bin"
+            binary.write_bytes(b"map")
+            manifest_path = root / "manifest.csv"
+            with manifest_path.open("w", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=(
+                    "scenario_id", "focus_track_id", "npz_path", "puffer_bin_path",
+                ))
+                writer.writeheader()
+                for path, focus in zip(paths, (11, 22)):
+                    writer.writerow(dict(
+                        scenario_id="scene", focus_track_id=focus,
+                        npz_path=root / "original" / path.name,
+                        puffer_bin_path=binary if focus == 11 else root / "missing.bin",
+                    ))
+            server = self.make_server(())
+            server.dataset = SimpleNamespace(paths=paths)
+            server.puffer_manifest = ScenarioManifest(manifest_path)
+            self.assertEqual(server._mapped_puffer_scene_indices(), (0,))
 
     def test_priority_queue_is_visited_in_order_before_remaining_scenes(self):
         server = self.make_server((2, 5, 7, 9))

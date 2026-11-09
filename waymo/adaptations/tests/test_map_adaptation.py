@@ -214,3 +214,43 @@ def test_manifest_rebases_old_paths_without_modifying_file():
         rows=rebase_manifest_rows([row],root)
         assert rows[0]['npz_path']==str(source.resolve())
         assert rows[0]['tfrecord_path']=='/old/raw.tfrecord'
+
+
+def test_launcher_survives_script_rewrite_during_preparation():
+    """Reproduce the live edit failure without CUDA, tmux or training work."""
+    import os
+    import subprocess
+    import tempfile
+    import time
+    from pathlib import Path
+    launcher=Path(__file__).resolve().parents[1]/'launch_stage1_tmux.sh'
+    with tempfile.TemporaryDirectory() as folder:
+        root=Path(folder);script=root/'repo/waymo/adaptations/launch_stage1_tmux.sh'
+        script.parent.mkdir(parents=True);script.write_text(launcher.read_text())
+        fake=root/'python'
+        fake.write_text('''#!/bin/bash
+printf '%s\\n' "$1" >> "$CALLS"
+if [[ "$1" == *index_scenarios.py ]]; then
+  touch "$READY"
+  while [[ ! -f "$RELEASE" ]]; do sleep .05; done
+fi
+''')
+        fake.chmod(0o755)
+        env=dict(os.environ,PYTHON=str(fake),READY=str(root/'ready'),RELEASE=str(root/'release'),CALLS=str(root/'calls'))
+        process=subprocess.Popen(['bash',str(script),'--worker'],env=env,
+                                  stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        try:
+            deadline=time.monotonic()+10
+            while not (root/'ready').exists() and time.monotonic()<deadline:
+                if process.poll() is not None:break
+                time.sleep(.05)
+            assert (root/'ready').exists(), 'Mock index stage did not start'
+            # Truncate and replace the active script, including invalid shell text.
+            script.write_text('do\n'*1000)
+            (root/'release').touch()
+            stdout,stderr=process.communicate(timeout=10)
+            assert process.returncode==0,(stdout,stderr)
+            calls=(root/'calls').read_text().splitlines()
+            assert calls[-2:]==['waymo/adaptations/prepare_map_cache.py','waymo/adaptations/run_stage1.py']
+        finally:
+            if process.poll() is None:process.kill();process.wait()

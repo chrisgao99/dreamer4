@@ -1,0 +1,1 @@
+2026-11-03: stage2 fixed (sequential exact candidate scoring; batched scoring failed replay check on trained model). Snapshot train_mon80_ddp.py/launch_tmux.sh replaced; restarted on GPUs 0,1,3 shared with other users.

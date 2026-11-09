@@ -1,0 +1,22 @@
+{
+  "train": {
+    "files": 2,
+    "flow_loss": 0.6028710603713989,
+    "edges": 6360,
+    "map_segments": [
+      2025,
+      3119
+    ],
+    "gpu_peak_mib": null
+  },
+  "val": {
+    "files": 2,
+    "flow_loss": 0.5772244930267334,
+    "edges": 4436,
+    "map_segments": [
+      1947,
+      2629
+    ],
+    "gpu_peak_mib": null
+  }
+}

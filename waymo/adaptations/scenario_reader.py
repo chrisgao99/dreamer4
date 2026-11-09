@@ -20,7 +20,15 @@ def scenario_class():
                 field.type = kind
     # double=1, int64=3, int32=5, string=9, float=2, bool=8
     message('Point', [('x',1,1,False),('y',2,1,False),('z',3,1,False)])
-    message('Lane', [('type',2,5,False),('polyline',8,'Point',True)])
+    message('Boundary', [('lane_start_index',1,5,False),('lane_end_index',2,5,False),
+                         ('boundary_feature_id',3,3,False),('boundary_type',4,5,False)])
+    message('Neighbor', [('feature_id',1,3,False),('self_start_index',2,5,False),
+                         ('self_end_index',3,5,False),('neighbor_start_index',4,5,False),
+                         ('neighbor_end_index',5,5,False),('boundaries',6,'Boundary',True)])
+    message('Lane', [('type',2,5,False),('polyline',8,'Point',True),
+                     ('entry_lanes',9,3,True),('exit_lanes',10,3,True),
+                     ('left_neighbors',11,'Neighbor',True),('right_neighbors',12,'Neighbor',True),
+                     ('left_boundaries',13,'Boundary',True),('right_boundaries',14,'Boundary',True)])
     message('RoadLine', [('type',1,5,False),('polyline',2,'Point',True)])
     message('RoadEdge', [('type',1,5,False),('polyline',2,'Point',True)])
     message('StopSign', [('lane',1,3,True),('position',2,'Point',False)])
@@ -30,7 +38,7 @@ def scenario_class():
                         ('crosswalk',8,'Polygon',False),('speed_bump',9,'Polygon',False),('driveway',10,'Polygon',False)])
     message('Light', [('lane',1,3,False),('state',2,5,False),('stop_point',3,'Point',False)])
     message('Dynamic', [('lane_states',1,'Light',True)])
-    message('State', [('center_x',2,1,False),('center_y',3,1,False),('valid',11,8,False)])
+    message('State', [('center_x',2,1,False),('center_y',3,1,False),('length',5,2,False),('width',6,2,False),('valid',11,8,False)])
     message('Track', [('id',1,5,False),('states',3,'State',True)])
     message('Scenario', [('scenario_id',5,9,False),('tracks',2,'Track',True),
                          ('dynamic_map_states',7,'Dynamic',True),('map_features',8,'Feature',True),
