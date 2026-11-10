@@ -1,0 +1,37 @@
+{
+  "out_dir": "/scratch/baz7dy/tri30/dreamer4/waymo/pair_order_z/runs/exp1_oracle_z_frozen_20261110/train",
+  "checkpoint": "/sfs/weka/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_laneconn_scratch100k_20261007/best.pt",
+  "labels_dir": "/sfs/weka/scratch/baz7dy/tri30/dreamer4/data/pair_order_z_labels_v1",
+  "steps": 8000,
+  "batch_size": 16,
+  "lr": 0.001,
+  "min_lr_ratio": 0.1,
+  "warmup_steps": 200,
+  "weight_decay": 0.0,
+  "grad_clip": 1.0,
+  "hidden": 128,
+  "eval_every": 500,
+  "val_batches": 60,
+  "num_workers": 5,
+  "seed": 0,
+  "log_every": 20,
+  "max_minutes": 0.0,
+  "wm": {
+    "path": "/sfs/weka/scratch/baz7dy/tri30/dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_laneconn_scratch100k_20261007/best.pt",
+    "step": 85000,
+    "best_val": 0.07639105682028458
+  },
+  "g_params": 18824,
+  "g_config": {
+    "n_heads": 8,
+    "hidden": 128,
+    "limit": 3.0,
+    "position_scale_m": 20.0,
+    "speed_scale_mps": 10.0
+  },
+  "train_samples_with_pairs": 10322,
+  "train_samples_total": 44998,
+  "val_samples_with_pairs": 1075,
+  "val_samples_total": 5002,
+  "val_samples_used": 960
+}
