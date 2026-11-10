@@ -2,7 +2,7 @@
 
 本方案的目标是改进 world model 在细节交互上的表现：减少碰撞，让通行顺序符合路权，并让车对对方的实际运动做出反应。做法是把"每对冲突车谁先过"做成 WM 内部一个有监督的 pair 变量 z，再把 z 变成去噪器 agent_attn 的 bias。小模型（pair head）先单独训练，再接入 WM。
 
-> **2026-11-10 更新**：新增第 8 节"WM 初版实验计划"，第一轮 WM 实验按第 8 节执行（finetune，不从头训练；先用 oracle z 冻结 WM 只训练 z→bias）。第 8.1 节汇总了小模型实验（rowz pilot / v2 / v3）对本方案的修改。
+> **2026-11-10 更新**：新增第 8 节"WM 初版实验计划"，第一轮 WM 实验按第 8 节执行（finetune，不从头训练；起点是 MoN 之前的 stage 1 `best.pt`（85k）；先用 oracle z 冻结 WM 只训练 z→bias）。第 8.1 节汇总了小模型实验（rowz pilot / v2 / v3）对本方案的修改。
 >
 > **路径约定**：文中所有路径都相对于 `tri30/`（另一台服务器上 `tri30/` 之后的路径相同）。注意各 checkpoint 的 `config.json` 里存的是本机绝对路径，换服务器时要用命令行参数覆盖。
 
@@ -203,7 +203,7 @@ steering 当时的加法，供对照：
 
 为什么不从头训练：
 
-- **可归因**：g 零初始化，第 0 步与 `best_ade.pt` 完全相同，之后的变化只能来自 z。从头训练有 run 间差异：dynbias stage 1 的 ADE −7.6%，碰撞却 +3.6 pt，分不清来源。
+- **可归因**：g 零初始化，第 0 步与起点 checkpoint 完全相同，之后的变化只能来自 z。从头训练有 run 间差异：dynbias stage 1 的 ADE −7.6%，碰撞却 +3.6 pt，分不清来源。
 - **成本**：从头训练要 stage 1 100k 加 MoN 10k，至少数天；冻结 finetune 单卡几小时。
 - **通道已验证**：steering 中 +2 logit 让 ego 只对 2310 等待，两侧都加时碰撞 0.81 → 0.10（第 1 节）。
 - 只有实验 1 和 1b 都失败、并且实验 2 表明 WM 表示里没有通行顺序信息时，才考虑从头训练。
@@ -234,10 +234,24 @@ steering 当时的加法，供对照：
 
 | 内容 | 路径 | 大小 |
 |---|---|---|
-| checkpoint（MoN step 9500） | `dreamer4/waymo/checkpoints/waymo_daf_laneconn90k_mon8_gt_unroll80_b5_detach0_10k_20261009/best_ade.pt` 和 `config.json` | 431 MB |
+| checkpoint（stage 1，step 85000，MoN 之前） | `dreamer4/waymo/checkpoints/waymo_daf_h40_b5_typeaware_vxvy_smarttrajtok_laneconn_scratch100k_20261007/best.pt` | 431 MB |
 | 训练和验证数据（含统计文件 `direct_action_stats_typeaware_h40_l11_phys5_yaw075_reexec025_8192_v1.json`） | `dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/{train,val}` | 4.6 GB（train 44,998 个样本） |
 | map cache | `dreamer4/data/waymo_map_smarttrajtok_5m_v2` | 12 GB |
 | lane topology | `dreamer4/data/waymo_lane_connectivity_5m_v1` | 0.5 GB |
+
+**起点 checkpoint 的说明**：
+
+- 它是第 1 节目标模型（MoN `best_ade.pt`）的第一阶段。MoN 的 `config.json` 里写的起点是同目录的 `step_000090000.pt`，这个文件已删除；目录里只剩 `best.pt`（按验证集 flow loss 选出，step 85000，val 0.0764）和 `metrics.jsonl`。所以起点比 MoN 的初始化早 5k 步。mon_select 的两个 run 也是从这个 `best.pt` 开始的。
+- 用 `ema_model` 权重：MoN 初始化时加载的是 `ema_model`（`train_waymo_direct_action_flow_mon80.py`），512 评估默认也是 `--weights ema`。
+- 这个目录没有 `config.json`，训练参数存在 checkpoint 的 `args` 里（`data_dir`、`val_data_dir`、`map_cache_dir`、`lane_topology_dir`、`action_stats_path` 等）。它们是本机绝对路径，换服务器时要覆盖。
+- 选它而不是 MoN 模型的原因：
+  - 实验 1 用 stage 1 的 flow loss 训练 g，这正是这个 checkpoint 本身的训练目标；MoN 之后的模型已经被闭环 best-of-8 改过，flow loss 不再是它最后优化的目标。
+  - 后面若在 MoN 阶段加 z，有现成的对照：mon_select 的 A run（从同一个 85k `best.pt` 做普通 MoN），`dreamer4/waymo/checkpoints/waymo_daf_laneconn85k_mon8_select_ade_unroll80_b5_detach0_20261106/final.pt`。
+- 代价：
+  - stage 1 的闭环 ADE 比 MoN 差（见 8.3），rollout 更散，z 的效果可能被噪声冲淡一些。
+  - 第 1 节的 probe 和 steering 证据（head 3 负责"等待"、+2 logit 让 ego 只等 2310 等）都是在 MoN 模型上测的，在 stage 1 上不一定完全一样。
+
+**数据格式**：
 
 - 每个样本的 `agents` 是 (32, 91, 8)，列为 x, y, speed, vx, vy, valid, yaw, type，即 32 辆车的完整 9.1 s 日志轨迹，另有 `agent_lengths`。
 - 所以 **z 标签直接从样本算**，不需要按 scenario_id 对接审计表，也不需要路权。
@@ -281,17 +295,16 @@ steering 当时的加法，供对照：
 
 ### 8.3 实验 1 的评估
 
-1. **先重跑基线。**
-   - 现有 512 场景结果（`dreamer4/waymo/eval_results/world_model/monbest_512_k32_closedloop_holonomic_20261014/laneconn90k/`）对应的是 step 8000 的快照（`dreamer4/waymo/checkpoints/mon_best_eval_snapshot_20261014/laneconn90k_best_ade.pt`），不是当前的 `best_ade.pt`（step 9500）。快照的结果：
+1. **先重跑基线。** 85k `best.pt` 还没有 512 场景结果。现有的相近结果（同一批 512 场景，每场景 32 个 rollout，闭环 holonomic）：
 
-     | 指标 | 值 |
-     |---|---|
-     | ADE / minADE | 1.941 / 1.235 |
-     | CPD | 0.168 |
-     | 碰撞场景-rollout 率 | 0.429（日志本身在同一 proxy 下为 0.186） |
-     | offroad | 0.388 |
+   | 模型 | ADE | minADE | CPD | 碰撞场景-rollout 率 | offroad |
+   |---|---|---|---|---|---|
+   | stage 1，step 90000（已删除） | 2.382 | 1.377 | 0.221 | 0.417 | 0.395 |
+   | MoN，step 8000 快照 | 1.941 | 1.235 | 0.168 | 0.429 | 0.388 |
+   | 日志本身（同一 proxy） | | | | 0.186 | |
 
-   - 用新代码路径、z = 未知重跑 step 9500，并确认与原代码路径在相同种子下输出一致，以此检查钩子。
+   - 出处：stage 1 90k 在 `dreamer4/waymo/eval_results/world_model/mapadapt_laneconn_512_k32_closedloop_holonomic_20261008/laneconn_90k/`，MoN 快照在 `dreamer4/waymo/eval_results/world_model/monbest_512_k32_closedloop_holonomic_20261014/laneconn90k/`。
+   - 用新代码路径、z = 未知重跑 85k `best.pt`，并确认与原代码路径在相同种子下输出一致，以此检查钩子。评估参数照 `launch_eval_mapadapt_laneconn_512_tmux.sh`（`--weights ema --focus_mode generate_all`）。
 2. **512 场景闭环评估**（`dreamer4/waymo/evaluation/eval_waymo_direct_action_flow_multisample.py`，启动方式同 `launch_eval_monbest_512_tmux.sh`，每场景 32 个 rollout），对比三种 z：
    - **未知**：就是基线。
    - **oracle**：每次重规划（每 5 步）更新。
@@ -305,8 +318,8 @@ steering 当时的加法，供对照：
    - ADE、minADE、CPD、offroad；
    - 冻结车辆比例和"一直不起步"比例；
    - 有标签车对在 rollout 中的通行顺序与日志的一致率。
-4. **三个 steering 场景**，用同样的配对种子：95720e9471028705:6062、3a99d1ec2d955550:619、47e836ed96e19bda:1275（工具在 `wm_interaction_probe/`）。
-5. **`wm_interaction_probe/bias_effect.py`**：确认冲突对上 bias 在 2 logit 左右，不到 4。
+4. **三个 steering 场景**，用同样的配对种子：95720e9471028705:6062、3a99d1ec2d955550:619、47e836ed96e19bda:1275（工具在 `wm_interaction_probe/`）。原来的数字是 MoN 模型上的，先在 85k 上跑一遍 z = 未知的基线（碰撞率、起步时间）。
+5. **`wm_interaction_probe/bias_effect.py`**：确认冲突对上 bias 在 2 logit 左右，不到 4。stage 1 的 head 分工可能和 MoN 模型不同，不要照搬"head 3 = 等待"。
 6. **近似第 0 步的分格**：oracle z 消掉的碰撞约等于"顺序没定"类；oracle z 下仍然存在的标签车对碰撞，是"顺序定了但间隔太短"或"路径切得太狠"，再按路径偏离区分这两类。
 
 **判定**：
@@ -317,10 +330,10 @@ steering 当时的加法，供对照：
 
 ### 8.4 实验 1b（实验 1 不够时）
 
-- 用小学习率解冻去噪器（MoN 原配置 lr 1e-6），z-dropout 0.2，仍用真值 z 的 flow loss。
+- 用小学习率解冻去噪器（参考：MoN 原配置 lr 1e-6），z-dropout 0.2，仍用真值 z 的 flow loss。
 - 同样的评估，并检查 z = 未知时没有偏离基线。
 - 有效：说明需要 WM 本身学会用 z，只加 bias 不够。
-- 仍无效：再考虑在 MoN 阶段（闭环 best-of-8，`train_mon80_ddp.py` 或 `train_waymo_direct_action_flow_mon80_select.py`）加 z，或从头训练。
+- 仍无效：再考虑在 MoN 阶段（闭环 best-of-8，`train_mon80_ddp.py` 或 `train_waymo_direct_action_flow_mon80_select.py`）加 z，对照是 mon_select A 的 `final.pt`（同起点、不加 z）；或者从头训练。
 
 ### 8.5 实验 2（实验 1 成立之后）：把 oracle z 换成预测的 z
 

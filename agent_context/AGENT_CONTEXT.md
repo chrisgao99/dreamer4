@@ -32,7 +32,8 @@ Plan agreed with the user; not yet implemented.
   4. unfreeze;
   5. interventions / DPO.
 - 2026-11-10 update (§8 of the plan): the first WM round is a finetune, not a
-  retrain. Experiment 1 = oracle z (logged pass order) with the WM frozen,
+  retrain, starting from the pre-MoN stage-1 `best.pt` (laneconn scratch100k,
+  step 85000, EMA weights). Experiment 1 = oracle z (logged pass order) with the WM frozen,
   training only the zero-init z→bias module g with the stage-1 flow loss, then
   512-scene closed-loop eval with z unknown / oracle / flipped. Experiment 2 =
   A2 head (frozen WM tokens, 3 classes). §8.1 lists what the small rowz models
