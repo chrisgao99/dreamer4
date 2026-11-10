@@ -2,9 +2,13 @@
 
 本方案的目标是改进 world model 在细节交互上的表现：减少碰撞，让通行顺序符合路权，并让车对对方的实际运动做出反应。做法是把"每对冲突车谁先过"做成 WM 内部一个有监督的 pair 变量 z，再把 z 变成去噪器 agent_attn 的 bias。小模型（pair head）先单独训练，再接入 WM。
 
+> **2026-11-10 更新**：新增第 8 节"WM 初版实验计划"，第一轮 WM 实验按第 8 节执行（finetune，不从头训练；先用 oracle z 冻结 WM 只训练 z→bias）。第 8.1 节汇总了小模型实验（rowz pilot / v2 / v3）对本方案的修改。
+>
+> **路径约定**：文中所有路径都相对于 `tri30/`（另一台服务器上 `tri30/` 之后的路径相同）。注意各 checkpoint 的 `config.json` 里存的是本机绝对路径，换服务器时要用命令行参数覆盖。
+
 ## 1. 背景：为什么要改 representation，不是挑样本
 
-**目标模型**：`waymo/checkpoints/waymo_daf_laneconn90k_mon8_gt_unroll80_b5_detach0_10k_20261009/best_ade.pt`。
+**目标模型**：`dreamer4/waymo/checkpoints/waymo_daf_laneconn90k_mon8_gt_unroll80_b5_detach0_10k_20261009/best_ade.pt`（MoN step 9500）。
 
 - 结构：
   - 11 帧（1.1 s）历史；
@@ -15,7 +19,7 @@
   - 轨迹看起来真实，能复现日志，也有足够的随机性；
   - 但部分场景的碰撞率达到 50–80%，重采样多少次都一样。
 
-**已有证据**（细节见 `RELATIVE_AGENT_BIAS_ATTENTION_ANALYSIS_2026_11_05.md` §5、§10、§11，以及 `/p/yufeng/tri30/wm_interaction_probe/`）：
+**已有证据**（细节见 `dreamer4/agent_context/RELATIVE_AGENT_BIAS_ATTENTION_ANALYSIS_2026_11_05.md` §5、§10、§11，以及 `wm_interaction_probe/`）：
 
 - **决策在 t0 的快照上就定了，之后不看对方怎么动。** 例如 ego 何时起步，由 t0 时冲突车的位置和速度决定。
   - 单条 rollout 内，起步时间与对方实际运动的相关约为 0。
@@ -39,7 +43,7 @@
   - flow 可以把"走"和"等"都保留成模式，却不需要把选哪个和对方的状态联系起来。
   - 所以 80% 碰撞的场景里，"走"这个模式的概率本身就是错的。
 
-**路权与通行顺序数据**：`/p/yufeng/tri30/waymo_interaction_screening/results/row_audit_step0_v5_20261105/`（SUMMARY.md、analysis/、pairs/）。
+**路权与通行顺序数据**：`waymo_interaction_screening/results/row_audit_step0_v5_20261105/`（SUMMARY.md、analysis/、pairs/）。
 
 - 规模：421,825 对，2,331,398 行（pair × 时刻）。
 - t0 路口、路权已知：train + val 共 85,580 对。
@@ -144,6 +148,8 @@ steering 当时的加法，供对照：
 
 ## 4. 执行步骤
 
+> 2026-11-10：第一轮改按第 8 节执行。第 8 节的实验 1 对应这里的第 3 步（但用 oracle z、不需要 head），实验 2 对应第 2 步的 A2。第 0 步的分格可以用实验 1 的结果近似（见 8.3）；第 1 步的路权与 v5.1 推迟。
+
 0. **WM 失败分格表**（只需推理）。
    - 在 ROW 已知的 pair 上采样 WM，并存下样本。
    - 按"路权类型 × margin_N"分格，统计碰撞率和 P(N 先过)，与 SUMMARY 表对比。
@@ -183,9 +189,168 @@ steering 当时的加法，供对照：
 
 ## 7. 相关文件
 
-- 路权审计：`/p/yufeng/tri30/waymo_interaction_screening/results/row_audit_step0_v5_20261105/`，代码在 `source_snapshot/`（`row_audit_extract.py` 中的 `row_label`、`pair_rows`）。
-- candidate bank：`/p/yufeng/tri30/waymo_interaction_screening/candidate_bank_v1_20261022`（说明见 `CANDIDATE_BANK.md`）。
-- 交互 probe 和 steering 工具：`/p/yufeng/tri30/wm_interaction_probe/`（`bias_steer.py`、`bias_effect.py`、`attn_vs_outcome.py`、`steer_scale.py`）。
-- MoN 违规挑选：`waymo/training/world_model/mon_violations.py`、`train_waymo_direct_action_flow_mon80_select.py`。
-- dynbias（FutureAgentBias，可复用为注入 bias 的钩子）：`waymo/dynamic_agent_bias/`。
-- toy 的 MATS 和 policy（alpha 条件化、pair_free 规则）：`/p/yufeng/tri30/MATS/waymo_mats/toy/three_style.py`。
+- 路权审计：`waymo_interaction_screening/results/row_audit_step0_v5_20261105/`，代码在 `source_snapshot/`（`row_audit_extract.py` 中的 `row_label`、`pair_rows`）。
+- candidate bank：`waymo_interaction_screening/candidate_bank_v1_20261022`（说明见 `CANDIDATE_BANK.md`）。
+- 交互 probe 和 steering 工具：`wm_interaction_probe/`（`bias_steer.py`、`bias_effect.py`、`attn_vs_outcome.py`、`steer_scale.py`）。
+- MoN 违规挑选：`dreamer4/waymo/training/world_model/mon_violations.py`、`train_waymo_direct_action_flow_mon80_select.py`。
+- dynbias（FutureAgentBias，可复用为注入 bias 的钩子）：`dreamer4/waymo/dynamic_agent_bias/`。
+- toy 的 MATS 和 policy（alpha 条件化、pair_free 规则）：`MATS/waymo_mats/toy/three_style.py`。
+- 小模型（rowz）代码：`MATS/waymo_mats/rowz/`（`models.py`、`v2.py`、`v3.py`、`zexp.py`）；运行和分析：`MATS/waymo_runs/rowz_pilot_20261109/`、`rowz_zhead_present_20261109/`、`rowz_v2_20261109/`、`rowz_v3_20261110/`。
+
+## 8. WM 初版实验计划（2026-11-10，尚未实现）
+
+**结论：finetune，不从头训练。** 第一个实验只回答本方案的核心问题：如果 WM 知道每对冲突车谁先过（oracle z，取自日志），碰撞会不会明显下降。WM 本体冻住，只训练一个零初始化的 z→bias 小模块 g。
+
+为什么不从头训练：
+
+- **可归因**：g 零初始化，第 0 步与 `best_ade.pt` 完全相同，之后的变化只能来自 z。从头训练有 run 间差异：dynbias stage 1 的 ADE −7.6%，碰撞却 +3.6 pt，分不清来源。
+- **成本**：从头训练要 stage 1 100k 加 MoN 10k，至少数天；冻结 finetune 单卡几小时。
+- **通道已验证**：steering 中 +2 logit 让 ego 只对 2310 等待，两侧都加时碰撞 0.81 → 0.10（第 1 节）。
+- 只有实验 1 和 1b 都失败、并且实验 2 表明 WM 表示里没有通行顺序信息时，才考虑从头训练。
+
+### 8.1 小模型实验对本方案的修改
+
+小模型是一维纵向执行层（车沿日志路线走），设置和 WM 不同，但下面几点直接影响 WM 计划：
+
+1. **z 是很强的控制量，但会被盲目执行**（`MATS/waymo_runs/rowz_pilot_20261109/analysis/z_effect.md`）。
+   - 碰撞按真值 z < head z < 未知 z 递增（policy 0.6% / 1.3% / 3.0%）。
+   - 反转 z 后对方进入时间移动约 1 s（困难样本 1.1–1.7 s），碰撞增加 9–18 pt。
+   - 所以 oracle z 实验有意义，同时 head 的校准很关键。
+2. **只看当前信息的 z head 可行；给了路线信息后，路权标签没有额外贡献**（`MATS/waymo_runs/rowz_zhead_present_20261109/README.md`）。
+   - 只用 1.1 s 历史 + 地图分支 + route head：0.950；告诉它日志对应的地图分支：0.956；只有历史、没有地图：0.915。
+   - 在给了日志路线的条件下，加不加路权标签都是约 0.98（0.976 / 0.980）。"只看当前 + 路权"没测过。
+   - 所以第一轮不用路权，v5.1 推迟。
+3. **同向车对"前车先"一直不释放，会让后车卡住**：pilot 里 11% 的后车没再起步，v2 加了"相距 > 20 m 或 > 2 s 就释放"后降到 0–2%。第一轮 WM 只给交叉和对向车对加 z。
+4. **只靠 z 学不会对意外动作的反应**（`rowz_pilot_20261109/analysis/counterfactual_split.md`、`rowz_v2_20261109/analysis/brake_before_flip.md`）。
+   - ego 突然抢行时，对方进入时间只推后 0–0.25 s，碰撞 27–35%。v2 每 0.5 s 重估 z 也没改善。
+   - z 会翻，但太晚；z 冻住时约 25% 的样本仍会刹车，但几乎都是 ego 车身压到自己路线上之后才刹。
+   - 所以实验 1、2 只针对 WM 控制的车之间的协调（80% 碰撞场景的主因：联合 79% vs 打乱 77%）。若 ego 由外部控制（游戏、规划器），必须加 §3.6 的干预训练和明确的让行目标。
+5. **回放 ego 时，通行顺序准确率天然约 0.99**，没有参考价值。WM 评估要看闭环碰撞和反事实测试。
+6. 小模型里还有三处在 z head 之外用了日志未来路径：决定哪些车对有冲突、按实际进入顺序覆盖 z、同向释放的距离。WM 部署时这些都要换成模型自己的判断（见实验 2 的 3 类 head）。
+
+### 8.2 实验 1（核心）：oracle z，冻结 WM，只训练 g
+
+**起点和数据**（换服务器需要拷贝）：
+
+| 内容 | 路径 | 大小 |
+|---|---|---|
+| checkpoint（MoN step 9500） | `dreamer4/waymo/checkpoints/waymo_daf_laneconn90k_mon8_gt_unroll80_b5_detach0_10k_20261009/best_ade.pt` 和 `config.json` | 431 MB |
+| 训练和验证数据（含统计文件 `direct_action_stats_typeaware_h40_l11_phys5_yaw075_reexec025_8192_v1.json`） | `dreamer4/data/waymo_vector_dataset_ooi_centered_50k_with_lengths/{train,val}` | 4.6 GB（train 44,998 个样本） |
+| map cache | `dreamer4/data/waymo_map_smarttrajtok_5m_v2` | 12 GB |
+| lane topology | `dreamer4/data/waymo_lane_connectivity_5m_v1` | 0.5 GB |
+
+- 每个样本的 `agents` 是 (32, 91, 8)，列为 x, y, speed, vx, vy, valid, yaw, type，即 32 辆车的完整 9.1 s 日志轨迹，另有 `agent_lengths`。
+- 所以 **z 标签直接从样本算**，不需要按 scenario_id 对接审计表，也不需要路权。
+- 样本里没有车宽：按类型取默认宽度，取值与评估的碰撞检测一致。
+
+**z 标签**（离线预计算，CPU；每个样本存一组车对记录）：
+
+- **车对**：只做 vehicle–vehicle，两车都要有效。两车日志路径空间重叠（中心距 < 两车半宽之和 + 0.5 m，不要求同时到），且重叠处航向差 ≥ 30°（交叉或对向）。
+- **每对存**：i、j、两车各自的进入帧和离开帧（车中心第一次进入、最后离开自己路径上的重叠段），以及交叉角。
+- **在训练时刻 t 给标签**（t 是 `select_window_anchors` 选出的窗口起点，范围是第 10–50 帧，所以标签在 batch 里在线算）：
+
+  | t 时刻的状态 | 标签 |
+  |---|---|
+  | 两车都还没进入 | 日志先后（一辆在日志结束前进入、另一辆没进入，也算进入的那辆先） |
+  | 先过的车还在重叠段内 | 它先 |
+  | 先过的车已经离开 | 不加 bias |
+  | 同帧进入；t 时两车都已在重叠段内；两车在日志结束前都没进入 | 未知，不加 bias |
+
+- 同向车对、非机动车第一轮不加 z。
+- 预计算完先统计：每个样本平均有几对标签；按 t 统计各类比例；随机抽 20 对画出来，用肉眼检查。
+
+**z→bias 模块 g**：
+
+- b_ij^h = 3·tanh(MLP(z 的 one-hot, pair 特征))，每个 head 一个数，最后一层零初始化。
+- z 未知或没有冲突时 b = 0，此时就是原模型。
+- 每对两个方向都算：query i/key j 用 z_ij，query j/key i 用 z_ji，模块共用。
+- pair 特征只用当前时刻：j 在 i 坐标系下的相对位置、航向差、距离，以及两车速度。不用冲突区距离这类来自日志未来路径的量，这样实验 2 换成预测的 z 时 g 能原样复用。
+- **只加在去噪器 agent_attn 上**，复用 dynbias 的 `chunk_bias` 钩子：
+  - 位置是 `dreamer4/waymo/training/world_model/direct_action_flow.py` 中 `JointActionDiTBlock.forward` 的 `relation_bias + scene.chunk_bias`（第 937 行附近，`chunk_bias` 在第 1151 行附近赋值）；
+  - 8 层共用，所有 chunk 和 flow 步共用；
+  - 编码器和 scene_cross 不加（第 3.2 节）。
+
+**训练**：
+
+- loss 用 stage 1 的 flow loss（`flow_matching_loss`）：日志历史，随机起点，teacher-forced 真值 z。
+- WM 全部冻住并用 eval 模式（关 dropout），只更新 g（几万个参数）。
+- 单卡 batch 16，lr 约 1e-3，5–10k 步，每 500 步验证一次。stage 1 单卡约 1.3 updates/s，预计 2–3 h。
+- 训练中记录：
+  - 验证集 flow loss，真值 z 对比未知，看全部车和有标签车对上的车；按"第二辆车的进入帧是否落在 4 s 窗口内"分开；
+  - 有标签车对上 bias 的分布（每个 head 的均值，以及 |b| > 3 的比例）。
+
+### 8.3 实验 1 的评估
+
+1. **先重跑基线。**
+   - 现有 512 场景结果（`dreamer4/waymo/eval_results/world_model/monbest_512_k32_closedloop_holonomic_20261014/laneconn90k/`）对应的是 step 8000 的快照（`dreamer4/waymo/checkpoints/mon_best_eval_snapshot_20261014/laneconn90k_best_ade.pt`），不是当前的 `best_ade.pt`（step 9500）。快照的结果：
+
+     | 指标 | 值 |
+     |---|---|
+     | ADE / minADE | 1.941 / 1.235 |
+     | CPD | 0.168 |
+     | 碰撞场景-rollout 率 | 0.429（日志本身在同一 proxy 下为 0.186） |
+     | offroad | 0.388 |
+
+   - 用新代码路径、z = 未知重跑 step 9500，并确认与原代码路径在相同种子下输出一致，以此检查钩子。
+2. **512 场景闭环评估**（`dreamer4/waymo/evaluation/eval_waymo_direct_action_flow_multisample.py`，启动方式同 `launch_eval_monbest_512_tmux.sh`，每场景 32 个 rollout），对比三种 z：
+   - **未知**：就是基线。
+   - **oracle**：每次重规划（每 5 步）更新。
+     - 顺序取日志。
+     - 状态取 rollout：先过的车在 rollout 里越过自己重叠段的出口，才释放（把 rollout 位置投影到它的日志路径上判断）。
+     - 任一车偏离日志路径超过 2 m 的车对改为未知。
+     - rollout 里后车反而先进入时，按实际进入顺序（已在重叠段内的车先）。
+   - **反转**：顺序反过来，检验 g 的控制力。
+3. **指标**：
+   - 碰撞（场景-rollout 率、agent-time 率，同一 proxy），并单独统计有标签车对之间的碰撞；
+   - ADE、minADE、CPD、offroad；
+   - 冻结车辆比例和"一直不起步"比例；
+   - 有标签车对在 rollout 中的通行顺序与日志的一致率。
+4. **三个 steering 场景**，用同样的配对种子：95720e9471028705:6062、3a99d1ec2d955550:619、47e836ed96e19bda:1275（工具在 `wm_interaction_probe/`）。
+5. **`wm_interaction_probe/bias_effect.py`**：确认冲突对上 bias 在 2 logit 左右，不到 4。
+6. **近似第 0 步的分格**：oracle z 消掉的碰撞约等于"顺序没定"类；oracle z 下仍然存在的标签车对碰撞，是"顺序定了但间隔太短"或"路径切得太狠"，再按路径偏离区分这两类。
+
+**判定**：
+
+- oracle 明显降低碰撞（场景配对 bootstrap 显著），冻结和"一直不起步"不上升，ADE 不明显变差：方向成立，进入实验 2。
+- 反转 z 能翻转相当一部分标签车对的通行顺序：g 有控制力。
+- oracle 几乎不降碰撞：做实验 1b。
+
+### 8.4 实验 1b（实验 1 不够时）
+
+- 用小学习率解冻去噪器（MoN 原配置 lr 1e-6），z-dropout 0.2，仍用真值 z 的 flow loss。
+- 同样的评估，并检查 z = 未知时没有偏离基线。
+- 有效：说明需要 WM 本身学会用 z，只加 bias 不够。
+- 仍无效：再考虑在 MoN 阶段（闭环 best-of-8，`train_mon80_ddp.py` 或 `train_waymo_direct_action_flow_mon80_select.py`）加 z，或从头训练。
+
+### 8.5 实验 2（实验 1 成立之后）：把 oracle z 换成预测的 z
+
+- **先做 A2**：
+  - 输入：冻结的 WM 编码器在当前时刻的 agent token，加上与 g 相同的当前 pair 特征。
+  - 输出 3 类：i 先、j 先、无冲突。
+  - 训练范围：50 m 内所有车辆对，第 10–80 帧中每 5 帧（0.5 s）一个时刻。
+  - 标签来自 8.2 的同一份预计算：路径不重叠记为无冲突，先过的车离开后也记为无冲突；同向车对和未知的不计入 loss。
+  - 报告准确率、log-loss、ECE，按全部、困难、远（第一辆车进入时间 ≥ 4 s）分开。小模型 C2 的 0.950 只能粗略参照，因为数据和车对定义不同。
+- **为什么先做 A2**：在 WM 内部最容易实现，也直接回答"WM 表示里有没有通行顺序信息"。A1（小模型 C2 那样的地图分支特征）工作量大，A2 不够好再做。
+- **闭环**：
+  - 每次重规划用 head 算 p(z)，每对只采一个、两车共用。
+  - 滞回：当前类的概率低于 0.35 才换。
+  - 释放由 head 的"无冲突"类负责，不再用日志路径。
+  - 对比 未知 / head / oracle。
+
+### 8.6 这一轮不做的
+
+- 路权输入和 v5.1；
+- 同向车对的 z；
+- §3.6 的干预训练、§3.5 的 DAgger 规则标签、碰撞损失、flow-DPO。
+
+如果实验 1、2 成立，下一轮先加干预训练，原因见 8.1 第 4 点。
+
+### 8.7 代码组织（建议）
+
+新目录 `dreamer4/waymo/pair_order_z/`：
+
+- `make_z_labels.py`：CPU 预计算每个样本的车对记录；
+- `z_bias.py`：g 模块和"按时刻 t 给标签"的函数；
+- `train_zbias_frozen.py`：实验 1 的训练；
+- 评估：在 `eval_waymo_direct_action_flow_multisample.py` 里加 z 来源选项（未知 / oracle / 反转 / head）；
+- `launch_*.sh`：所有路径都写相对于 `tri30/` 的路径，用一个根目录变量拼接。
