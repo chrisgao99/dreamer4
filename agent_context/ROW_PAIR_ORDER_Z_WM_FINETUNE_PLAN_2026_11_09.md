@@ -248,7 +248,7 @@ steering 当时的加法，供对照：
 - 这个目录没有 `config.json`，训练参数存在 checkpoint 的 `args` 里（`data_dir`、`val_data_dir`、`map_cache_dir`、`lane_topology_dir`、`action_stats_path` 等）。它们是本机绝对路径，换服务器时要覆盖。
 - 选它而不是 MoN 模型的原因：
   - 实验 1 用 stage 1 的 flow loss 训练 g，这正是这个 checkpoint 本身的训练目标；MoN 之后的模型已经被闭环 best-of-8 改过，flow loss 不再是它最后优化的目标。
-  - 后面若在 MoN 阶段加 z，有现成的对照：mon_select 的 A run（从同一个 85k `best.pt` 做普通 MoN），`dreamer4/waymo/checkpoints/waymo_daf_laneconn85k_mon8_select_ade_unroll80_b5_detach0_20261106/final.pt`。
+  - 后面若在 MoN 阶段加 z，有现成的对照：mon_select 的 A run（从同一个 85k `best.pt` 做普通 MoN），`dreamer4/waymo/checkpoints/waymo_daf_laneconn85k_mon8_select_ade_unroll80_b5_detach0_20261106/best_ade.pt`。
 - 代价：
   - stage 1 的闭环 ADE 比 MoN 差（见 8.3），rollout 更散，z 的效果可能被噪声冲淡一些。
   - 第 1 节的 probe 和 steering 证据（head 3 负责"等待"、+2 logit 让 ego 只等 2310 等）都是在 MoN 模型上测的，在 stage 1 上不一定完全一样。
