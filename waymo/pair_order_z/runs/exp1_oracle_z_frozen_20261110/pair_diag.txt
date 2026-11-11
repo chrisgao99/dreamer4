@@ -1,0 +1,53 @@
+labelled pair x rollout rows: 6176  (pairs 193)
+code at anchor t=10 (fraction of pairs): {1: 0.819, 2: 0.171, 5: 0.01}
+
+== all labelled pairs: 193 pairs
+  oracle   yielder  |Δpos vs unknown| @2s 0.088  @4s 0.350  @8s 1.174 m
+  oracle   priority |Δpos vs unknown| @2s 0.075  @4s 0.239  @8s 0.671 m
+  oracle   non-pair veh (same scenes)        @2s 0.003  @4s 0.014  @8s 0.074 m
+  reversed yielder  |Δpos vs unknown| @2s 0.070  @4s 0.281  @8s 0.937 m
+  reversed priority |Δpos vs unknown| @2s 0.097  @4s 0.308  @8s 0.840 m
+  reversed non-pair veh (same scenes)        @2s 0.003  @4s 0.012  @8s 0.063 m
+  oracle   Δ distance travelled yielder  @2s -0.010 m (±0.008 pair-SE)  oracle   Δ distance travelled yielder  @4s +0.003 m (±0.034 pair-SE)  oracle   Δ distance travelled yielder  @8s +0.148 m (±0.113 pair-SE)
+  oracle   Δ distance travelled priority @2s +0.038 m (±0.006 pair-SE)  oracle   Δ distance travelled priority @4s +0.118 m (±0.020 pair-SE)  oracle   Δ distance travelled priority @8s +0.264 m (±0.048 pair-SE)
+  reversed Δ distance travelled yielder  @2s -0.014 m (±0.006 pair-SE)  reversed Δ distance travelled yielder  @4s -0.011 m (±0.028 pair-SE)  reversed Δ distance travelled yielder  @8s +0.124 m (±0.087 pair-SE)
+  reversed Δ distance travelled priority @2s +0.054 m (±0.007 pair-SE)  reversed Δ distance travelled priority @4s +0.163 m (±0.024 pair-SE)  reversed Δ distance travelled priority @8s +0.292 m (±0.061 pair-SE)
+  oracle   order outcome changed vs unknown: 156/6176 = 0.025; {'log->none': 38, 'log->rev': 8, 'log->tie': 6, 'none->log': 73, 'none->rev': 4, 'none->tie': 1, 'rev->log': 8, 'rev->none': 1, 'rev->tie': 6, 'tie->log': 7, 'tie->rev': 4}
+  reversed order outcome changed vs unknown: 144/6176 = 0.023; {'log->none': 30, 'log->rev': 8, 'log->tie': 4, 'none->log': 62, 'none->rev': 10, 'rev->log': 9, 'rev->none': 3, 'rev->tie': 8, 'tie->log': 9, 'tie->rev': 1}
+  unknown  log-order share among conflicts 0.844 (log 2334, rev 432, none 3367); mean entry gap 25.76 frames
+  oracle   log-order share among conflicts 0.846 (log 2370, rev 433, none 3328); mean entry gap 26.02 frames
+  reversed log-order share among conflicts 0.846 (log 2372, rev 431, none 3328); mean entry gap 25.99 frames
+
+== pairs still unresolved at t=10 (z carries an order): 191 pairs
+  oracle   yielder  |Δpos vs unknown| @2s 0.089  @4s 0.354  @8s 1.185 m
+  oracle   priority |Δpos vs unknown| @2s 0.076  @4s 0.241  @8s 0.678 m
+  oracle   non-pair veh (same scenes)        @2s 0.003  @4s 0.014  @8s 0.074 m
+  reversed yielder  |Δpos vs unknown| @2s 0.071  @4s 0.284  @8s 0.946 m
+  reversed priority |Δpos vs unknown| @2s 0.098  @4s 0.312  @8s 0.848 m
+  reversed non-pair veh (same scenes)        @2s 0.003  @4s 0.012  @8s 0.063 m
+  oracle   Δ distance travelled yielder  @2s -0.010 m (±0.008 pair-SE)  oracle   Δ distance travelled yielder  @4s +0.003 m (±0.035 pair-SE)  oracle   Δ distance travelled yielder  @8s +0.151 m (±0.114 pair-SE)
+  oracle   Δ distance travelled priority @2s +0.039 m (±0.006 pair-SE)  oracle   Δ distance travelled priority @4s +0.119 m (±0.020 pair-SE)  oracle   Δ distance travelled priority @8s +0.267 m (±0.048 pair-SE)
+  reversed Δ distance travelled yielder  @2s -0.014 m (±0.007 pair-SE)  reversed Δ distance travelled yielder  @4s -0.011 m (±0.028 pair-SE)  reversed Δ distance travelled yielder  @8s +0.126 m (±0.088 pair-SE)
+  reversed Δ distance travelled priority @2s +0.054 m (±0.008 pair-SE)  reversed Δ distance travelled priority @4s +0.165 m (±0.024 pair-SE)  reversed Δ distance travelled priority @8s +0.295 m (±0.062 pair-SE)
+  oracle   order outcome changed vs unknown: 156/6112 = 0.026; {'log->none': 38, 'log->rev': 8, 'log->tie': 6, 'none->log': 73, 'none->rev': 4, 'none->tie': 1, 'rev->log': 8, 'rev->none': 1, 'rev->tie': 6, 'tie->log': 7, 'tie->rev': 4}
+  reversed order outcome changed vs unknown: 144/6112 = 0.024; {'log->none': 30, 'log->rev': 8, 'log->tie': 4, 'none->log': 62, 'none->rev': 10, 'rev->log': 9, 'rev->none': 3, 'rev->tie': 8, 'tie->log': 9, 'tie->rev': 1}
+  unknown  log-order share among conflicts 0.844 (log 2333, rev 432, none 3304); mean entry gap 25.76 frames
+  oracle   log-order share among conflicts 0.845 (log 2369, rev 433, none 3265); mean entry gap 26.01 frames
+  reversed log-order share among conflicts 0.846 (log 2371, rev 431, none 3265); mean entry gap 25.99 frames
+
+== pairs already released at t=10: 2 pairs
+  oracle   yielder  |Δpos vs unknown| @2s 0.012  @4s 0.029  @8s 0.076 m
+  oracle   priority |Δpos vs unknown| @2s 0.002  @4s 0.007  @8s 0.035 m
+  oracle   non-pair veh (same scenes)        @2s 0.003  @4s 0.014  @8s 0.074 m
+  reversed yielder  |Δpos vs unknown| @2s 0.007  @4s 0.016  @8s 0.053 m
+  reversed priority |Δpos vs unknown| @2s 0.003  @4s 0.009  @8s 0.067 m
+  reversed non-pair veh (same scenes)        @2s 0.003  @4s 0.012  @8s 0.063 m
+  oracle   Δ distance travelled yielder  @2s -0.004 m (±0.002 pair-SE)  oracle   Δ distance travelled yielder  @4s -0.005 m (±0.008 pair-SE)  oracle   Δ distance travelled yielder  @8s -0.062 m (±0.026 pair-SE)
+  oracle   Δ distance travelled priority @2s -0.001 m (±0.000 pair-SE)  oracle   Δ distance travelled priority @4s -0.002 m (±0.001 pair-SE)  oracle   Δ distance travelled priority @8s +0.009 m (±0.002 pair-SE)
+  reversed Δ distance travelled yielder  @2s -0.002 m (±0.002 pair-SE)  reversed Δ distance travelled yielder  @4s -0.003 m (±0.005 pair-SE)  reversed Δ distance travelled yielder  @8s -0.048 m (±0.023 pair-SE)
+  reversed Δ distance travelled priority @2s -0.002 m (±0.000 pair-SE)  reversed Δ distance travelled priority @4s -0.001 m (±0.001 pair-SE)  reversed Δ distance travelled priority @8s +0.035 m (±0.001 pair-SE)
+  oracle   order outcome changed vs unknown: 0/64 = 0.000; {}
+  reversed order outcome changed vs unknown: 0/64 = 0.000; {}
+  unknown  log-order share among conflicts 1.000 (log 1, rev 0, none 63); mean entry gap 41.00 frames
+  oracle   log-order share among conflicts 1.000 (log 1, rev 0, none 63); mean entry gap 39.00 frames
+  reversed log-order share among conflicts 1.000 (log 1, rev 0, none 63); mean entry gap 40.00 frames

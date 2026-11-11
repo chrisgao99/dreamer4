@@ -1,0 +1,65 @@
+{
+ "view": "95720e9471028705:6062",
+ "other": 2310,
+ "K": 32,
+ "steps": 80,
+ "seed": 12346,
+ "checkpoint": "waymo/checkpoints/waymo_daf_laneconn90k_mon8_gt_unroll80_b5_detach0_10k_20261009/best_ade.pt",
+ "checkpoint_step": 9500,
+ "g": "/sfs/weka/scratch/baz7dy/tri30/dreamer4/waymo/pair_order_z/runs/exp1_oracle_z_frozen_20261110/train/zbias_best.pt",
+ "g_step": 1500,
+ "scenario_in_g_train_labels": false,
+ "labelled_pairs": [
+  {
+   "i": 0,
+   "j": 2,
+   "id_i": 6062,
+   "id_j": 2310,
+   "enter_i": 78,
+   "exit_i": 90,
+   "enter_j": 29,
+   "exit_j": 39,
+   "angle": 133,
+   "log_first": 2310
+  }
+ ],
+ "label_stats": {
+  "vehicles": 30,
+  "overlap": 1,
+  "same_dir": 0,
+  "pre_existing": 0,
+  "tie": 0
+ },
+ "identity_check": 0.0,
+ "results": {
+  "unknown": {
+   "collision_2310": 0.84375,
+   "ego_any_collision": 0.875,
+   "ego_collision_not_2310": 0.03125,
+   "t_hit_median": 2.8000000000000003,
+   "ego_start_median": 2.3000000000000003,
+   "ego_start_mean": 2.5625,
+   "ego_never_start": 0.0,
+   "ego_disp8s_median": 24.665027618408203,
+   "order": {
+    "collision": 0.84375,
+    "ego_first": 0.0,
+    "other_first": 0.125,
+    "no_cross": 0.03125
+   },
+   "pet_other_first_median": 3.45,
+   "ego_reach_conflict_median": 4.75,
+   "other_reach_conflict_median": 2.6,
+   "min_gap_median": -0.6904572248458862,
+   "other_mean_speed": 8.084554672241211,
+   "hit_with_ego_parked": 0.0625,
+   "hit_ego_speed_median": 2.033827066421509,
+   "ego_mean_speed": 3.2472286224365234,
+   "ego_turn_left": 0.9375,
+   "other_turn_left": 1.0,
+   "other_turn_right": 0.0,
+   "collision_given_other_left": 0.84375,
+   "scene_any_collision": 0.9375
+  }
+ }
+}

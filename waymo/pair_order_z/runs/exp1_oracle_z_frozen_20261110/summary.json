@@ -1,0 +1,282 @@
+{
+  "labelled_scenes": 115,
+  "scenes": 512,
+  "modes": {
+    "unknown": {
+      "mean_ade_m": 2.4685957431793213,
+      "minade_m": 1.4281270503997803,
+      "cpd": 0.2200808823108673,
+      "collision_scene_rollout": 0.4129638671875,
+      "collision_agent_time": 0.02482199113341221,
+      "offroad_scene_rollout_reliable": 0.35601806640625,
+      "offroad_agent_time_reliable": 0.01210841799561016,
+      "collision_scene_rollout_labelled_scenes": 0.3923913043478261,
+      "collision_agent_time_labelled_scenes": 0.019580297938924445,
+      "collision_scene_rollout_unlabelled_scenes": 0.41892317380352645,
+      "labelled_pairs": 193,
+      "pair_collision_rate": 0.07318652849740932,
+      "pass_order": {
+        "same_as_log": 0.37791450777202074,
+        "reversed": 0.06994818652849741,
+        "no_conflict": 0.5451748704663213,
+        "tie": 0.006962435233160621
+      },
+      "never_start_rate": 0.3764130434782609,
+      "never_start_eligible": 18400,
+      "never_start_rate_labelled_scenes": 0.6293103448275862,
+      "stuck_late_rate": 0.10444028121137207,
+      "stuck_late_eligible": 103552,
+      "bias_stats": null
+    },
+    "oracle": {
+      "mean_ade_m": 2.4678573608398438,
+      "minade_m": 1.432325005531311,
+      "cpd": 0.2199992537498474,
+      "collision_scene_rollout": 0.41339111328125,
+      "collision_agent_time": 0.024804885176262635,
+      "offroad_scene_rollout_reliable": 0.35565185546875,
+      "offroad_agent_time_reliable": 0.01208991828249802,
+      "collision_scene_rollout_labelled_scenes": 0.3942934782608696,
+      "collision_agent_time_labelled_scenes": 0.01950334427785402,
+      "collision_scene_rollout_unlabelled_scenes": 0.41892317380352645,
+      "labelled_pairs": 193,
+      "pair_collision_rate": 0.06865284974093264,
+      "pass_order": {
+        "same_as_log": 0.38374352331606215,
+        "reversed": 0.070110103626943,
+        "no_conflict": 0.538860103626943,
+        "tie": 0.007286269430051813
+      },
+      "never_start_rate": 0.37521739130434784,
+      "never_start_eligible": 18400,
+      "never_start_rate_labelled_scenes": 0.6253591954022989,
+      "stuck_late_rate": 0.10409262978986403,
+      "stuck_late_eligible": 103552,
+      "bias_stats": {
+        "yield": {
+          "edges": 35170,
+          "per_head_mean": [
+            -1.6223,
+            -0.7316,
+            -2.8944,
+            2.3594,
+            -2.2591,
+            -0.8223,
+            0.0189,
+            -2.5466
+          ],
+          "mean_abs": 1.9598313706942097,
+          "max_head_mean": 2.3878826751588997,
+          "frac_any_head_abs_gt_2.5": 0.9425362524879158
+        },
+        "priority": {
+          "edges": 35170,
+          "per_head_mean": [
+            -0.2077,
+            0.1979,
+            -0.973,
+            0.8527,
+            -0.1785,
+            -0.0717,
+            0.1919,
+            -0.3992
+          ],
+          "mean_abs": 1.034452231044894,
+          "max_head_mean": 1.63800763971288,
+          "frac_any_head_abs_gt_2.5": 0.214046061984646
+        }
+      },
+      "oracle_pair_replan_codes": {
+        "pre_entry_log_order": 0.26105084196891193,
+        "first_in_overlap": 0.09254574158031088,
+        "second_in_overlap": 0.0023174384715025907,
+        "both_in_unknown": 0.0014774935233160622,
+        "released": 0.3451566547927461,
+        "deviated_unknown": 0.27672644106217614,
+        "tie_unknown": 0.0,
+        "not_alive": 0.02072538860103627
+      },
+      "bootstrap_vs_unknown": {
+        "scene_collision_all": {
+          "n": 512,
+          "mean": 0.00042724609375,
+          "ci95": [
+            -0.000732421875,
+            0.0015869140625
+          ],
+          "p_ge_0": 0.7771
+        },
+        "scene_collision_labelled": {
+          "n": 115,
+          "mean": 0.0019021739130434783,
+          "ci95": [
+            -0.003260869565217391,
+            0.007065217391304348
+          ],
+          "p_ge_0": 0.7819
+        },
+        "pair_collision_by_scene": {
+          "n": 115,
+          "mean": -0.004257246376811594,
+          "ci95": [
+            -0.010416666666666666,
+            0.0010416666666666667
+          ],
+          "p_ge_0": 0.068
+        }
+      }
+    },
+    "reversed": {
+      "mean_ade_m": 2.468292236328125,
+      "minade_m": 1.4411087036132812,
+      "cpd": 0.21998798847198486,
+      "collision_scene_rollout": 0.41326904296875,
+      "collision_agent_time": 0.024808627104389105,
+      "offroad_scene_rollout_reliable": 0.3560791015625,
+      "offroad_agent_time_reliable": 0.01211275831291724,
+      "collision_scene_rollout_labelled_scenes": 0.39375,
+      "collision_agent_time_labelled_scenes": 0.019520177891213176,
+      "collision_scene_rollout_unlabelled_scenes": 0.41892317380352645,
+      "labelled_pairs": 193,
+      "pair_collision_rate": 0.0702720207253886,
+      "pass_order": {
+        "same_as_log": 0.38406735751295334,
+        "reversed": 0.06978626943005181,
+        "no_conflict": 0.538860103626943,
+        "tie": 0.007286269430051813
+      },
+      "never_start_rate": 0.3758695652173913,
+      "never_start_eligible": 18400,
+      "never_start_rate_labelled_scenes": 0.6275143678160919,
+      "stuck_late_rate": 0.10419885661310259,
+      "stuck_late_eligible": 103552,
+      "bias_stats": {
+        "yield": {
+          "edges": 35107,
+          "per_head_mean": [
+            -1.1957,
+            -0.4989,
+            -2.5974,
+            2.0645,
+            -1.5587,
+            -0.6366,
+            0.5434,
+            -2.0343
+          ],
+          "mean_abs": 1.666829580816384,
+          "max_head_mean": 2.1958116062078235,
+          "frac_any_head_abs_gt_2.5": 0.7770245250234996
+        },
+        "priority": {
+          "edges": 35107,
+          "per_head_mean": [
+            -0.5555,
+            -0.0016,
+            -1.7886,
+            1.2449,
+            -0.979,
+            -0.155,
+            -0.2999,
+            -1.1792
+          ],
+          "mean_abs": 1.2670422708172906,
+          "max_head_mean": 1.6577444744466046,
+          "frac_any_head_abs_gt_2.5": 0.42376164297718405
+        }
+      },
+      "oracle_pair_replan_codes": {
+        "pre_entry_log_order": 0.26072700777202074,
+        "first_in_overlap": 0.09224214702072539,
+        "second_in_overlap": 0.002307318652849741,
+        "both_in_unknown": 0.0013560556994818653,
+        "released": 0.3439321567357513,
+        "deviated_unknown": 0.2787099255181347,
+        "tie_unknown": 0.0,
+        "not_alive": 0.02072538860103627
+      },
+      "bootstrap_vs_unknown": {
+        "scene_collision_all": {
+          "n": 512,
+          "mean": 0.00030517578125,
+          "ci95": [
+            -0.00079345703125,
+            0.00146484375
+          ],
+          "p_ge_0": 0.7132
+        },
+        "scene_collision_labelled": {
+          "n": 115,
+          "mean": 0.001358695652173913,
+          "ci95": [
+            -0.003532608695652174,
+            0.006521739130434782
+          ],
+          "p_ge_0": 0.7166
+        },
+        "pair_collision_by_scene": {
+          "n": 115,
+          "mean": -0.0020380434782608695,
+          "ci95": [
+            -0.007608695652173913,
+            0.003577898550724637
+          ],
+          "p_ge_0": 0.2417
+        }
+      }
+    }
+  },
+  "train": {
+    "best_step": 1500,
+    "last_step": 8000,
+    "best": {
+      "val_all_gain_pct": 0.08483746320429064,
+      "val_active_gain_pct": 0.5658490485354094,
+      "val_yielder_gain_pct": 0.8598494422744335,
+      "val_priority_gain_pct": 0.09760771602952414,
+      "val_active_in_window_gain_pct": 0.7911383039362561,
+      "val_active_beyond_window_gain_pct": 0.3836351721922642
+    },
+    "last": {
+      "val_all_gain_pct": 0.07439486136440725,
+      "val_active_gain_pct": 0.47268264129434245,
+      "val_yielder_gain_pct": 0.6871394002039491,
+      "val_priority_gain_pct": 0.12483325586164566,
+      "val_active_in_window_gain_pct": 0.46072125749299636,
+      "val_active_beyond_window_gain_pct": 0.4823570157381027
+    },
+    "best_bias": {
+      "yield": {
+        "edges": 976,
+        "per_head_mean": [
+          -1.6861,
+          -0.7611,
+          -2.8929,
+          2.3444,
+          -2.279,
+          -0.8998,
+          0.1624,
+          -2.5482
+        ],
+        "mean_abs": 1.9691076767249185,
+        "max_head_mean": 2.373127015887714,
+        "frac_any_head_abs_gt_2.5": 0.951844262295082
+      },
+      "priority": {
+        "edges": 976,
+        "per_head_mean": [
+          -0.2862,
+          0.1383,
+          -0.9748,
+          0.8143,
+          -0.0526,
+          -0.2361,
+          0.4396,
+          -0.2971
+        ],
+        "mean_abs": 1.0445416686964817,
+        "max_head_mean": 1.6644498285700062,
+        "frac_any_head_abs_gt_2.5": 0.19467213114754098
+      }
+    }
+  }
+}

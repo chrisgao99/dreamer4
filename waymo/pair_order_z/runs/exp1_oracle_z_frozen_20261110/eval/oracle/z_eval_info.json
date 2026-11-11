@@ -1,0 +1,113 @@
+{
+  "z_mode": "oracle",
+  "zbias": {
+    "path": "/scratch/baz7dy/tri30/dreamer4/waymo/pair_order_z/runs/exp1_oracle_z_frozen_20261110/train/zbias_best.pt",
+    "step": 1500,
+    "val": {
+      "val_all_loss_z": 0.05690749623504923,
+      "val_all_loss_unknown": 0.056955816104579664,
+      "val_all_gain_pct": 0.08483746320429064,
+      "val_all_points": 672074.0,
+      "val_active_loss_z": 0.08997978724678013,
+      "val_active_loss_unknown": 0.09049183443090968,
+      "val_active_gain_pct": 0.5658490485354094,
+      "val_active_points": 63550.0,
+      "val_yielder_loss_z": 0.11179535901682082,
+      "val_yielder_loss_unknown": 0.11276496796494836,
+      "val_yielder_gain_pct": 0.8598494422744335,
+      "val_yielder_points": 31091.0,
+      "val_priority_loss_z": 0.06915269541706758,
+      "val_priority_loss_unknown": 0.06922025973162133,
+      "val_priority_gain_pct": 0.09760771602952414,
+      "val_priority_points": 32819.0,
+      "val_active_in_window_loss_z": 0.09223036131648507,
+      "val_active_in_window_loss_unknown": 0.0929658497635443,
+      "val_active_in_window_gain_pct": 0.7911383039362561,
+      "val_active_in_window_points": 27660.0,
+      "val_active_beyond_window_loss_z": 0.08824529547738733,
+      "val_active_beyond_window_loss_unknown": 0.0885851392288045,
+      "val_active_beyond_window_gain_pct": 0.3836351721922642,
+      "val_active_beyond_window_points": 35890.0,
+      "val_pair_codes": {
+        "pre_entry_log_order": 677,
+        "first_in_overlap": 299,
+        "second_in_overlap": 0,
+        "both_in_unknown": 10,
+        "released": 626,
+        "deviated_unknown": 0,
+        "tie_unknown": 1,
+        "not_alive": 54
+      },
+      "val_bias": {
+        "yield": {
+          "edges": 976,
+          "per_head_mean": [
+            -1.6861,
+            -0.7611,
+            -2.8929,
+            2.3444,
+            -2.279,
+            -0.8998,
+            0.1624,
+            -2.5482
+          ],
+          "mean_abs": 1.9691076767249185,
+          "max_head_mean": 2.373127015887714,
+          "frac_any_head_abs_gt_2.5": 0.951844262295082
+        },
+        "priority": {
+          "edges": 976,
+          "per_head_mean": [
+            -0.2862,
+            0.1383,
+            -0.9748,
+            0.8143,
+            -0.0526,
+            -0.2361,
+            0.4396,
+            -0.2971
+          ],
+          "mean_abs": 1.0445416686964817,
+          "max_head_mean": 1.6644498285700062,
+          "frac_any_head_abs_gt_2.5": 0.19467213114754098
+        }
+      }
+    }
+  },
+  "labels": "/sfs/weka/scratch/baz7dy/tri30/dreamer4/data/pair_order_z_labels_v1/val.npz",
+  "max_deviation_m": 2.0,
+  "bias_stats": {
+    "yield": {
+      "edges": 35170,
+      "per_head_mean": [
+        -1.6223,
+        -0.7316,
+        -2.8944,
+        2.3594,
+        -2.2591,
+        -0.8223,
+        0.0189,
+        -2.5466
+      ],
+      "mean_abs": 1.9598313706942097,
+      "max_head_mean": 2.3878826751588997,
+      "frac_any_head_abs_gt_2.5": 0.9425362524879158
+    },
+    "priority": {
+      "edges": 35170,
+      "per_head_mean": [
+        -0.2077,
+        0.1979,
+        -0.973,
+        0.8527,
+        -0.1785,
+        -0.0717,
+        0.1919,
+        -0.3992
+      ],
+      "mean_abs": 1.034452231044894,
+      "max_head_mean": 1.63800763971288,
+      "frac_any_head_abs_gt_2.5": 0.214046061984646
+    }
+  }
+}
