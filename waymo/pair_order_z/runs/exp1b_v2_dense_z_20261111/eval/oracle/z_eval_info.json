@@ -1,0 +1,121 @@
+{
+  "z_mode": "oracle",
+  "zbias": {
+    "path": "/scratch/baz7dy/tri30/dreamer4/waymo/pair_order_z/runs/exp1b_v2_dense_z_20261111/train/zbias_final.pt",
+    "step": 10000,
+    "val": {
+      "val_all_loss_z": 0.05515380794235551,
+      "val_all_loss_unknown": 0.055190807795244434,
+      "val_all_gain_pct": 0.06703988284822475,
+      "val_all_points": 441011.0,
+      "val_z_loss_z": 0.07901689784453743,
+      "val_z_loss_unknown": 0.07920365107404137,
+      "val_z_gain_pct": 0.23578866248143174,
+      "val_z_points": 79644.0,
+      "val_crossing_loss_z": 0.09290079729354417,
+      "val_crossing_loss_unknown": 0.09333945507611031,
+      "val_crossing_gain_pct": 0.4699596566194381,
+      "val_crossing_points": 11704.0,
+      "val_same_dir_loss_z": 0.07756164060033231,
+      "val_same_dir_loss_unknown": 0.07771722292245258,
+      "val_same_dir_gain_pct": 0.2001902747805358,
+      "val_same_dir_points": 70270.0,
+      "val_yielder_loss_z": 0.08382969632483671,
+      "val_yielder_loss_unknown": 0.0840390633402625,
+      "val_yielder_gain_pct": 0.24913059130382195,
+      "val_yielder_points": 47917.0,
+      "val_priority_loss_z": 0.07410571013053134,
+      "val_priority_loss_unknown": 0.07426854369475121,
+      "val_priority_gain_pct": 0.21924970669833155,
+      "val_priority_points": 46136.0,
+      "val_other_loss_z": 0.04989446894409083,
+      "val_other_loss_unknown": 0.049898462433353476,
+      "val_other_gain_pct": 0.008003231097513256,
+      "val_other_points": 361367.0,
+      "val_pair_codes": {
+        "pre_entry_log_order": 289,
+        "first_in_overlap": 553,
+        "second_in_overlap": 0,
+        "both_in_unknown": 2,
+        "released": 1538,
+        "deviated_unknown": 0,
+        "tie_unknown": 18,
+        "not_alive": 783,
+        "same_dir_far": 2906,
+        "same_dir_both_in_front_first": 504
+      },
+      "val_bias": {
+        "yield": {
+          "edges": 1346,
+          "per_head_mean": [
+            -0.4349,
+            -0.0459,
+            0.5475,
+            0.3925,
+            0.6045,
+            -0.0901,
+            0.4927,
+            0.1775
+          ],
+          "mean_abs": 0.5506104735704623,
+          "max_head_mean": 1.2174575516585964,
+          "frac_any_head_abs_gt_2.5": 0.01188707280832095
+        },
+        "priority": {
+          "edges": 1346,
+          "per_head_mean": [
+            0.0117,
+            -0.2414,
+            0.4492,
+            -0.7536,
+            -0.0138,
+            1.4016,
+            0.48,
+            -0.5255
+          ],
+          "mean_abs": 0.6831464136869025,
+          "max_head_mean": 1.556333327895642,
+          "frac_any_head_abs_gt_2.5": 0.007429420505200594
+        }
+      }
+    }
+  },
+  "labels": "/sfs/weka/scratch/baz7dy/tri30/dreamer4/data/pair_order_z_labels_v2/val.npz",
+  "checkpoint": "/scratch/baz7dy/tri30/dreamer4/waymo/pair_order_z/runs/exp1b_v2_dense_z_20261111/train/wm_final.pt",
+  "max_deviation_m": 2.0,
+  "num_rollouts": 16,
+  "bias_stats": {
+    "yield": {
+      "edges": 180736,
+      "per_head_mean": [
+        -0.4362,
+        -0.0814,
+        0.6232,
+        0.3132,
+        0.566,
+        -0.0001,
+        0.4947,
+        0.1665
+      ],
+      "mean_abs": 0.5244664320786201,
+      "max_head_mean": 1.1867087956020943,
+      "frac_any_head_abs_gt_2.5": 0.01385999468838527
+    },
+    "priority": {
+      "edges": 180736,
+      "per_head_mean": [
+        0.0285,
+        -0.2763,
+        0.4652,
+        -0.7813,
+        -0.0113,
+        1.4305,
+        0.5076,
+        -0.5475
+      ],
+      "mean_abs": 0.6959118282921394,
+      "max_head_mean": 1.5821940271330934,
+      "frac_any_head_abs_gt_2.5": 0.009516643059490085
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "z_mode": "unknown",
+  "zbias": {},
+  "labels": null,
+  "checkpoint": "/scratch/baz7dy/tri30/dreamer4/waymo/pair_order_z/runs/exp1b_v2_dense_z_20261111/train/wm_final.pt",
+  "max_deviation_m": 2.0,
+  "num_rollouts": 16
+}

@@ -1,0 +1,63 @@
+{
+ "mode": "unknown",
+ "scene_rollouts": 8192,
+ "colliding_scene_rollouts": 4208,
+ "colliding_pairs_by_category": {
+  "log_overlap": [
+   3086,
+   0.357
+  ],
+  "labelled_pair": [
+   229,
+   0.026
+  ],
+  "veh_same_dir": [
+   3329,
+   0.385
+  ],
+  "veh_crossing_unl": [
+   819,
+   0.095
+  ],
+  "vru": [
+   1191,
+   0.138
+  ]
+ },
+ "share_of_colliding_scene_rollouts_with_category": {
+  "log_overlap": 0.336,
+  "labelled_pair": 0.054,
+  "veh_same_dir": 0.567,
+  "veh_crossing_unl": 0.151,
+  "vru": 0.188
+ },
+ "share_of_colliding_scene_rollouts_only_this_category": {
+  "log_overlap": 0.185,
+  "labelled_pair": 0.025,
+  "veh_same_dir": 0.415,
+  "veh_crossing_unl": 0.065,
+  "vru": 0.072
+ },
+ "labelled_pair_collision_by_pass_order": {
+  "log": {
+   "rate": 0.0729,
+   "n": 1536,
+   "hits": 112
+  },
+  "none": {
+   "rate": 0.0037,
+   "n": 1342,
+   "hits": 5
+  },
+  "rev": {
+   "rate": 0.5661,
+   "n": 189,
+   "hits": 107
+  },
+  "tie": {
+   "rate": 0.2381,
+   "n": 21,
+   "hits": 5
+  }
+ }
+}
