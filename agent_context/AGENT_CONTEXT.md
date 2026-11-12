@@ -1,6 +1,30 @@
 # Agent Context
 
-Last updated: 2026-11-09
+Last updated: 2026-11-12
+
+## Latest Update: Bias Controller, Ceiling Test, DPO and Exogenous-Agent Notes, 2026-11-12
+
+- **The z route did not give order control.** Experiments 1a (frozen WM, oracle z) and 1b-v2 (dense z, unfrozen denoiser) both failed: reversing z did not flip the pass order. Results are in §8.8 of the z plan and §1 of the bias plan.
+- **Replacement plan, agreed with the user:**
+  - a learned bias controller reads the conflicts in this replan's draft plan;
+  - it outputs δ for each conflicting pair, added in three places (encoder, `agent_attn`, `scene_cross`);
+  - it is trained on closed-loop outcomes, not log likelihood.
+- **Ceiling test result (frozen 85k, 512 scenes, K = 8; 356 scenes have a target pair):**
+  - the best δ per scene cuts real collisions 0.537 → 0.373 (−30%), the pre-registered middle zone, so only same-direction (−36%) and crossing (−30%) pairs go forward; VRU drops only −15%;
+  - global δ moves collisions to other agents;
+  - most of the remaining 0.373 comes from pairs that were never steered.
+- **Follow-up discussion, not decided:**
+  - DPO on winner/loser plans from the same state, restricted to the colliding pair, as an alternative to labels from δ search.
+  - The generate-all assumption: every agent is treated as following the joint plan, which fails for exogenous agents such as a human driver or the policy under test. Possible fixes are an exogenous flag, multi-draft prediction and closed-loop training with log-replay or perturbed agents.
+  - The existing focus mode gives the model the exogenous agent's 4 s future, so it is an oracle, not a human proxy.
+
+Files:
+
+```text
+agent_context/BIAS_CONTROLLER_PLAN_2026_11_12.md
+agent_context/CLOSED_LOOP_PREFERENCE_AND_EXOGENOUS_AGENTS_2026_11_12.md
+waymo/pair_order_z/runs/bias_ceiling_85k_20261112/summary.md
+```
 
 ## Latest Update: Pass-Order Variable z for WM Interaction Fine-Tuning, 2026-11-09
 
