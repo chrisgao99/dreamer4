@@ -1,6 +1,24 @@
 # Agent Context
 
-Last updated: 2026-11-12
+Last updated: 2026-11-13
+
+## Latest Update: rowz Small-Model Results and the 2-D (v4) Plan, 2026-11-13
+
+- **What drives reaction to the ego in the small pass-order model** (pilot → v2 → v3 → v3noz):
+  - ego interventions in training, with rule-relabeled targets for the other cars, made the difference: stop-go collisions went from 37–38% (pilot, no interventions) to 11–17% (v3 / v3noz);
+  - neither z nor the safety layer did: v3noz without z reacts as well as v3 or better.
+  - This is not a single-variable ablation; a clean check (v3noz with `--perturb 0`) is still open.
+- **The model learns exactly the reaction the target encodes:** braking for a car body on its route. Anticipatory yielding at crossings stays weak: when the ego asserts, the other car enters only +0.3–0.4 s later, with 23–25% collisions.
+- **v4 (2-D):** the model also controls heading; a 30-point arc-length route plan is an input; lateral deviation is limited by losses only.
+  - Stopped at epoch 16/80 on kuorobot01 (GPU shared with a foreign ollama model).
+  - Lane keeping was learned fast: mean |d| 0.06–0.08 m at epoch 12, with collisions close to v3noz at the same epoch.
+  - To be re-run on another server; the doc has the steps, and `v2.py` now reads the data root from `ROWZ_SCREEN`.
+
+File (paths inside are relative to `tri30/`):
+
+```text
+agent_context/ROWZ_SMALL_MODEL_RESULTS_AND_2D_PLAN_2026_11_13.md
+```
 
 ## Latest Update: Bias Controller, Ceiling Test, DPO and Exogenous-Agent Notes, 2026-11-12
 
